@@ -20,6 +20,7 @@ export interface JurySession {
 export interface OrganizerSession {
   role: "organizer";
   organizer: Organizer;
+  selectedTeam?: Team;
 }
 
 // ================== Type guards ==================

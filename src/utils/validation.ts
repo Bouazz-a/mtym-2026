@@ -197,3 +197,8 @@ export function getDocumentRound(docType: DocumentType): Round | null {
   if (docType.endsWith("_2")) return 2;
   return null;
 }
+
+export function getDocumentProblemNumber(docType: DocumentType): number | null {
+  const match = docType.match(/^rapport_final_p(\d+)$/);
+  return match ? Number(match[1]) : null;
+}
