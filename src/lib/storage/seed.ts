@@ -29,6 +29,11 @@ const IDS = {
   t6: "team-0006",
   t7: "team-0007",
   t8: "team-0008",
+  // 11 équipes au total (≢ 0 mod 4) : la génération forme des poules
+  // [4, 4, 3] aux deux tours -> exerce le cas des poules de 3.
+  t9: "team-0009",
+  t10: "team-0010",
+  t11: "team-0011",
 
   // Participants (3 per team)
   p1a: "part-0001",
@@ -55,6 +60,15 @@ const IDS = {
   p8a: "part-0022",
   p8b: "part-0023",
   p8c: "part-0024",
+  p9a: "part-0025",
+  p9b: "part-0026",
+  p9c: "part-0027",
+  p10a: "part-0028",
+  p10b: "part-0029",
+  p10c: "part-0030",
+  p11a: "part-0031",
+  p11b: "part-0032",
+  p11c: "part-0033",
 
   // Jury
   j1: "jury-0001",
@@ -67,22 +81,10 @@ const IDS = {
   o1: "org-0001",
   o2: "org-0002",
 
-  // Pools
-  pool_A1: "pool-A1",
-  pool_B1: "pool-B1",
-  pool_A2: "pool-A2",
-  pool_B2: "pool-B2",
-
-  // Passages round 1 — pool A1 (teams 1, 2, 3, 4)
-  pass_A1_1: "pass-A1-1",
-  pass_A1_2: "pass-A1-2",
-  pass_A1_3: "pass-A1-3",
-  pass_A1_4: "pass-A1-4",
-  // Passages round 1 — pool B1 (teams 5, 6, 7, 8)
-  pass_B1_1: "pass-B1-1",
-  pass_B1_2: "pass-B1-2",
-  pass_B1_3: "pass-B1-3",
-  pass_B1_4: "pass-B1-4",
+  // NB : pas d'ids de poules/passages ici. Les poules, passages et tours
+  // sont produits par tournamentService.generateBothRounds (page Tournoi
+  // côté organisateur), seule source de vérité. Le seed ne contient que
+  // les entités durables (équipes, participants, jury, etc.).
 
   // Workshops
   w1: "work-0001",
@@ -102,62 +104,85 @@ const IDS = {
 // TEAMS
 // ============================================================
 
+// poolIdRound1 = "" : tournoi non encore tiré. Les affectations de poules
+// sont écrites par tournamentService au moment de la génération.
 const teams: Team[] = [
   {
     id: IDS.t1,
     name: "Al-Kindi",
     quadrigramme: "AKND",
     creatorId: IDS.p1a,
-    poolIdRound1: IDS.pool_A1,
+    poolIdRound1: "",
   },
   {
     id: IDS.t2,
     name: "Ibn Battuta",
     quadrigramme: "IBBT",
     creatorId: IDS.p2a,
-    poolIdRound1: IDS.pool_A1,
+    poolIdRound1: "",
   },
   {
     id: IDS.t3,
     name: "Al-Biruni",
     quadrigramme: "ALBI",
     creatorId: IDS.p3a,
-    poolIdRound1: IDS.pool_A1,
+    poolIdRound1: "",
   },
   {
     id: IDS.t4,
     name: "Ibn Rushd",
     quadrigramme: "IBRU",
     creatorId: IDS.p4a,
-    poolIdRound1: IDS.pool_A1,
+    poolIdRound1: "",
   },
   {
     id: IDS.t5,
     name: "Al-Jazari",
     quadrigramme: "ALJZ",
     creatorId: IDS.p5a,
-    poolIdRound1: IDS.pool_B1,
+    poolIdRound1: "",
   },
   {
     id: IDS.t6,
     name: "Ibn Khaldun",
     quadrigramme: "IBKH",
     creatorId: IDS.p6a,
-    poolIdRound1: IDS.pool_B1,
+    poolIdRound1: "",
   },
   {
     id: IDS.t7,
     name: "Al-Farabi",
     quadrigramme: "ALFR",
     creatorId: IDS.p7a,
-    poolIdRound1: IDS.pool_B1,
+    poolIdRound1: "",
   },
   {
     id: IDS.t8,
     name: "Ibn Sina",
     quadrigramme: "IBSN",
     creatorId: IDS.p8a,
-    poolIdRound1: IDS.pool_B1,
+    poolIdRound1: "",
+  },
+  {
+    id: IDS.t9,
+    name: "Al-Khwarizmi",
+    quadrigramme: "ALKW",
+    creatorId: IDS.p9a,
+    poolIdRound1: "",
+  },
+  {
+    id: IDS.t10,
+    name: "Ibn al-Haytham",
+    quadrigramme: "IBHY",
+    creatorId: IDS.p10a,
+    poolIdRound1: "",
+  },
+  {
+    id: IDS.t11,
+    name: "Al-Razi",
+    quadrigramme: "ALRZ",
+    creatorId: IDS.p11a,
+    poolIdRound1: "",
   },
 ];
 
@@ -510,6 +535,135 @@ const participants: Participant[] = [
     hoodieSize: "M",
     transportInfo: "voiture",
   },
+  // Team Al-Khwarizmi
+  {
+    id: IDS.p9a,
+    teamId: IDS.t9,
+    firstName: "Anas",
+    lastName: "Belkadi",
+    email: "a.belkadi@gmail.com",
+    phone: "0656780002",
+    city: "Kénitra",
+    region: "Rabat-Salé",
+    birthDate: "06-03-2008",
+    schoolLevel: "2BAC",
+    hoodieSize: "L",
+    transportInfo: "train",
+  },
+  {
+    id: IDS.p9b,
+    teamId: IDS.t9,
+    firstName: "Lina",
+    lastName: "Saidi",
+    email: "l.saidi@gmail.com",
+    phone: "0667890002",
+    city: "Kénitra",
+    region: "Rabat-Salé",
+    birthDate: "21-08-2008",
+    schoolLevel: "2BAC",
+    hoodieSize: "S",
+    transportInfo: "train",
+  },
+  {
+    id: IDS.p9c,
+    teamId: IDS.t9,
+    firstName: "Reda",
+    lastName: "Amrani",
+    email: "r.amrani@gmail.com",
+    phone: "0678900002",
+    city: "Sidi Slimane",
+    region: "Rabat-Salé",
+    birthDate: "13-12-2007",
+    schoolLevel: "1BAC",
+    hoodieSize: "M",
+    transportInfo: "bus",
+  },
+  // Team Ibn al-Haytham
+  {
+    id: IDS.p10a,
+    teamId: IDS.t10,
+    firstName: "Khalil",
+    lastName: "Benjelloun",
+    email: "k.benjelloun@gmail.com",
+    phone: "0689010002",
+    city: "Safi",
+    region: "Marrakech-Safi",
+    birthDate: "27-05-2008",
+    schoolLevel: "2BAC",
+    hoodieSize: "XL",
+    transportInfo: "bus",
+  },
+  {
+    id: IDS.p10b,
+    teamId: IDS.t10,
+    firstName: "Douaa",
+    lastName: "Fassi",
+    email: "d.fassi@gmail.com",
+    phone: "0690120002",
+    city: "El Jadida",
+    region: "Casablanca-Settat",
+    birthDate: "02-02-2008",
+    schoolLevel: "2BAC",
+    hoodieSize: "S",
+    transportInfo: "voiture",
+  },
+  {
+    id: IDS.p10c,
+    teamId: IDS.t10,
+    firstName: "Walid",
+    lastName: "Cherif",
+    email: "w.cherif@gmail.com",
+    phone: "0601230002",
+    city: "Safi",
+    region: "Marrakech-Safi",
+    birthDate: "19-09-2007",
+    schoolLevel: "2BAC",
+    hoodieSize: "M",
+    transportInfo: "bus",
+  },
+  // Team Al-Razi
+  {
+    id: IDS.p11a,
+    teamId: IDS.t11,
+    firstName: "Othmane",
+    lastName: "Sefrioui",
+    email: "o.sefrioui@gmail.com",
+    phone: "0612340003",
+    city: "Beni Mellal",
+    region: "Béni Mellal-Khénifra",
+    birthDate: "11-07-2008",
+    schoolLevel: "2BAC",
+    hoodieSize: "L",
+    transportInfo: "bus",
+  },
+  {
+    id: IDS.p11b,
+    teamId: IDS.t11,
+    firstName: "Yasmine",
+    lastName: "Haddad",
+    email: "y.haddad@gmail.com",
+    phone: "0623450003",
+    city: "Khouribga",
+    region: "Béni Mellal-Khénifra",
+    birthDate: "30-04-2008",
+    schoolLevel: "2BAC",
+    hoodieSize: "S",
+    transportInfo: "bus",
+  },
+  {
+    id: IDS.p11c,
+    teamId: IDS.t11,
+    firstName: "Ayoub",
+    lastName: "Rachidi",
+    email: "a.rachidi@gmail.com",
+    phone: "0634560003",
+    city: "Beni Mellal",
+    region: "Béni Mellal-Khénifra",
+    birthDate: "24-01-2008",
+    schoolLevel: "1BAC",
+    hoodieSize: "M",
+    transportInfo: "voiture",
+  },
 ];
 
 // ============================================================
@@ -577,159 +731,40 @@ const organizers: Organizer[] = [
 ];
 
 // ============================================================
-// POOLS
+// POOLS — vides au seed.
+// Poules/tours produits par tournamentService.generateBothRounds
+// (page Tournoi, organisateur). Convention des libellés : A = tour 1,
+// B = tour 2 (A1 = poule 1 du tour 1, B2 = poule 2 du tour 2).
 // ============================================================
 
-const pools: Pool[] = [
-  { id: IDS.pool_A1, label: "A1", round: 1 },
-  { id: IDS.pool_B1, label: "B1", round: 1 },
-  { id: IDS.pool_A2, label: "A2", round: 2 },
-  { id: IDS.pool_B2, label: "B2", round: 2 },
-];
+const pools: Pool[] = [];
 
 // ============================================================
-// PASSAGES — Round 1
-// Pool A1: t1=AKND, t2=IBBT, t3=ALBI, t4=IBRU (4 teams → 4 passages)
+// PASSAGES — vides au seed (générés par tournamentService).
 // ============================================================
 
-const passages: Passage[] = [
-  // Pool A1
-  {
-    id: IDS.pass_A1_1,
-    label: "A1P1",
-    problemNumber: 1,
-    poolId: IDS.pool_A1,
-    defenderTeamId: IDS.t1,
-    opponentTeamId: IDS.t2,
-    reporterTeamId: IDS.t3,
-    extraTeamId: IDS.t4,
-    day: "14-06-2025",
-    timeSlot: "09:00",
-    room: "Salle 101",
-  },
-  {
-    id: IDS.pass_A1_2,
-    label: "A1P2",
-    problemNumber: 2,
-    poolId: IDS.pool_A1,
-    defenderTeamId: IDS.t2,
-    opponentTeamId: IDS.t3,
-    reporterTeamId: IDS.t4,
-    extraTeamId: IDS.t1,
-    day: "14-06-2025",
-    timeSlot: "11:00",
-    room: "Salle 101",
-  },
-  {
-    id: IDS.pass_A1_3,
-    label: "A1P3",
-    problemNumber: 3,
-    poolId: IDS.pool_A1,
-    defenderTeamId: IDS.t3,
-    opponentTeamId: IDS.t4,
-    reporterTeamId: IDS.t1,
-    extraTeamId: IDS.t2,
-    day: "14-06-2025",
-    timeSlot: "14:00",
-    room: "Salle 101",
-  },
-  {
-    id: IDS.pass_A1_4,
-    label: "A1P4",
-    problemNumber: 4,
-    poolId: IDS.pool_A1,
-    defenderTeamId: IDS.t4,
-    opponentTeamId: IDS.t1,
-    reporterTeamId: IDS.t2,
-    extraTeamId: IDS.t3,
-    day: "14-06-2025",
-    timeSlot: "16:00",
-    room: "Salle 101",
-  },
-  // Pool B1
-  {
-    id: IDS.pass_B1_1,
-    label: "B1P1",
-    problemNumber: 1,
-    poolId: IDS.pool_B1,
-    defenderTeamId: IDS.t5,
-    opponentTeamId: IDS.t6,
-    reporterTeamId: IDS.t7,
-    extraTeamId: IDS.t8,
-    day: "14-06-2025",
-    timeSlot: "09:00",
-    room: "Salle 102",
-  },
-  {
-    id: IDS.pass_B1_2,
-    label: "B1P2",
-    problemNumber: 2,
-    poolId: IDS.pool_B1,
-    defenderTeamId: IDS.t6,
-    opponentTeamId: IDS.t7,
-    reporterTeamId: IDS.t8,
-    extraTeamId: IDS.t5,
-    day: "14-06-2025",
-    timeSlot: "11:00",
-    room: "Salle 102",
-  },
-  {
-    id: IDS.pass_B1_3,
-    label: "B1P3",
-    problemNumber: 3,
-    poolId: IDS.pool_B1,
-    defenderTeamId: IDS.t7,
-    opponentTeamId: IDS.t8,
-    reporterTeamId: IDS.t5,
-    extraTeamId: IDS.t6,
-    day: "14-06-2025",
-    timeSlot: "14:00",
-    room: "Salle 102",
-  },
-  {
-    id: IDS.pass_B1_4,
-    label: "B1P4",
-    problemNumber: 4,
-    poolId: IDS.pool_B1,
-    defenderTeamId: IDS.t8,
-    opponentTeamId: IDS.t5,
-    reporterTeamId: IDS.t6,
-    extraTeamId: IDS.t7,
-    day: "14-06-2025",
-    timeSlot: "16:00",
-    room: "Salle 102",
-  },
-];
+const passages: Passage[] = [];
 
 // ============================================================
 // JURY ASSIGNMENTS
 // ============================================================
 
+// Répartition des rapports intermédiaires (par équipe — indépendante des
+// poules). Couvre t1..t8 ; t9..t11 seront affectées côté organisateur.
 const juryAssignments: JuryAssignment[] = [
-  // j1 & j2 → pool A1 report intermediaire
   { juryMemberId: IDS.j1, teamId: IDS.t1, reportType: "intermediaire" },
   { juryMemberId: IDS.j1, teamId: IDS.t2, reportType: "intermediaire" },
   { juryMemberId: IDS.j2, teamId: IDS.t3, reportType: "intermediaire" },
   { juryMemberId: IDS.j2, teamId: IDS.t4, reportType: "intermediaire" },
-  // j3 & j4 → pool B1 report intermediaire
   { juryMemberId: IDS.j3, teamId: IDS.t5, reportType: "intermediaire" },
   { juryMemberId: IDS.j3, teamId: IDS.t6, reportType: "intermediaire" },
   { juryMemberId: IDS.j4, teamId: IDS.t7, reportType: "intermediaire" },
   { juryMemberId: IDS.j4, teamId: IDS.t8, reportType: "intermediaire" },
 ];
 
-const juryPassageAssignments: JuryPassageAssignment[] = [
-  // j1 & j2 → pool A1 passages
-  { juryMemberId: IDS.j1, passageId: IDS.pass_A1_1 },
-  { juryMemberId: IDS.j1, passageId: IDS.pass_A1_2 },
-  { juryMemberId: IDS.j2, passageId: IDS.pass_A1_3 },
-  { juryMemberId: IDS.j2, passageId: IDS.pass_A1_4 },
-  // j3 & j4 → pool B1 passages
-  { juryMemberId: IDS.j3, passageId: IDS.pass_B1_1 },
-  { juryMemberId: IDS.j3, passageId: IDS.pass_B1_2 },
-  { juryMemberId: IDS.j4, passageId: IDS.pass_B1_3 },
-  { juryMemberId: IDS.j4, passageId: IDS.pass_B1_4 },
-];
+// Vide au seed : dépend des passages, eux-mêmes générés par
+// tournamentService. Réparti côté organisateur après le tirage.
+const juryPassageAssignments: JuryPassageAssignment[] = [];
 
 // ============================================================
 // CRITERIA
@@ -896,7 +931,8 @@ export function seedDemoData(): void {
 
   setState(state);
   console.log(
-    " Demo data seeded — 8 teams, 24 participants, 5 jury, 8 passages",
+    " Demo data seeded — 11 équipes, 33 participants, 5 jury. " +
+      "Poules/passages non tirés (à générer via la page Tournoi).",
   );
 }
 
