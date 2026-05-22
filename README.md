@@ -1,4 +1,7 @@
-# MTYM 2026 Platform
+<h1 align="center">MTYM 2026 Platform</h1>
+
+![MTYM logo](./src/assets/MTYM2.svg)
+
 
 Management platform for the **MTYM** tournament (Moroccan Tournament of Young
 Mathematicians): document upload, tournament scheduling, jury grading, and
