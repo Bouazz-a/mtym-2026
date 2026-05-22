@@ -1,111 +1,781 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Open+Sans:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+  --paper: #faf7ee;
+  --paper-2: #f0ebdc;
+  --surface: #ffffff;
+  --forest: #122019;
+  --forest-soft: #244b3a;
+  --saffron: #f6a806;
+  --saffron-dark: #c8870d;
+  --sage: #629f73;
+  --sage-dark: #244b3a;
+  --clay: #b23b1b;
+  --ink: #122019;
+  --ink-soft: #4a5550;
+  --ink-faint: #8a9290;
+  --border: #e1dcc9;
 }
 
 body {
-  margin: 0;
+  /* Global 133% zoom — scales the entire UI *and* the fixed particle
+     canvas uniformly, reflowing like native browser zoom. */
+  zoom: 1.33;
+  color: var(--ink);
+  font-family: "Open Sans", system-ui, sans-serif;
+  background-color: var(--paper);
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 90% 70% at 50% 50%,
+      rgba(212, 175, 55, 0.09) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 90% 75% at 50% 50%,
+      rgba(18, 32, 25, 0.05) 0%,
+      transparent 70%
+    );
+  background-repeat: no-repeat;
+  background-size:
+    180% 160%,
+    180% 170%;
+  background-position:
+    85% 10%,
+    15% 90%;
+  animation: ambient-warmth 16s ease-in-out infinite;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+#root,
+.app-shell {
+  background-color: transparent;
+  background-image: none;
+}
+/* Make the app content sit above the fixed atmosphere layers */
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: var(--saffron);
+  color: var(--forest);
+}
+
+/* Typography helpers (matching the old platform) */
+.font-mont {
+  font-family: "Montserrat", system-ui, sans-serif;
+}
+.font-open {
+  font-family: "Open Sans", system-ui, sans-serif;
+}
+.text-tiny {
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+.text-micro {
+  font-size: 9.5px;
+  line-height: 1.4;
+}
+
+/* Card hover effect */
+.card-hover {
+  transition:
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms,
+    box-shadow 200ms;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: var(--saffron) !important;
+  box-shadow:
+    0 12px 28px -8px rgba(18, 32, 25, 0.12),
+    0 4px 8px -2px rgba(18, 32, 25, 0.06);
+}
+
+/* Button hover effect */
+.btn-fx {
+  transition: all 150ms;
+}
+.btn-fx:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(18, 32, 25, 0.08);
+}
+.btn-fx:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Focus ring on inputs */
+.focus-ring:focus {
+  border-color: var(--saffron) !important;
+  box-shadow: 0 0 0 3px rgba(246, 168, 6, 0.18);
+  outline: none;
+}
+
+/* Hover row (for tables) */
+.hover-row:hover {
+  background: rgba(18, 32, 25, 0.04);
+}
+
+/* Animations */
+.page-fade {
+  animation: fadeIn 350ms ease-out;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+
+@keyframes ping {
+  75%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
   }
 }
-p {
-  margin: 0;
+
+/* ── Constraint-conflict highlighting ──────────────────────────────────
+   Flagged cells pop in when the "Surligner les conflits" toggle is
+   enabled, then keep a slow halo pulse so the eye is drawn to them
+   without the layout ever shifting. Honors prefers-reduced-motion. */
+.conflict-cell {
+  animation:
+    conflictPop 260ms cubic-bezier(0.16, 1, 0.3, 1) both,
+    conflictPulse 2.4s ease-in-out 260ms infinite;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
+.conflict-row {
+  animation: conflictRowIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.conflict-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: currentColor;
+  transform: scaleY(0);
+  transform-origin: top;
+  animation: conflictBar 360ms cubic-bezier(0.16, 1, 0.3, 1) 80ms both;
+}
+
+@keyframes conflictPop {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes conflictPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(178, 59, 27, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(178, 59, 27, 0.28);
+  }
+}
+
+@keyframes conflictRowIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes conflictBar {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conflict-cell,
+  .conflict-row,
+  .conflict-row::before {
+    animation: none;
+  }
+}
+
+/* ── Drop-zone grid — perfect 24px × 24px squares anchored top-left.
+   Apply only to the upload drop zone, never to the card wrapper. The
+   card's overflow clipping will trim any half-cells cleanly. */
+.bg-graph-paper {
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0;
+  background-repeat: repeat;
+}
+.bg-graph-paper-dark {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0;
+  background-repeat: repeat;
+}
+.bg-grid-pattern {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: 0 0;
+}
+.shadow-brutal {
+  box-shadow: 3px 3px 0 0 var(--forest);
+}
+.shadow-brutal-sm {
+  box-shadow: 2px 2px 0 0 var(--forest);
+}
+.shadow-brutal-gold {
+  box-shadow: 3px 3px 0 0 var(--saffron);
+}
+.clip-triangle-tr {
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.clip-triangle-bl {
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+.diamond-marker {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--forest);
+  transform: rotate(45deg);
+}
+
+/* ── Tournament page interactions (mirroring the SuperDesign mockup) ── */
+.rf-tile-empty {
+  border: 1px dashed var(--forest-soft);
+}
+.rf-tile-empty:hover {
+  border-style: solid;
+  border-color: var(--saffron);
+  background: rgba(246, 168, 6, 0.05) !important;
+  box-shadow: 2px 2px 0 0 var(--forest);
+  transform: translateY(-1px);
+}
+.rf-tile-empty:hover .rf-tile-number {
+  border-color: var(--saffron) !important;
+  color: var(--saffron) !important;
+}
+.ri-drop:hover {
+  background: rgba(98, 159, 115, 0.18) !important;
+}
+
+/* Brutal card hover lift */
+.brutal-hover {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms;
+}
+.brutal-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 4px 4px 0 0 var(--forest) !important;
+}
+
+/* Brutal button */
+.btn-brutal {
   display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+  align-items: center;
+  gap: 6px;
+  font-family: "Montserrat", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 14px;
+  border: 2px solid var(--forest);
+  box-shadow: 2px 2px 0 0 var(--forest);
+  background: var(--saffron);
+  color: var(--forest);
+  cursor: pointer;
+  transition:
+    transform 150ms,
+    box-shadow 150ms;
+}
+.btn-brutal:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 0 var(--forest);
+}
+.btn-brutal:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 0 var(--forest);
+}
+.btn-brutal:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-brutal--ghost {
+  background: var(--surface);
+  color: var(--forest);
+}
+.btn-brutal--dark {
+  background: var(--forest);
+  color: var(--saffron);
+}
+.btn-brutal--danger {
+  background: var(--surface);
+  color: var(--clay);
+  border-color: var(--clay);
+  box-shadow: 2px 2px 0 0 var(--clay);
+}
+.btn-brutal--danger:hover:not(:disabled) {
+  box-shadow: 3px 3px 0 0 var(--clay);
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* ── Frosted-glass surface (used by elevated tiles/popovers) ── */
+.surface-frost {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+}
+.surface-frost-dark {
+  background: rgba(18, 32, 25, 0.78);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+/* ── Elevated tile shadow (replaces colored left-borders) ── */
+.tile-elevation {
+  box-shadow:
+    0 1px 0 rgba(18, 32, 25, 0.04),
+    0 8px 20px -10px rgba(18, 32, 25, 0.18),
+    0 2px 6px -2px rgba(18, 32, 25, 0.08);
+  transition:
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 200ms;
+}
+.tile-elevation:hover {
+  box-shadow:
+    0 1px 0 rgba(18, 32, 25, 0.04),
+    0 18px 36px -12px rgba(18, 32, 25, 0.22),
+    0 4px 10px -2px rgba(18, 32, 25, 0.1);
+  transform: translateY(-1px);
+}
+.tile-active {
+  box-shadow:
+    inset 0 0 0 2px var(--forest),
+    0 8px 20px -10px rgba(18, 32, 25, 0.2);
+}
+
+/* ── Modal overlay + dialog ── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 32, 25, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+  animation: backdropIn 160ms ease-out;
+}
+.modal-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 101;
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  background: var(--surface);
+  border: 2px solid var(--forest);
+  box-shadow: 6px 6px 0 0 var(--forest);
+  animation: dialogIn 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ── MTYM generation loader ──────────────────────────────────────────
+   Pool generation is synchronous and blocks the main thread. Only
+   compositor-driven properties (transform / opacity) keep animating
+   while JS is frozen — so every animation below is restricted to those,
+   with will-change to force a compositor layer. */
+.mtym-loader-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 32, 25, 0.6);
+  backdrop-filter: blur(3px);
+  animation: backdropIn 200ms ease-out;
+}
+.mtym-loader-card {
+  position: relative;
+  padding: 40px 56px;
+  text-align: center;
+  background: var(--surface);
+  border: 2px solid var(--forest);
+  box-shadow: 6px 6px 0 0 var(--forest);
+}
+/* A passage in motion: the three roles of a pool — Défenseur, Opposant,
+   Rapporteur — light up in turn while a token (the "defending" team)
+   advances between them, mirroring the role rotation the generator is
+   actually solving. Loop is 2.7s; only transform/opacity animate. */
+.mtym-loader-stage {
+  position: relative;
+  width: 252px;
+  height: 60px;
+  margin: 4px auto 0;
+}
+.mtym-role {
+  position: absolute;
+  top: 0;
+  width: 64px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Montserrat", sans-serif;
+  font-weight: 900;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  border: 2px solid var(--forest);
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+.mtym-role--def {
+  left: 10px;
+  background: var(--saffron);
+  color: var(--forest);
+  animation: mtymRoleDef 2.7s ease-in-out infinite;
+}
+.mtym-role--opp {
+  left: 94px;
+  background: var(--forest);
+  color: var(--saffron);
+  animation: mtymRoleOpp 2.7s ease-in-out infinite;
+}
+.mtym-role--rap {
+  left: 178px;
+  background: var(--sage-dark);
+  color: var(--paper);
+  animation: mtymRoleRap 2.7s ease-in-out infinite;
+}
+.mtym-loader-track {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 5px;
+  height: 2px;
+  background: var(--border);
+}
+.mtym-loader-token {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  background: var(--saffron);
+  border: 2px solid var(--forest);
+  will-change: transform;
+  animation: mtymToken 2.7s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.mtym-loader-title {
+  margin-top: 26px;
+  font-family: "Montserrat", sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.95rem;
+  color: var(--forest);
+}
+.mtym-loader-cycle {
+  position: relative;
+  height: 13px;
+  margin-top: 8px;
+}
+.mtym-loader-cycle span {
+  position: absolute;
+  inset: 0;
+  text-align: center;
+  font-family: "Montserrat", sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.62rem;
+  color: var(--ink-faint);
+  opacity: 0;
+  will-change: opacity;
+}
+.mtym-loader-cycle span:nth-child(1) {
+  animation: mtymCycle1 2.7s ease-in-out infinite;
+}
+.mtym-loader-cycle span:nth-child(2) {
+  animation: mtymCycle2 2.7s ease-in-out infinite;
+}
+.mtym-loader-cycle span:nth-child(3) {
+  animation: mtymCycle3 2.7s ease-in-out infinite;
+}
+
+@keyframes mtymRoleDef {
+  0%,
+  30% {
+    transform: scale(1.14);
+    opacity: 1;
+  }
+  37%,
+  100% {
+    transform: scale(0.86);
+    opacity: 0.4;
+  }
+}
+@keyframes mtymRoleOpp {
+  0%,
+  30% {
+    transform: scale(0.86);
+    opacity: 0.4;
+  }
+  37%,
+  63% {
+    transform: scale(1.14);
+    opacity: 1;
+  }
+  70%,
+  100% {
+    transform: scale(0.86);
+    opacity: 0.4;
+  }
+}
+@keyframes mtymRoleRap {
+  0%,
+  63% {
+    transform: scale(0.86);
+    opacity: 0.4;
+  }
+  70%,
+  96% {
+    transform: scale(1.14);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.86);
+    opacity: 0.4;
+  }
+}
+@keyframes mtymToken {
+  0%,
+  30% {
+    transform: translateX(36px) rotate(45deg);
+  }
+  37%,
+  63% {
+    transform: translateX(120px) rotate(45deg);
+  }
+  70%,
+  96% {
+    transform: translateX(204px) rotate(45deg);
+  }
+  100% {
+    transform: translateX(36px) rotate(45deg);
+  }
+}
+@keyframes mtymCycle1 {
+  0%,
+  30% {
+    opacity: 1;
+  }
+  37%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes mtymCycle2 {
+  0%,
+  30% {
+    opacity: 0;
+  }
+  37%,
+  63% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes mtymCycle3 {
+  0%,
+  63% {
+    opacity: 0;
+  }
+  70%,
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mtym-role,
+  .mtym-loader-token,
+  .mtym-loader-cycle span {
+    animation: none;
+  }
+  .mtym-role {
+    transform: none;
+    opacity: 1;
+  }
+  .mtym-loader-token {
+    display: none;
+  }
+  .mtym-loader-cycle span:nth-child(1) {
+    opacity: 1;
+  }
+}
+
+/* ── Popover (account picker, etc.) ── */
+.popover {
+  position: absolute;
+  z-index: 60;
+  background: var(--surface);
+  border: 2px solid var(--forest);
+  box-shadow: 4px 4px 0 0 var(--forest);
+  animation: popIn 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.team-hero-banner {
+  background-image:
+    radial-gradient(
+      ellipse 60% 80% at 85% 12%,
+      rgba(212, 175, 55, 0.12) 0%,
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 40% 60% at 10% 80%,
+      rgba(0, 80, 40, 0.4) 0%,
+      transparent 60%
+    );
+  background-repeat: no-repeat, no-repeat;
+  background-size: auto, auto;
+  background-position:
+    85% 12%,
+    10% 80%;
+}
+
+.radar-card,
+.dark-card {
+  background-image: radial-gradient(
+    ellipse 80% 60% at 85% 12%,
+    rgba(212, 175, 55, 0.07) 0%,
+    transparent 70%
+  );
+  background-repeat: no-repeat;
+  background-size: auto;
+  background-position: 85% 12%;
+}
+
+@keyframes ambient-warmth {
+  0% {
+    background-position:
+      85% 10%,
+      15% 90%;
+  }
+  50% {
+    background-position:
+      60% 6%,
+      25% 94%;
+  }
+  100% {
+    background-position:
+      85% 10%,
+      15% 90%;
+  }
+}
+
+/* Brutal table */
+.brutal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "Montserrat", sans-serif;
+}
+.brutal-table thead tr {
+  background: var(--forest-soft);
+  color: var(--paper);
+}
+.brutal-table th {
+  text-align: left;
+  padding: 12px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+.brutal-table td {
+  padding: 12px;
+  border-right: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.brutal-table tbody tr {
+  transition: background 150ms;
+}
+.brutal-table tbody tr:hover {
+  background: rgba(18, 32, 25, 0.04);
 }
