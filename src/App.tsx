@@ -1,122 +1,105 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { SessionProvider, useSession } from "@/features/shared/SessionContext";
+import { AppLayout } from "@/layout/AppLayout";
+import { RoleGuard } from "@/layout/RoleGuard";
 
-function App() {
-  const [count, setCount] = useState(0)
+import { ParcoursPage } from "@/features/participant/ParcoursPage";
+import { DocumentsPage as ParticipantDocumentsPage } from "@/features/participant/DocumentsPage";
+import { PassageDetailPage } from "@/features/participant/PassageDetailPage";
+import { ProfilPage } from "@/features/participant/ProfilPage";
+import { AnnouncementsPage } from "@/features/participant/AnnouncementsPage";
 
+import { JuryDashboard } from "@/features/jury/JuryDashboard";
+import { JuryPassagesPage } from "@/features/jury/JuryPassagesPage";
+import { JuryTeamsPage } from "@/features/jury/JuryTeamsPage";
+import { JuryTeamDetailPage } from "@/features/jury/JuryTeamDetailPage";
+
+import { OrganizerDashboard } from "@/features/organizer/OrganizerDashboard";
+import { TournamentPage } from "@/features/organizer/TournamentPage";
+import { TeamsPage } from "@/features/organizer/TeamsPage";
+import { JuryManagementPage } from "@/features/organizer/JuryManagementPage";
+import { AdministrationPage } from "@/features/organizer/AdministrationPage";
+import { OrgDocumentsPage } from "@/features/organizer/OrgDocumentsPage";
+import { OrgAnnouncementsPage } from "@/features/organizer/OrgAnnouncementsPage";
+
+// App — wires the platform providers and the routing tree. Routes are
+// segregated by role using RoleGuard wrappers; the home "/" route is
+// dispatched to the appropriate dashboard via HomeByRole.
+
+export default function App() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <SessionProvider>
+      <BrowserRouter>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route index element={<HomeByRole />} />
 
-      <div className="ticks"></div>
+              <Route element={<RoleGuard allow={["participant"]} />}>
+                <Route path="passage/:passageId" element={<PassageDetailPage />} />
+                <Route path="profil" element={<ProfilPage />} />
+              </Route>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+              <Route element={<RoleGuard allow={["participant", "organizer"]} />}>
+                <Route path="documents" element={<DocumentsRouter />} />
+              </Route>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+              <Route element={<RoleGuard allow={["participant", "jury", "organizer"]} />}>
+                <Route path="annonces" element={<AnnouncementsRouter />} />
+              </Route>
+
+              <Route element={<RoleGuard allow={["jury", "organizer"]} />}>
+                <Route path="equipes" element={<EquipesRouter />} />
+              </Route>
+
+              <Route element={<RoleGuard allow={["jury"]} />}>
+                <Route path="equipes/:teamId" element={<JuryTeamDetailPage />} />
+                <Route path="passages" element={<JuryPassagesPage />} />
+              </Route>
+
+              <Route element={<RoleGuard allow={["organizer"]} />}>
+                <Route path="tournoi" element={<TournamentPage />} />
+                <Route path="jury" element={<JuryManagementPage />} />
+                <Route path="administration" element={<AdministrationPage />} />
+              </Route>
+
+              <Route path="*" element={<TodoPage label="404" />} />
+            </Route>
+          </Routes>
+      </BrowserRouter>
+    </SessionProvider>
+  );
 }
 
-export default App
+function HomeByRole() {
+  const { role } = useSession();
+  if (role === "participant") return <ParcoursPage />;
+  if (role === "jury") return <JuryDashboard />;
+  return <OrganizerDashboard />;
+}
+
+function DocumentsRouter() {
+  const { role } = useSession();
+  if (role === "organizer") return <OrgDocumentsPage />;
+  return <ParticipantDocumentsPage />;
+}
+
+function AnnouncementsRouter() {
+  const { role } = useSession();
+  if (role === "organizer") return <OrgAnnouncementsPage />;
+  return <AnnouncementsPage />;
+}
+
+function EquipesRouter() {
+  const { role } = useSession();
+  if (role === "jury") return <JuryTeamsPage />;
+  return <TeamsPage />;
+}
+
+function TodoPage({ label }: { label: string }) {
+  return (
+    <div className="py-24 text-center">
+      <div className="font-heading font-bold text-4xl mb-3">{label}</div>
+      <div className="text-foreground/55">À venir dans la prochaine itération.</div>
+    </div>
+  );
+}
