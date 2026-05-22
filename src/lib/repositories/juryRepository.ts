@@ -48,3 +48,44 @@ export function getPassagesAssignedToJuror(juryMemberId: string): Passage[] {
   );
   return assignments.map(a => getPassageById(a.passageId)).filter(Boolean) as Passage[];
 }
+
+// ─── Mutation helpers ─────────────────────────────────────────────────
+
+export function setJuryAssignments(assignments: JuryAssignment[]): void {
+  setAll("juryAssignments", assignments);
+}
+
+// Toggle (or add) a single (juror, team, reportType) tuple.
+// Uniqueness key = (juryMemberId, teamId, reportType).
+export function upsertJuryAssignment(a: JuryAssignment): void {
+  const all = getJuryAssignments();
+  const exists = all.some(
+    x => x.juryMemberId === a.juryMemberId && x.teamId === a.teamId && x.reportType === a.reportType,
+  );
+  if (exists) return;
+  setAll("juryAssignments", [...all, a]);
+}
+
+export function deleteJuryAssignment(a: JuryAssignment): void {
+  setAll(
+    "juryAssignments",
+    getJuryAssignments().filter(
+      x => !(x.juryMemberId === a.juryMemberId && x.teamId === a.teamId && x.reportType === a.reportType),
+    ),
+  );
+}
+
+export function setJuryPassageAssignments(assignments: JuryPassageAssignment[]): void {
+  setAll("juryPassageAssignments", assignments);
+}
+
+export function clearJuryAssignmentsForReportType(reportType: ReportType): void {
+  setAll(
+    "juryAssignments",
+    getJuryAssignments().filter(a => a.reportType !== reportType),
+  );
+}
+
+export function clearJuryPassageAssignments(): void {
+  setAll("juryPassageAssignments", []);
+}
