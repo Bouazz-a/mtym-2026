@@ -126,20 +126,25 @@ export interface JuryPassageAssignment {
 export interface Criterion {
   id: string;
   label: string; // "Clarté et pédagogie", "Q1(a)", etc.
-  coefficient: number;
+  coefficient: number; // arbitrary weight; may be negative (malus)
   type: EvaluationType;
   role?: PassageRole; // oral only
-  problemNumber?: number; // report only
+  problemNumber?: number; // report (final) only — 1..4
+  theme?: string; // optional grouping label, e.g. "Présentation orale", "Débat", "Malus"
   order: number; // order of display
 }
 
-// Report evaluation (1 per (juror × team × reportType × problem))
+// Report evaluation (1 per (juror × team × reportType × problem)).
+// Rapport final -> criteria-based: per-criterion ReportGrade rows.
+// Rapport intermédiaire -> single overall grade 1..4 (overallScore),
+// stored with problemNumber 0 (RI spans all problems).
 export interface ReportEvaluation {
   id: string;
   juryMemberId: string;
   teamId: string;
   reportType: ReportType;
   problemNumber: number;
+  overallScore?: number; // RI only — overall grade on a 1..4 scale
   globalRemark?: string;
 }
 
