@@ -33,6 +33,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/equipes", label: "Équipes" },
     { to: "/jury", label: "Jury" },
     { to: "/documents", label: "Documents" },
+    { to: "/notes", label: "Évaluations" },
     { to: "/administration", label: "Administration" },
     { to: "/", label: "Tableau de bord" },
   ],
