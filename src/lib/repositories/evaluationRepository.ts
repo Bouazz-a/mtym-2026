@@ -68,6 +68,10 @@ export function deleteReportEvaluation(id: string): void {
   setAll("reportGrades", getReportGrades().filter(g => g.reportEvaluationId !== id));
 }
 
+export function getReportEvaluationsByTeam(teamId: string): ReportEvaluation[] {
+  return getReportEvaluations().filter(e => e.teamId === teamId);
+}
+
 export function getReportGrades(): ReportGrade[] {
   return getAll("reportGrades") as ReportGrade[];
 }
@@ -123,6 +127,14 @@ export function upsertOralEvaluation(evaluation: OralEvaluation): void {
 export function deleteOralEvaluation(id: string): void {
   setAll("oralEvaluations", getOralEvaluations().filter(e => e.id !== id));
   setAll("oralGrades", getOralGrades().filter(g => g.oralEvaluationId !== id));
+}
+
+export function getOralEvaluationsByTeam(teamId: string): OralEvaluation[] {
+  return getOralEvaluations().filter(e => e.teamId === teamId);
+}
+
+export function getOralEvaluationsByPassage(passageId: string): OralEvaluation[] {
+  return getOralEvaluations().filter(e => e.passageId === passageId);
 }
 
 export function getOralGrades(): OralGrade[] {
