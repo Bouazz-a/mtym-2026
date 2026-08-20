@@ -91,13 +91,8 @@ const IDS = {
   w2: "work-0002",
   w3: "work-0003",
 
-  // Criteria
-  cr1: "crit-0001",
-  cr2: "crit-0002",
-  cr3: "crit-0003",
-  cr4: "crit-0004",
-  cr5: "crit-0005",
-  cr6: "crit-0006",
+  // NB : les critères d'évaluation sont produits plus bas par
+  // buildSeedCriteria() (ids déterministes crit-rf-*/crit-oral-*).
 };
 
 // ============================================================
@@ -716,9 +711,9 @@ const juryMembers: JuryMember[] = [
 const organizers: Organizer[] = [
   {
     id: IDS.o1,
-    firstName: "Mehdi",
-    lastName: "Lahlou",
-    email: "mehdi.lahlou@mtym.ma",
+    firstName: "Bou3azwa",
+    lastName: ">:)",
+    email: "bou3azwa@mtym.ma",
     role: "admin",
   },
   {
@@ -770,58 +765,73 @@ const juryPassageAssignments: JuryPassageAssignment[] = [];
 // CRITERIA
 // ============================================================
 
-const criteria: Criterion[] = [
-  // Report criteria (problem-agnostic, apply to all problems)
-  {
-    id: IDS.cr1,
-    label: "Rigueur mathématique",
-    coefficient: 3,
-    type: "report",
-    problemNumber: 1,
-    order: 1,
-  },
-  {
-    id: IDS.cr2,
-    label: "Clarté de la rédaction",
-    coefficient: 2,
-    type: "report",
-    problemNumber: 1,
-    order: 2,
-  },
-  {
-    id: IDS.cr3,
-    label: "Originalité de l'approche",
-    coefficient: 2,
-    type: "report",
-    problemNumber: 1,
-    order: 3,
-  },
-  // Oral criteria
-  {
-    id: IDS.cr4,
-    label: "Maîtrise du contenu",
-    coefficient: 3,
-    type: "oral",
-    role: "defender",
-    order: 1,
-  },
-  {
-    id: IDS.cr5,
-    label: "Qualité des questions",
-    coefficient: 2,
-    type: "oral",
-    role: "opponent",
-    order: 1,
-  },
-  {
-    id: IDS.cr6,
-    label: "Qualité du rapport oral",
-    coefficient: 2,
-    type: "oral",
-    role: "reporter",
-    order: 1,
-  },
-];
+// Barème de départ. Modifiable en ligne par l'admin / l'admin scientifique
+// (page Administration → onglet Critères). Le grading est piloté par ces
+// données : aucun critère n'est codé en dur dans l'UI.
+function buildSeedCriteria(): Criterion[] {
+  const out: Criterion[] = [];
+
+  // ── Rapports finaux — mêmes critères pour les 4 problèmes ──────────────
+  const reportTemplate: { label: string; coefficient: number }[] = [
+    { label: "Rigueur mathématique", coefficient: 3 },
+    { label: "Clarté de la rédaction", coefficient: 2 },
+    { label: "Originalité de l'approche", coefficient: 2 },
+    { label: "Structure du document", coefficient: 1 },
+    { label: "Pistes de recherche", coefficient: 1 },
+  ];
+  for (const problemNumber of [1, 2, 3, 4]) {
+    reportTemplate.forEach((c, i) => {
+      out.push({
+        id: `crit-rf-p${problemNumber}-${i + 1}`,
+        label: c.label,
+        coefficient: c.coefficient,
+        type: "report",
+        problemNumber,
+        order: i + 1,
+      });
+    });
+  }
+
+  // ── Passages oraux — critères par rôle, groupés par thème ──────────────
+  const oralTemplate: {
+    role: "defender" | "opponent" | "reporter";
+    theme: string;
+    label: string;
+    coefficient: number;
+  }[] = [
+    { role: "defender", theme: "Présentation orale", label: "Maîtrise du contenu", coefficient: 3 },
+    { role: "defender", theme: "Présentation orale", label: "Clarté et pédagogie", coefficient: 2 },
+    { role: "defender", theme: "Présentation orale", label: "Organisation et gestion du temps", coefficient: 2 },
+    { role: "defender", theme: "Débat", label: "Réponses aux questions posées", coefficient: 3 },
+    { role: "defender", theme: "Malus", label: "Non-conformité / comportement", coefficient: -5 },
+    { role: "opponent", theme: "Débat", label: "Pertinence et profondeur des questions", coefficient: 5 },
+    { role: "opponent", theme: "Débat", label: "Analyse critique du débat", coefficient: 3 },
+    { role: "opponent", theme: "Débat", label: "Contribution au débat global", coefficient: 2 },
+    { role: "opponent", theme: "Malus", label: "Non-conformité / comportement", coefficient: -5 },
+    { role: "reporter", theme: "Débat", label: "Analyse critique du débat", coefficient: 4 },
+    { role: "reporter", theme: "Débat", label: "Pertinence des interventions", coefficient: 3 },
+    { role: "reporter", theme: "Débat", label: "Enrichissement du débat", coefficient: 2 },
+    { role: "reporter", theme: "Malus", label: "Non-conformité / comportement", coefficient: -5 },
+  ];
+  const perRoleOrder: Record<string, number> = {};
+  oralTemplate.forEach((c) => {
+    perRoleOrder[c.role] = (perRoleOrder[c.role] ?? 0) + 1;
+    const order = perRoleOrder[c.role];
+    out.push({
+      id: `crit-oral-${c.role}-${order}`,
+      label: c.label,
+      coefficient: c.coefficient,
+      type: "oral",
+      role: c.role,
+      theme: c.theme,
+      order,
+    });
+  });
+
+  return out;
+}
+
+const criteria: Criterion[] = buildSeedCriteria();
 
 // ============================================================
 // WORKSHOPS

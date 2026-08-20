@@ -336,9 +336,18 @@ export function canViewDeadlineAsJury(deadline: Deadline): boolean {
 
 // ================== Criteria ==================
 
-// Admin SOC manage evaluation criteria.
+// Admin and scientific organizers manage the evaluation criteria (the
+// grading grid for reports and oral passages) and their coefficients.
 export function canManageCriteria(organizer: Organizer): boolean {
-  return isAdmin(organizer);
+  return isAdmin(organizer) || isScientific(organizer);
+}
+
+// ================== Evaluation review ==================
+
+// Admin and scientific organizers may review jury evaluations — the
+// numeric grades and the per-team / per-juror remarks. Logistics may not.
+export function canViewEvaluations(organizer: Organizer): boolean {
+  return isAdmin(organizer) || isScientific(organizer);
 }
 
 // ================== Participant info ==================

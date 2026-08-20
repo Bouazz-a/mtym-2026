@@ -11,6 +11,7 @@ import { AnnouncementsPage } from "@/features/participant/AnnouncementsPage";
 
 import { JuryDashboard } from "@/features/jury/JuryDashboard";
 import { JuryPassagesPage } from "@/features/jury/JuryPassagesPage";
+import { JuryPassageDetailPage } from "@/features/jury/JuryPassageDetailPage";
 import { JuryTeamsPage } from "@/features/jury/JuryTeamsPage";
 import { JuryTeamDetailPage } from "@/features/jury/JuryTeamDetailPage";
 
@@ -19,6 +20,7 @@ import { TournamentPage } from "@/features/organizer/TournamentPage";
 import { TeamsPage } from "@/features/organizer/TeamsPage";
 import { JuryManagementPage } from "@/features/organizer/JuryManagementPage";
 import { AdministrationPage } from "@/features/organizer/AdministrationPage";
+import { EvaluationsPage } from "@/features/organizer/EvaluationsPage";
 import { OrgDocumentsPage } from "@/features/organizer/OrgDocumentsPage";
 import { OrgAnnouncementsPage } from "@/features/organizer/OrgAnnouncementsPage";
 
@@ -54,12 +56,14 @@ export default function App() {
               <Route element={<RoleGuard allow={["jury"]} />}>
                 <Route path="equipes/:teamId" element={<JuryTeamDetailPage />} />
                 <Route path="passages" element={<JuryPassagesPage />} />
+                <Route path="passages/:passageId" element={<JuryPassageDetailPage />} />
               </Route>
 
               <Route element={<RoleGuard allow={["organizer"]} />}>
                 <Route path="tournoi" element={<TournamentPage />} />
                 <Route path="jury" element={<JuryManagementPage />} />
                 <Route path="administration" element={<AdministrationPage />} />
+                <Route path="notes" element={<EvaluationsPage />} />
               </Route>
 
               <Route path="*" element={<TodoPage label="404" />} />

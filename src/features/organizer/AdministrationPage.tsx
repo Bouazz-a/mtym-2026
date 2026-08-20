@@ -38,6 +38,11 @@ import type {
   ReportType,
   Team,
 } from "@/types";
+import { CriteriaEditor } from "./CriteriaEditor";
+import { useSession } from "@/features/shared/SessionContext";
+import { isAdmin } from "@/lib/permissions";
+import { exportAppDataXlsx } from "@/lib/services/exportService";
+import { getPoolDisplayLabel } from "@/utils/naming";
 
 // AdministrationPage — manual editors that complement the auto-generation
 // flows. Three sub-sections:
@@ -49,19 +54,42 @@ import type {
 //   · Affectations jury— matrix toggle (RI / RF / both / none) per
 //                        (juror × team) pair.
 
-type TabId = "pools" | "teams" | "jury";
+type TabId = "pools" | "teams" | "jury" | "criteria";
 
 export function AdministrationPage() {
+  const { session } = useSession();
   const [tab, setTab] = useState<TabId>("pools");
   const [version, setVersion] = useState(0);
+  const [exporting, setExporting] = useState(false);
   const refresh = () => setVersion((v) => v + 1);
+
+  const canExport =
+    session?.role === "organizer" && isAdmin(session.organizer);
+
+  const handleExport = () => {
+    setExporting(true);
+    try {
+      exportAppDataXlsx();
+    } finally {
+      // The download is synchronous; clear the flag on the next tick so the
+      // button briefly shows the busy state.
+      setTimeout(() => setExporting(false), 400);
+    }
+  };
 
   return (
     <PageMotion>
       <PageHeader
         eyebrow="Administration"
         title="Édition manuelle"
-        sub="Ajuster les pools, les équipes et les affectations jury une fois la génération automatique terminée."
+        sub="Ajuster les pools, les équipes, les affectations jury et le barème."
+        right={
+          canExport ? (
+            <Btn onClick={handleExport} disabled={exporting} size="sm">
+              {exporting ? "Export en cours…" : "↓ Exporter XLSX"}
+            </Btn>
+          ) : undefined
+        }
       />
 
       <Tabs current={tab} onChange={setTab} />
@@ -70,6 +98,7 @@ export function AdministrationPage() {
         {tab === "pools" && <PoolsEditor key={version} onChange={refresh} />}
         {tab === "teams" && <TeamsEditor key={version} />}
         {tab === "jury" && <JuryMatrixEditor key={version} />}
+        {tab === "criteria" && <CriteriaEditor key={version} />}
       </div>
     </PageMotion>
   );
@@ -85,9 +114,10 @@ function Tabs({
   onChange: (t: TabId) => void;
 }) {
   const tabs: { id: TabId; label: string }[] = [
-    { id: "pools", label: "Pools & passages" },
+    { id: "pools", label: "Poules & passages" },
     { id: "teams", label: "Équipes" },
     { id: "jury", label: "Affectations jury" },
+    { id: "criteria", label: "Critères" },
   ];
   return (
     <div
@@ -154,7 +184,7 @@ function PoolsEditor({ onChange }: { onChange: () => void }) {
                 className="font-mont text-tiny uppercase tracking-widest"
                 style={{ color: "var(--ink-faint)", fontWeight: 700 }}
               >
-                {group.list.length} pool{group.list.length > 1 ? "s" : ""} ·{" "}
+                {group.list.length} poule{group.list.length > 1 ? "s" : ""} ·{" "}
                 {
                   passages.filter((p) =>
                     group.list.some((po) => po.id === p.poolId),
@@ -174,7 +204,7 @@ function PoolsEditor({ onChange }: { onChange: () => void }) {
                 className="font-open text-sm italic"
                 style={{ color: "var(--ink-faint)" }}
               >
-                Aucune pool générée pour ce tour.
+                Aucune poule générée pour ce tour.
               </p>
             </BrutalCard>
           ) : (
@@ -203,7 +233,7 @@ function PoolsEditor({ onChange }: { onChange: () => void }) {
                           fontSize: "1.15rem",
                         }}
                       >
-                        Pool {pool.label}
+                        {getPoolDisplayLabel(pool)}
                       </h3>
                       <Badge tone="neutral">
                         {poolPassages.length} passages
@@ -790,9 +820,9 @@ function TeamEditCard({
 
   // Reset internal state if the canonical team prop changes (e.g. after
   // an external re-seed).
-  const teamRef = useRef(team);
-  if (teamRef.current.id !== team.id) {
-    teamRef.current = team;
+  const [prevTeamId, setPrevTeamId] = useState(team.id);
+  if (prevTeamId !== team.id) {
+    setPrevTeamId(team.id);
     setDraft(team);
     setError(null);
     setSaved(false);
@@ -903,7 +933,7 @@ function TeamEditCard({
               ))}
             </select>
           </Field>
-          <Field label="Pool · Tour 1">
+          <Field label="Poule · Tour 1">
             <PoolSelect
               pools={r1Pools}
               value={draft.poolIdRound1}
@@ -911,7 +941,7 @@ function TeamEditCard({
             />
           </Field>
 
-          <Field label="Pool · Tour 2 (optionnel)">
+          <Field label="Poule · Tour 2 (optionnel)">
             <PoolSelect
               pools={r2Pools}
               value={draft.poolIdRound2 ?? ""}
@@ -974,7 +1004,7 @@ function PoolSelect({
       {allowNone && <option value="">— Aucune —</option>}
       {pools.map((p) => (
         <option key={p.id} value={p.id}>
-          Pool {p.label}
+          {getPoolDisplayLabel(p)}
         </option>
       ))}
     </select>

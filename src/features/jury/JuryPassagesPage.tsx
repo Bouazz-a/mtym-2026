@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader, BrutalCard, SectionHeading, Badge, Btn, PageMotion, Stagger } from "@/features/shared/primitives";
+import { DocPreviewModal, useDocPreview } from "@/features/shared/DocPreview";
 import { ROLE_PALETTE, StatCounter } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
 import {
@@ -11,6 +13,7 @@ import { getPools } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getDocumentsByTeam } from "@/lib/repositories/documentRepository";
 import { createDownloadUrl } from "@/lib/storage/fileStorage";
+import { getPoolDisplayLabel, getRoundLabel } from "@/utils/naming";
 import type { Document, DocumentType, JuryMember, Passage, Pool, Team } from "@/types";
 
 // JuryPassagesPage — full list of passages a jury member is assigned to.
@@ -34,11 +37,11 @@ interface PassageContext {
 
 export function JuryPassagesPage() {
   const { session } = useSession();
-  const [items, setItems] = useState<PassageContext[]>([]);
   const [filter, setFilter] = useState<RoundFilter>("all");
+  const preview = useDocPreview();
 
-  useEffect(() => {
-    if (!session || session.role !== "jury") return;
+  const items = useMemo<PassageContext[]>(() => {
+    if (!session || session.role !== "jury") return [];
     const mine = getPassagesAssignedToJuror(session.juryMember.id);
     const pools = new Map(getPools().map(p => [p.id, p]));
     const teams = new Map(getTeams().map(t => [t.id, t]));
@@ -59,7 +62,7 @@ export function JuryPassagesPage() {
     }));
 
     enriched.sort((a, b) => a.passage.label.localeCompare(b.passage.label));
-    setItems(enriched);
+    return enriched;
   }, [session]);
 
   const filtered = useMemo(() => {
@@ -142,10 +145,12 @@ export function JuryPassagesPage() {
             key={String(filter)}
             className="grid grid-cols-1 xl:grid-cols-2 gap-6"
           >
-            {filtered.map(ctx => <PassageCard key={ctx.passage.id} ctx={ctx} />)}
+            {filtered.map(ctx => <PassageCard key={ctx.passage.id} ctx={ctx} onPreview={preview.open} />)}
           </Stagger>
         )}
       </section>
+
+      <DocPreviewModal state={preview.state} onClose={preview.close} />
     </PageMotion>
   );
 }
@@ -196,7 +201,7 @@ function StatCard({
 
 // ─── Per-passage card ─────────────────────────────────────────────────
 
-function PassageCard({ ctx }: { ctx: PassageContext }) {
+function PassageCard({ ctx, onPreview }: { ctx: PassageContext; onPreview: (doc: Document) => void }) {
   const { passage, pool, defender, opponent, reporter, extra, coJurors } = ctx;
   const accent = pool?.round === 2 ? "var(--saffron)" : "var(--forest)";
 
@@ -213,7 +218,7 @@ function PassageCard({ ctx }: { ctx: PassageContext }) {
           <div className="min-w-0">
             <div className="font-mont text-tiny uppercase tracking-widest"
                  style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-              {pool ? `Pool ${pool.label} · Tour ${pool.round}` : "Pool inconnue"}
+              {pool ? `${getPoolDisplayLabel(pool)} · ${getRoundLabel(pool.round)}` : "Poule inconnue"}
             </div>
             <div className="flex items-baseline gap-3 mt-0.5">
               <h3 className="font-mont uppercase"
@@ -248,12 +253,12 @@ function PassageCard({ ctx }: { ctx: PassageContext }) {
              style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
           Documents
         </div>
-        <DocumentList passage={passage} defender={defender} opponent={opponent} reporter={reporter} />
+        <DocumentList passage={passage} defender={defender} opponent={opponent} reporter={reporter} onPreview={onPreview} />
       </div>
 
-      {/* Co-jurors footer */}
+      {/* Co-jurors */}
       <div className="px-5 py-3 flex items-center justify-between"
-           style={{ borderTop: "1px dashed var(--border)", background: "var(--paper-2)" }}>
+           style={{ borderTop: "1px dashed var(--border)" }}>
         <div className="font-mont text-tiny uppercase tracking-widest"
              style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
           {coJurors.length === 0 ? "Aucun co-juré" : "Co-jurés"}
@@ -269,6 +274,20 @@ function PassageCard({ ctx }: { ctx: PassageContext }) {
           ))}
         </div>
       </div>
+
+      {/* Evaluate CTA */}
+      <Link to={`/passages/${passage.id}`}
+            className="px-5 py-3 flex items-center justify-between transition-colors hover-row"
+            style={{ borderTop: "1px solid var(--border)", background: "var(--paper-2)" }}>
+        <span className="font-mont text-tiny uppercase tracking-widest"
+              style={{ color: "var(--ink-soft)", fontWeight: 800 }}>
+          Grille d'évaluation
+        </span>
+        <span className="font-mont text-tiny uppercase tracking-widest"
+              style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
+          Évaluer le passage
+        </span>
+      </Link>
     </BrutalCard>
   );
 }
@@ -325,12 +344,13 @@ function TeamRow({ team, role }: { team: Team | undefined; role: keyof typeof RO
 // ─── Documents list (downloadable) ────────────────────────────────────
 
 function DocumentList({
-  passage, defender, opponent, reporter,
+  passage, defender, opponent, reporter, onPreview,
 }: {
   passage: Passage;
   defender: Team | undefined;
   opponent: Team | undefined;
   reporter: Team | undefined;
+  onPreview: (doc: Document) => void;
 }) {
   // Compute the four documents the juror can read for this passage.
   const items: Array<{ label: string; team: Team | undefined; expected: DocumentType | null }> = [
@@ -342,35 +362,36 @@ function DocumentList({
     {
       label: "Présentation",
       team: defender,
-      expected: pickPresentationType(defender, passage),
+      expected: pickPresentationType(defender),
     },
     {
       label: "Fiche opposant",
       team: opponent,
-      expected: pickSummaryType("opposant", opponent, passage),
+      expected: pickSummaryType("opposant", opponent),
     },
     {
       label: "Fiche rapporteur",
       team: reporter,
-      expected: pickSummaryType("rapporteur", reporter, passage),
+      expected: pickSummaryType("rapporteur", reporter),
     },
   ];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
       {items.map((it, idx) => (
-        <DocRow key={idx} label={it.label} team={it.team} expected={it.expected} />
+        <DocRow key={idx} label={it.label} team={it.team} expected={it.expected} onPreview={onPreview} />
       ))}
     </div>
   );
 }
 
 function DocRow({
-  label, team, expected,
+  label, team, expected, onPreview,
 }: {
   label: string;
   team: Team | undefined;
   expected: DocumentType | null;
+  onPreview: (doc: Document) => void;
 }) {
   const doc = team && expected
     ? getDocumentsByTeam(team.id).find(d => d.docType === expected)
@@ -400,7 +421,10 @@ function DocRow({
         </div>
       </div>
       {doc ? (
-        <Btn variant="ghost" size="sm" onClick={handleDownload}>↓</Btn>
+        <div className="flex items-center gap-1 shrink-0">
+          <Btn variant="ghost" size="sm" onClick={() => onPreview(doc)}>Voir</Btn>
+          <Btn variant="ghost" size="sm" onClick={handleDownload}>↓</Btn>
+        </div>
       ) : (
         <span className="font-mont text-micro uppercase tracking-widest"
               style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
@@ -415,7 +439,7 @@ function DocRow({
 // passage. Returns null if the defender hasn't appeared in any prior
 // passage as defender (shouldn't happen — every passage has a unique
 // defender team).
-function pickPresentationType(team: Team | undefined, _passage: Passage): DocumentType | null {
+function pickPresentationType(team: Team | undefined): DocumentType | null {
   if (!team) return null;
   // We don't have the team's full passage history here; the participant-
   // side flow uses index 1 or 2 (first/second time the team defends). For
@@ -431,7 +455,6 @@ function pickPresentationType(team: Team | undefined, _passage: Passage): Docume
 function pickSummaryType(
   role: "opposant" | "rapporteur",
   team: Team | undefined,
-  _passage: Passage,
 ): DocumentType | null {
   if (!team) return null;
   const docs = getDocumentsByTeam(team.id);
