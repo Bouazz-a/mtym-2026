@@ -9,7 +9,11 @@ import {
   upsertPassage,
   upsertPool,
 } from "@/lib/repositories/poolRepository";
-import { getTeamById, getTeams, upsertTeam } from "@/lib/repositories/teamRepository";
+import {
+  getTeamById,
+  getTeams,
+  upsertTeam,
+} from "@/lib/repositories/teamRepository";
 import { buildPassageLabel, buildPoolLabel } from "@/utils/sanitize";
 import { ConflictError, ForbiddenError } from "./errors";
 import type { OrganizerSession } from "./session";
@@ -32,12 +36,12 @@ import type { OrganizerSession } from "./session";
 //   ----  --------          --------            ------
 //   DD    defended P        defends P           ABSOLUTE (forbidden)
 //   OO    opposed  P        opposes P           15
-//   OD    opposed  P        defends P           15
+//   OD    defends  P        opposes P           15
 //   OR    reported P        opposes P           15
-//   DO    defended P        opposes P            5
-//   DR    defended P        reports P            5
+//   DO    opposed P         defends P            5
+//   DR    reported P        defends P            5
 
-const MAX_ATTEMPTS = 2000;
+const MAX_ATTEMPTS = 10000;
 const WEIGHT_HIGH = 15; // OO, OD, OR
 const WEIGHT_LOW = 5; // DO, DR
 // Forbidden (DD) cells get a cost far above any achievable real penalty so
@@ -142,11 +146,7 @@ export function generateBothRoundsOptimal(
     history,
   );
 
-  const report = buildConstraintReport(
-    round2.plans,
-    round1,
-    history,
-  );
+  const report = buildConstraintReport(round2.plans, round1, history);
   saveConstraintReport(report);
 
   return {
@@ -385,21 +385,19 @@ function composeRound2Pools(
 function passagePenalty(
   defender: Team,
   opponent: Team,
-  reporter: Team,
   problem: number,
   history: Map<string, TeamHistory>,
 ): number {
   let s = 0;
   const def = history.get(defender.id);
-  if (def?.opposed.has(problem)) s += WEIGHT_HIGH; // OD
+  if (def?.opposed.has(problem)) s += WEIGHT_LOW; // DO
+  if (def?.reported.has(problem)) s += WEIGHT_LOW; // DR
   const opp = history.get(opponent.id);
   if (opp) {
     if (opp.opposed.has(problem)) s += WEIGHT_HIGH; // OO
-    if (opp.defended.has(problem)) s += WEIGHT_LOW; // DO
+    if (opp.defended.has(problem)) s += WEIGHT_HIGH; // DO
     if (opp.reported.has(problem)) s += WEIGHT_HIGH; // OR
   }
-  const rep = history.get(reporter.id);
-  if (rep?.defended.has(problem)) s += WEIGHT_LOW; // DR
   return s;
 }
 
@@ -423,7 +421,6 @@ function solvePoolOptimal(
     for (let i = 0; i < N; i++) {
       const defender = teams[square[i][0]];
       const opponent = teams[square[i][1]];
-      const reporter = teams[square[i][2]];
       const row = new Array<number>(N);
       const defHist = history.get(defender.id);
       for (let k = 0; k < N; k++) {
@@ -431,7 +428,12 @@ function solvePoolOptimal(
         if (defHist?.defended.has(problem)) {
           row[k] = FORBIDDEN; // DD — absolute
         } else {
-          row[k] = passagePenalty(defender, opponent, reporter, problem, history);
+          row[k] = passagePenalty(
+            defender,
+            opponent,
+            problem,
+            history,
+          );
         }
       }
       cost[i] = row;
@@ -585,7 +587,11 @@ function buildConstraintReport(
       teamQuad: quadById.get(teamId) ?? "?",
       problemNumber: problem,
       round2: { poolLabel, passageLabel, role: r2Role },
-      round1: { poolLabel: origin.poolLabel, passageLabel: origin.passageLabel, role: r1Role },
+      round1: {
+        poolLabel: origin.poolLabel,
+        passageLabel: origin.passageLabel,
+        role: r1Role,
+      },
     });
   };
 
@@ -596,23 +602,65 @@ function buildConstraintReport(
 
       const defH = history.get(entry.defender.id);
       if (defH?.opposed.has(prob)) {
-        push("OD", WEIGHT_HIGH, entry.defender.id, prob, plan.pool.label, passageLabel, "defender", "opposed");
+        push(
+          "DO",
+          WEIGHT_LOW,
+          entry.defender.id,
+          prob,
+          plan.pool.label,
+          passageLabel,
+          "defender",
+          "opposed",
+        );
       }
-
+      if (defH?.reported.has(prob)) {
+        push(
+          "DR",
+          WEIGHT_LOW,
+          entry.defender.id,
+          prob,
+          plan.pool.label,
+          passageLabel,
+          "defender",
+          "reported",
+        );
+      }
       const oppH = history.get(entry.opponent.id);
       if (oppH?.opposed.has(prob)) {
-        push("OO", WEIGHT_HIGH, entry.opponent.id, prob, plan.pool.label, passageLabel, "opponent", "opposed");
+        push(
+          "OO",
+          WEIGHT_HIGH,
+          entry.opponent.id,
+          prob,
+          plan.pool.label,
+          passageLabel,
+          "opponent",
+          "opposed",
+        );
       }
       if (oppH?.defended.has(prob)) {
-        push("DO", WEIGHT_LOW, entry.opponent.id, prob, plan.pool.label, passageLabel, "opponent", "defended");
+        push(
+          "OD",
+          WEIGHT_HIGH,
+          entry.opponent.id,
+          prob,
+          plan.pool.label,
+          passageLabel,
+          "opponent",
+          "defended",
+        );
       }
       if (oppH?.reported.has(prob)) {
-        push("OR", WEIGHT_HIGH, entry.opponent.id, prob, plan.pool.label, passageLabel, "opponent", "reported");
-      }
-
-      const repH = history.get(entry.reporter.id);
-      if (repH?.defended.has(prob)) {
-        push("DR", WEIGHT_LOW, entry.reporter.id, prob, plan.pool.label, passageLabel, "reporter", "defended");
+        push(
+          "OR",
+          WEIGHT_HIGH,
+          entry.opponent.id,
+          prob,
+          plan.pool.label,
+          passageLabel,
+          "opponent",
+          "reported",
+        );
       }
     });
   }
