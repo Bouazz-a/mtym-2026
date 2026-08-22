@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   PageHeader, BrutalCard, SectionHeading, Badge, DiamondMarker, PageMotion,
 } from "@/features/shared/primitives";
-import { StatCounter } from "@/features/shared/widgets";
+import { StatCounter, ROLE_PALETTE } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
 import {
   autoAssignAll, autoAssignReports, autoAssignPassages,
@@ -15,6 +15,7 @@ import {
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getPools, getPassages } from "@/lib/repositories/poolRepository";
 import { ServiceError } from "@/lib/services/errors";
+import { getPoolDisplayLabel } from "@/utils/naming";
 import type { JuryAssignment, JuryPassageAssignment, Passage, Pool, Team } from "@/types";
 
 // JuryManagementPage — organizer-side jury workload distribution.
@@ -27,32 +28,22 @@ import type { JuryAssignment, JuryPassageAssignment, Passage, Pool, Team } from 
 
 export function JuryManagementPage() {
   const { session } = useSession();
-  const [state, setState] = useState<{
-    loads: JurorLoad[];
-    reports: JuryAssignment[];
-    passages: JuryPassageAssignment[];
-    teams: Team[];
-    passageList: Passage[];
-    pools: Pool[];
-  } | null>(null);
+  const loadState = () => ({
+    loads: computeJurorLoads(),
+    reports: getJuryAssignments(),
+    passages: getJuryPassageAssignments(),
+    teams: getTeams(),
+    passageList: getPassages(),
+    pools: getPools(),
+  });
+  const [state, setState] = useState(loadState);
   const [busy, setBusy] = useState<null | "all" | "inter" | "final" | "passages">(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const refresh = () => {
-    setState({
-      loads: computeJurorLoads(),
-      reports: getJuryAssignments(),
-      passages: getJuryPassageAssignments(),
-      teams: getTeams(),
-      passageList: getPassages(),
-      pools: getPools(),
-    });
-  };
+  const refresh = () => setState(loadState());
 
-  useEffect(refresh, []);
-
-  if (!session || session.role !== "organizer" || !state) return null;
+  if (!session || session.role !== "organizer") return null;
 
   const handle = (action: NonNullable<typeof busy>) => () => {
     setError(null); setNotice(null); setBusy(action);
@@ -204,7 +195,7 @@ export function JuryManagementPage() {
         </BrutalCard>
       </section>
 
-      {/* Passage assignments table */}
+      {/* Passage assignments — grouped by pool */}
       <section className="pb-10">
         <SectionHeading
           title="Affectation des passages"
@@ -214,69 +205,123 @@ export function JuryManagementPage() {
             </Badge>
           }
         />
+        <PassageAssignmentsByPool state={state} />
+      </section>
+    </PageMotion>
+  );
+}
 
-        <BrutalCard className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="brutal-table">
-              <thead>
-                <tr>
-                  <th>Passage</th>
-                  <th>Pool</th>
-                  <th style={{ textAlign: "center" }}>Pb</th>
-                  <th>Défense</th>
-                  <th>Opposition</th>
-                  <th>Rapport</th>
-                  <th style={{ borderRight: "none" }}>Jurés</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...state.passageList].sort((a, b) => a.label.localeCompare(b.label)).map(p => {
+// ─── Passage assignments grouped by pool ──────────────────────────────
+
+function PassageAssignmentsByPool({
+  state,
+}: {
+  state: {
+    loads: JurorLoad[];
+    passages: JuryPassageAssignment[];
+    teams: Team[];
+    passageList: Passage[];
+    pools: Pool[];
+  };
+}) {
+  const teamById = new Map(state.teams.map(t => [t.id, t]));
+  const jurorById = new Map(state.loads.map(l => [l.juror.id, l.juror]));
+  const passagesByPool = new Map<string, Passage[]>();
+  for (const p of state.passageList) {
+    const list = passagesByPool.get(p.poolId) ?? [];
+    list.push(p);
+    passagesByPool.set(p.poolId, list);
+  }
+  const sortedPools = [...state.pools].sort((a, b) => a.label.localeCompare(b.label));
+
+  if (sortedPools.length === 0) {
+    return (
+      <BrutalCard className="p-8" withCorners={false}
+                  style={{ borderStyle: "dashed", boxShadow: "none" }}>
+        <p className="font-open text-sm italic" style={{ color: "var(--ink-faint)" }}>
+          Aucune poule générée. Lancez d'abord le tirage depuis la page Tournoi.
+        </p>
+      </BrutalCard>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {sortedPools.map(pool => {
+        const pool_passages = (passagesByPool.get(pool.id) ?? [])
+          .sort((a, b) => a.label.localeCompare(b.label));
+        const total = pool_passages.length;
+        const assigned = pool_passages.filter(p =>
+          state.passages.some(a => a.passageId === p.id),
+        ).length;
+        const accent = pool.round === 1 ? "var(--forest)" : "var(--saffron)";
+        return (
+          <BrutalCard key={pool.id} className="overflow-hidden">
+            <div
+              className="px-4 py-3 flex items-center justify-between gap-3"
+              style={{
+                borderBottom: "2px solid var(--forest)",
+                background: pool.round === 1 ? "rgba(98,159,115,0.08)" : "rgba(246,168,6,0.08)",
+              }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span style={{ width: 6, height: 22, background: accent }} />
+                <div className="min-w-0">
+                  <div className="font-mont text-tiny uppercase tracking-widest"
+                       style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+                    Tour {pool.round}
+                  </div>
+                  <div className="font-mont"
+                       style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.05rem" }}>
+                    {getPoolDisplayLabel(pool)}
+                  </div>
+                </div>
+              </div>
+              <Badge tone={assigned === total && total > 0 ? "sage" : assigned > 0 ? "saffron" : "neutral"}>
+                {assigned}/{total} affectés
+              </Badge>
+            </div>
+
+            {pool_passages.length === 0 ? (
+              <p className="font-open text-xs italic px-4 py-4"
+                 style={{ color: "var(--ink-faint)" }}>
+                Aucun passage dans cette poule.
+              </p>
+            ) : (
+              <ul>
+                {pool_passages.map((p, i) => {
                   const jurors = state.passages.filter(a => a.passageId === p.id);
-                  const teamById = new Map(state.teams.map(t => [t.id, t]));
-                  const poolById = new Map(state.pools.map(po => [po.id, po]));
-                  const jurorById = new Map(state.loads.map(l => [l.juror.id, l.juror]));
                   return (
-                    <tr key={p.id}>
-                      <td>
-                        <span className="font-mont text-xs"
-                              style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-                          {p.label}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="font-mont text-xs"
-                              style={{ color: "var(--forest)", fontWeight: 800 }}>
-                          {poolById.get(p.poolId)?.label ?? "—"}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <span className="font-mont"
-                              style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
-                          P{p.problemNumber}
-                        </span>
-                      </td>
-                      <td>
-                        <Quad>{teamById.get(p.defenderTeamId)?.quadrigramme}</Quad>
-                      </td>
-                      <td>
-                        <Quad>{teamById.get(p.opponentTeamId)?.quadrigramme}</Quad>
-                      </td>
-                      <td>
-                        <Quad>{teamById.get(p.reporterTeamId)?.quadrigramme}</Quad>
-                      </td>
-                      <td style={{ borderRight: "none" }}>
+                    <li
+                      key={p.id}
+                      className="px-4 py-3 transition-colors hover-row"
+                      style={{ borderTop: i === 0 ? undefined : "1px solid var(--border)" }}
+                    >
+                      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="font-mont text-micro uppercase tracking-widest px-1.5 py-0.5"
+                                style={{ background: "var(--paper-2)", color: "var(--ink-soft)",
+                                         border: "1px solid var(--border)", fontWeight: 800 }}>
+                            {p.label}
+                          </span>
+                          <span className="font-mont"
+                                style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
+                            P{p.problemNumber}
+                          </span>
+                        </div>
                         {jurors.length === 0 ? (
-                          <span className="font-open text-xs italic"
-                                style={{ color: "var(--ink-faint)" }}>
+                          <span className="font-mont text-micro uppercase tracking-widest"
+                                style={{ color: "var(--clay)", fontWeight: 800 }}>
                             Non affecté
                           </span>
                         ) : (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex gap-1.5">
                             {jurors.map(a => {
                               const j = jurorById.get(a.juryMemberId);
                               if (!j) return null;
                               return (
                                 <span key={a.juryMemberId}
+                                      title={`${j.firstName} ${j.lastName}`}
                                       className="font-mont text-micro uppercase tracking-widest px-1.5 py-0.5"
                                       style={{ background: "var(--forest)", color: "var(--saffron)", fontWeight: 800 }}>
                                   {initials(j.firstName, j.lastName)}
@@ -285,16 +330,46 @@ export function JuryManagementPage() {
                             })}
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <RoleQuad role="defender" team={teamById.get(p.defenderTeamId)} />
+                        <RoleQuad role="opponent" team={teamById.get(p.opponentTeamId)} />
+                        <RoleQuad role="reporter" team={teamById.get(p.reporterTeamId)} />
+                        {p.extraTeamId && (
+                          <RoleQuad role="extra" team={teamById.get(p.extraTeamId)} />
+                        )}
+                      </div>
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        </BrutalCard>
-      </section>
-    </PageMotion>
+              </ul>
+            )}
+          </BrutalCard>
+        );
+      })}
+    </div>
+  );
+}
+
+function RoleQuad({
+  role, team,
+}: {
+  role: keyof typeof ROLE_PALETTE;
+  team: Team | undefined;
+}) {
+  const meta = ROLE_PALETTE[role];
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-1"
+          style={{ border: "1px solid var(--border)", background: "var(--surface)" }}>
+      <span className="font-mont text-micro uppercase tracking-widest px-1.5 py-0.5"
+            style={{ background: meta.bg, color: meta.fg, fontWeight: 800 }}>
+        {meta.short}
+      </span>
+      <span className="font-mont text-xs"
+            style={{ color: "var(--forest)", fontWeight: 900, letterSpacing: "0.05em" }}>
+        {team?.quadrigramme ?? "—"}
+      </span>
+    </span>
   );
 }
 
@@ -445,16 +520,6 @@ function Lane({ label, tone, children }: { label: string; tone: "sage" | "saffro
         {children}
       </span>
     </div>
-  );
-}
-
-function Quad({ children }: { children: React.ReactNode }) {
-  if (!children) return <span className="font-mont text-xs" style={{ color: "var(--ink-faint)" }}>—</span>;
-  return (
-    <span className="font-mont text-xs"
-          style={{ color: "var(--forest)", fontWeight: 800, letterSpacing: "0.05em" }}>
-      {children}
-    </span>
   );
 }
 

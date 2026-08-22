@@ -1,0 +1,127 @@
+% MTYM — Note de synthèse
+% Modèle adapté du gabarit officiel TFJM², à compléter par les équipes
+% Opposant et Rapporteur de chaque passage.
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{titlesec}
+\usepackage{parskip}
+
+\setlist{nosep,leftmargin=1.4em}
+\titleformat{\section}{\normalfont\Large\bfseries}{}{0pt}{}
+\titlespacing*{\section}{0pt}{*1.6}{*0.8}
+
+\newcommand{\blank}[1]{\rule{#1}{0.4pt}}
+\newcommand{\smallblank}{\blank{2.2em}}
+\newcommand{\midblank}{\blank{6em}}
+
+% Table cell helper — 8 numbered rows
+\newcommand{\synthtable}{%
+  \begin{tabular}{|c|c|c|c|c|}
+  \hline
+  Question & ER & PR & QE & NT \\\hline
+  \phantom{Q1} & & & & \\\hline
+  \phantom{Q1} & & & & \\\hline
+  \phantom{Q1} & & & & \\\hline
+  \phantom{Q1} & & & & \\\hline
+  \phantom{Q1} & & & & \\\hline
+  \phantom{Q1} & & & & \\\hline
+  \phantom{Q1} & & & & \\\hline
+  \phantom{Q1} & & & & \\\hline
+  \end{tabular}%
+}
+
+\begin{document}
+
+\begin{center}
+  {\Huge\bfseries MTYM}\\[0.3em]
+  {\Large NOTE DE SYNTHÈSE}
+\end{center}
+
+\vspace{0.8em}
+Poule \smallblank\\
+Problème \smallblank{} défendu par l'équipe \midblank\\
+Synthèse par l'équipe \midblank{} dans le rôle de :
+$\square$ Opposant \quad $\square$ Rapporteur
+
+\section*{Évaluation question par question de la solution}
+
+\noindent
+\begin{minipage}{0.40\textwidth}\synthtable\end{minipage}\hfill
+\begin{minipage}{0.40\textwidth}\synthtable\end{minipage}
+
+\medskip
+
+\noindent
+\textbf{ER} : entièrement résolue, ni erreur, ni manque mathématique\\
+\textbf{PR} : partiellement résolue\\
+\textbf{QE} : quelques éléments de réponse\\
+\textbf{NT} : non traitée
+
+\smallskip
+\emph{Remarque :} il est possible de cocher entre les cases pour un cas
+intermédiaire.
+
+\section*{Erreurs et imprécisions}
+
+Listez ci-dessous par ordre décroissant d'importance au plus quatre
+erreurs et/ou imprécisions selon vous, en précisant la question
+concernée, la page, le paragraphe et le type de remarque.
+
+\vspace{0.4em}
+\newcommand{\erreurEntry}[1]{%
+  #1. Question \smallblank{} Page \smallblank{} Paragraphe \smallblank\\
+  $\square$ Erreur majeure \quad $\square$ Erreur mineure \quad
+  $\square$ Imprécision \quad $\square$ Autre : \blank{4em}\\
+  Description :\\[4em]
+}
+\erreurEntry{1}
+\erreurEntry{2}
+\erreurEntry{3}
+\erreurEntry{4}
+
+\section*{Aspects positifs}
+
+Identifiez au plus deux points forts spécifiques de la solution et
+dites pourquoi (exemples : propositions majeures, idées importantes,
+généralisations pertinentes, exemples significatifs, constructions
+originales,\ldots).
+
+\vspace{0.4em}
+\newcommand{\positifEntry}[1]{%
+  #1. Question \smallblank{} Page \smallblank{} Paragraphe \smallblank\\
+  Description :\\[4em]
+}
+\positifEntry{1}
+\positifEntry{2}
+
+\section*{Évaluation qualitative de la solution}
+
+Donnez votre avis concernant la solution en général. Mettez notamment
+en valeur ses qualités globales, et précisez ce qui aurait pu
+l'améliorer.
+
+\vfill
+
+\begin{center}
+\textbf{Évaluation générale :} \quad
+$\square$ Excellente \quad $\square$ Bonne \quad
+$\square$ Suffisante \quad $\square$ Passable
+\end{center}
+
+\section*{Autres remarques (facultatif)}
+
+Présentation, lisibilité, orthographe, etc.
+
+\vfill
+\hrulefill\\
+\small Modèle rédigé par TFJM\textsuperscript{2}, adapté pour MTYM.
+
+\end{document}

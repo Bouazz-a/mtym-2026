@@ -1,4 +1,4 @@
-import { Children, isValidElement, useEffect, useRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
 import { motion, useReducedMotion, type HTMLMotionProps, type Transition } from "framer-motion";
 
 // Primitives — visual building blocks aligned with the MTYM aesthetic:
@@ -579,8 +579,6 @@ export function Popover({
     };
   }, [open, onClose, anchorRef]);
 
-  if (!open || !anchorRef.current) return null;
-
   // getBoundingClientRect() is viewport-relative, and we position the popover
   // with `position: fixed` (also viewport-relative), so the rect maps 1:1 —
   // do NOT add scrollX/scrollY or the popover drifts off-screen once the page
@@ -591,19 +589,34 @@ export function Popover({
   // value × zoom) while getBoundingClientRect() already returns the
   // post-zoom visual position — so divide the rect coords by the zoom
   // factor to cancel the double-scale. zoom = 1 leaves behaviour unchanged.
-  const zoom =
-    parseFloat(getComputedStyle(document.body).getPropertyValue("zoom")) || 1;
-  const rect = anchorRef.current.getBoundingClientRect();
-  const top = (rect.bottom + 8) / zoom;
-  const left = align === "right"
-    ? rect.right / zoom - width
-    : rect.left / zoom;
+  //
+  // Measured in a layout effect (refs can't be read during render); the
+  // popover paints on the frame after `open` flips, before the browser
+  // shows anything in between.
+  // A stale `pos` from a previous opening is fine: the guard below hides
+  // the popover while closed, and the effect re-measures (before paint)
+  // when it reopens.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    const zoom =
+      parseFloat(getComputedStyle(document.body).getPropertyValue("zoom")) || 1;
+    const rect = anchor.getBoundingClientRect();
+    setPos({
+      top: (rect.bottom + 8) / zoom,
+      left: align === "right" ? rect.right / zoom - width : rect.left / zoom,
+    });
+  }, [open, align, width, anchorRef]);
+
+  if (!open || !pos) return null;
 
   return (
     <div
       ref={ref}
       className="popover"
-      style={{ position: "fixed", top, left, width }}
+      style={{ position: "fixed", top: pos.top, left: pos.left, width }}
       role="dialog"
     >
       {children}

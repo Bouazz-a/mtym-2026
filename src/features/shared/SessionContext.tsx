@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { Session } from "@/lib/services/session";
 import { getParticipantById, getParticipants } from "@/lib/repositories/participantRepository";
 import { getTeamById, getTeams } from "@/lib/repositories/teamRepository";
@@ -49,12 +49,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem(STORAGE_KEY_ID);
   });
 
-  const [session, setSession] = useState<Session | null>(null);
-  const [version, setVersion] = useState(0);
-
-  useEffect(() => {
-    setSession(buildSession(role, activeUserId));
-  }, [role, activeUserId, version]);
+  // localStorage reads are synchronous, so the session is built eagerly
+  // on mount and rebuilt in the handlers that change role/user/data.
+  const [session, setSession] = useState<Session | null>(() =>
+    buildSession(role, activeUserId),
+  );
 
   const setRole = (newRole: Role) => {
     localStorage.setItem(STORAGE_KEY_ROLE, newRole);
@@ -63,6 +62,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEY_ID);
     setActiveUserIdState(null);
     setRoleState(newRole);
+    setSession(buildSession(newRole, null));
   };
 
   const setActiveUser = ({ role: newRole, id }: ActiveUserSelection) => {
@@ -70,9 +70,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY_ID, id);
     setRoleState(newRole);
     setActiveUserIdState(id);
+    setSession(buildSession(newRole, id));
   };
 
-  const refresh = useCallback(() => setVersion(v => v + 1), []);
+  const refresh = useCallback(
+    () => setSession(buildSession(role, activeUserId)),
+    [role, activeUserId],
+  );
 
   return (
     <SessionContext.Provider value={{ session, role, activeUserId, setRole, setActiveUser, refresh }}>

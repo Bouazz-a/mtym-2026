@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "@/features/shared/SessionContext";
 import {
   ROLE_PALETTE,
@@ -25,6 +26,7 @@ import {
 import { uploadDocument } from "@/lib/services/documentUploadService";
 import { ServiceError } from "@/lib/services/errors";
 import { isTeamCreator } from "@/lib/permissions";
+import { getPoolDisplayLabel, getRoundLabel } from "@/utils/naming";
 import {
   createDownloadUrl,
   fileToBase64,
@@ -64,58 +66,45 @@ export function ParcoursPage() {
     ? getTeamById(participantSession.team.id) ?? participantSession.team
     : null;
 
-  const [members, setMembers] = useState<Participant[]>([]);
-  const [pool1, setPool1] = useState<Pool | null>(null);
-  const [pool2, setPool2] = useState<Pool | null>(null);
-  const [passages, setPassages] = useState<Passage[]>([]);
-  const [teamById, setTeamById] = useState<Map<string, Team>>(new Map());
-  const [docs, setDocs] = useState<Document[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
-  const [myViolations, setMyViolations] = useState<ConstraintViolation[]>([]);
   const [highlight, setHighlight] = useState(false);
 
-  const refresh = () => {
-    if (!participantSession || !team) return;
-    setMembers(getParticipantsByTeam(team.id));
-    const pools = getPools();
-    setPool1(pools.find((p) => p.id === team.poolIdRound1) ?? null);
-    setPool2(
-      team.poolIdRound2
-        ? (pools.find((p) => p.id === team.poolIdRound2) ?? null)
-        : null,
-    );
-    setPassages(getPassagesByTeam(team.id));
-    const map = new Map<string, Team>();
-    for (const t of getTeams()) map.set(t.id, t);
-    setTeamById(map);
-    setDocs(getDocumentsByTeam(team.id));
-    setAnnouncements(
-      getAnnouncements()
+  // Everything below is derived synchronously from storage on each render;
+  // bumping `version` after a mutation (e.g. an upload) forces a fresh read.
+  const [, setVersion] = useState(0);
+  const refresh = () => setVersion((v) => v + 1);
+
+  const members: Participant[] = team ? getParticipantsByTeam(team.id) : [];
+  const pools = team ? getPools() : [];
+  const pool1: Pool | null = team
+    ? pools.find((p) => p.id === team.poolIdRound1) ?? null
+    : null;
+  const pool2: Pool | null = team?.poolIdRound2
+    ? pools.find((p) => p.id === team.poolIdRound2) ?? null
+    : null;
+  const passages: Passage[] = team ? getPassagesByTeam(team.id) : [];
+  const teamById = new Map<string, Team>(
+    team ? getTeams().map((t) => [t.id, t]) : [],
+  );
+  const docs: Document[] = team ? getDocumentsByTeam(team.id) : [];
+  const announcements: Announcement[] = team
+    ? getAnnouncements()
         .filter((a) => a.audience === "all" || a.audience === "participants")
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .slice(0, 3),
-    );
-    setDeadlines(
-      getDeadlines()
+        .slice(0, 3)
+    : [];
+  const deadlines: Deadline[] = team
+    ? getDeadlines()
         .filter(
           (d) => d.targetRole === "all" || d.targetRole === "participants",
         )
         .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(0, 3),
-    );
-    const rep = getConstraintReport();
-    setMyViolations(
-      rep ? rep.violations.filter((v) => v.teamId === team.id) : [],
-    );
-  };
+        .slice(0, 3)
+    : [];
+  const rep = team ? getConstraintReport() : null;
+  const myViolations: ConstraintViolation[] =
+    team && rep ? rep.violations.filter((v) => v.teamId === team.id) : [];
 
-  useEffect(refresh, [team?.id, team?.poolIdRound1, team?.poolIdRound2]);
-
-  const vindex = useMemo(
-    () => buildViolationIndex(myViolations),
-    [myViolations],
-  );
+  const vindex = buildViolationIndex(myViolations);
 
   // Every hook has run — safe to bail out now. TS narrows team/session to
   // non-null for all code (and JSX) below.
@@ -247,11 +236,11 @@ export function ParcoursPage() {
           >
             <span style={{ color: "var(--saffron)" }}>Affectations</span>
             <span style={{ color: "rgba(244,236,216,0.9)" }}>
-              ◆ Tour 1 : {pool1 ? `Pool ${pool1.label}` : "—"}
+              ◆ Tour 1 : {pool1 ? getPoolDisplayLabel(pool1) : "—"}
             </span>
             <span style={{ color: "rgba(244,236,216,0.3)" }}>//</span>
             <span style={{ color: "rgba(244,236,216,0.9)" }}>
-              ◆ Tour 2 : {pool2 ? `Pool ${pool2.label}` : "—"}
+              ◆ Tour 2 : {pool2 ? getPoolDisplayLabel(pool2) : "—"}
             </span>
             <span style={{ color: "rgba(244,236,216,0.3)" }}>//</span>
             <span style={{ color: "var(--sage)" }}>
@@ -373,7 +362,7 @@ export function ParcoursPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {pool1 && (
                     <PoolPanel
-                      label={`Tour 1 · Pool ${pool1.label}`}
+                      label={`${getRoundLabel(1)} · ${getPoolDisplayLabel(pool1)}`}
                       pool={pool1}
                       passages={passages.filter((p) => p.poolId === pool1.id)}
                       team={team}
@@ -384,7 +373,7 @@ export function ParcoursPage() {
                   )}
                   {pool2 && (
                     <PoolPanel
-                      label={`Tour 2 · Pool ${pool2.label}`}
+                      label={`${getRoundLabel(2)} · ${getPoolDisplayLabel(pool2)}`}
                       pool={pool2}
                       passages={passages.filter((p) => p.poolId === pool2.id)}
                       team={team}
@@ -810,21 +799,94 @@ function ProblemTile({
   );
   const filled = Boolean(doc);
 
-  if (filled) {
-    return (
-      <div
-        className={`relative p-6 shadow-brutal-sm overflow-hidden noise-overlay noise-overlay--card ${className}`}
-        style={{
-          backgroundColor: "var(--forest)",
-          // Same gold halo from the top edge as the RADAR panel — keeps
-          // the dark surfaces consistent.
-          backgroundImage:
-            "radial-gradient(ellipse 100% 60% at 50% 0%, rgba(246,168,6,0.07) 0%, transparent 70%)",
-          color: "var(--paper)",
-          border: "1px solid var(--forest)",
-        }}
-      >
-        <div
+  // AnimatePresence wraps the empty↔filled swap so framer-motion sees the
+  // mount/unmount lifecycle explicitly. `initial={false}` suppresses the
+  // first-paint animation when the tile is already filled at page load,
+  // so the enter animation only plays when an upload actually flips the
+  // state (or a Remplacer assigns a new doc.id).
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {filled ? (
+        <FilledTile
+          key={`filled-${doc!.id}`}
+          number={number}
+          doc={doc!}
+          canUpload={canUpload}
+          inputRef={inputRef}
+          handle={handle}
+          pick={pick}
+          busy={busy}
+          error={error}
+          className={className}
+        />
+      ) : (
+        <EmptyTile
+          key="empty"
+          number={number}
+          quad={team.quadrigramme}
+          canUpload={canUpload}
+          inputRef={inputRef}
+          handle={handle}
+          pick={pick}
+          busy={busy}
+          error={error}
+          className={className}
+        />
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─── Filled tile (animated entry) ──────────────────────────────────────
+
+function FilledTile({
+  number, doc, canUpload, inputRef, handle, pick, busy, error, className,
+}: {
+  number: number;
+  doc: Document;
+  canUpload: boolean;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  handle: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  pick: () => void;
+  busy: boolean;
+  error: string | null;
+  className: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+      className={`relative p-6 shadow-brutal-sm overflow-hidden noise-overlay noise-overlay--card ${className}`}
+      style={{
+        backgroundColor: "var(--forest)",
+        backgroundImage:
+          "radial-gradient(ellipse 100% 60% at 50% 0%, rgba(246,168,6,0.07) 0%, transparent 70%)",
+        color: "var(--paper)",
+        border: "1px solid var(--forest)",
+      }}
+    >
+        {/* Saffron sweep that runs across the card the moment it appears. */}
+        <motion.div
+          aria-hidden
+          className="absolute inset-y-0 pointer-events-none"
+          initial={{ x: "-110%", opacity: 0.55 }}
+          animate={{ x: "120%", opacity: 0 }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.05 }}
+          style={{
+            width: "55%",
+            background:
+              "linear-gradient(110deg, transparent 0%, rgba(246,168,6,0.18) 50%, transparent 100%)",
+            mixBlendMode: "screen",
+          }}
+        />
+
+        {/* Stamp-in saffron check tile. */}
+        <motion.div
+          initial={{ scale: 0, rotate: -20 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ delay: 0.18, type: "spring", stiffness: 380, damping: 18 }}
           className="absolute top-0 right-0 flex items-center justify-center"
           style={{
             width: 32,
@@ -832,10 +894,11 @@ function ProblemTile({
             background: "var(--saffron)",
             color: "var(--forest)",
             fontWeight: 800,
+            transformOrigin: "top right",
           }}
         >
           ✓
-        </div>
+        </motion.div>
         <div className="flex items-center gap-2 mb-4">
           <span
             className="flex items-center justify-center font-mont"
@@ -857,9 +920,15 @@ function ProblemTile({
             P{number}
           </span>
         </div>
-        <p className="font-mont truncate mb-6" style={{ fontWeight: 700 }}>
+        <motion.p
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.16, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          className="font-mont truncate mb-6"
+          style={{ fontWeight: 700 }}
+        >
           {doc!.renamedAs}
-        </p>
+        </motion.p>
         <input
           ref={inputRef}
           type="file"
@@ -896,12 +965,31 @@ function ProblemTile({
             {error}
           </div>
         )}
-      </div>
-    );
-  }
+    </motion.div>
+  );
+}
 
+// ─── Empty tile ────────────────────────────────────────────────────────
+
+function EmptyTile({
+  number, quad, canUpload, inputRef, handle, pick, busy, error, className,
+}: {
+  number: number;
+  quad: string;
+  canUpload: boolean;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  handle: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  pick: () => void;
+  busy: boolean;
+  error: string | null;
+  className: string;
+}) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.18 }}
       className={`rf-tile-empty relative p-6 bg-graph-paper transition-all duration-200 min-h-[160px] flex flex-col items-center justify-center text-center group ${className}`}
       onClick={canUpload ? pick : undefined}
       style={{
@@ -938,7 +1026,7 @@ function ProblemTile({
         className="font-mont text-micro uppercase tracking-widest mt-1"
         style={{ color: "var(--ink-faint)", fontWeight: 600 }}
       >
-        {team.quadrigramme}_RF_P{number}.pdf
+        {quad}_RF_P{number}.pdf
       </p>
       <input
         ref={inputRef}
@@ -955,7 +1043,7 @@ function ProblemTile({
           {error}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader, BrutalCard, SectionHeading, Badge, PageMotion } from "@/features/shared/primitives";
 import {
   ROLE_PALETTE,
@@ -17,6 +17,7 @@ import type { ConstraintReport, ConstraintViolation } from "@/lib/services/tourn
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getPools, getPassages } from "@/lib/repositories/poolRepository";
 import { ServiceError } from "@/lib/services/errors";
+import { getPoolDisplayLabel } from "@/utils/naming";
 import type { Pool, Passage, Team } from "@/types";
 
 type ViolationIndex = Map<string, ConstraintViolation[]>;
@@ -25,32 +26,31 @@ type RoundData = { pools: Pool[]; passages: Passage[] };
 
 export function TournamentPage() {
   const { session, refresh: refreshSession } = useSession();
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [round1, setRound1] = useState<RoundData | null>(null);
-  const [round2, setRound2] = useState<RoundData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [report, setReport] = useState<ConstraintReport | null>(null);
-  const [highlight, setHighlight] = useState(false);
-
-  const refresh = () => {
-    setTeams(getTeams());
+  const loadData = () => {
     const allPools = getPools();
     const allPassages = getPassages();
     const r1Pools = allPools.filter(p => p.round === 1);
     const r2Pools = allPools.filter(p => p.round === 2);
-    setRound1(r1Pools.length ? {
-      pools: r1Pools,
-      passages: allPassages.filter(p => r1Pools.some(po => po.id === p.poolId)),
-    } : null);
-    setRound2(r2Pools.length ? {
-      pools: r2Pools,
-      passages: allPassages.filter(p => r2Pools.some(po => po.id === p.poolId)),
-    } : null);
-    setReport(getConstraintReport());
+    return {
+      teams: getTeams(),
+      round1: r1Pools.length ? {
+        pools: r1Pools,
+        passages: allPassages.filter(p => r1Pools.some(po => po.id === p.poolId)),
+      } : null as RoundData | null,
+      round2: r2Pools.length ? {
+        pools: r2Pools,
+        passages: allPassages.filter(p => r2Pools.some(po => po.id === p.poolId)),
+      } : null as RoundData | null,
+      report: getConstraintReport() as ConstraintReport | null,
+    };
   };
+  const [data, setData] = useState(loadData);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [highlight, setHighlight] = useState(false);
 
-  useEffect(refresh, []);
+  const refresh = () => setData(loadData());
+  const { teams, round1, round2, report } = data;
 
   const handleGenerate = () => {
     if (!session || session.role !== "organizer") return;
@@ -63,7 +63,7 @@ export function TournamentPage() {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         try {
-          generateBothRoundsOptimal(session, { teams, poolSize: 4, problemPool: [1, 2, 3, 4, 5] });
+          generateBothRoundsOptimal(session, { teams, poolSize: 4, problemPool: [1, 2, 3, 4, 5, 6] });
           refresh();
           refreshSession();
         } catch (e) {
@@ -115,7 +115,7 @@ export function TournamentPage() {
       {/* Stat cards */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard label="Équipes" value={teams.length} progressColor="var(--saffron)" />
-        <StatCard label="Pools" value={totalPools} progressColor="var(--sage)" />
+        <StatCard label="Poules" value={totalPools} progressColor="var(--sage)" />
         <StatCard label="Passages" value={totalPassages} progressColor="var(--forest-soft)" />
         <StatCard
           label="Tours"
@@ -352,7 +352,7 @@ function PoolCard({
           <span style={{ width: 8, height: 28, background: accent }} />
           <h3 className="font-mont"
               style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.25rem", letterSpacing: "-0.01em" }}>
-            Pool {pool.label}
+            {getPoolDisplayLabel(pool)}
           </h3>
         </div>
         <Badge tone={pool.round === 1 ? "sage" : "saffron"}>

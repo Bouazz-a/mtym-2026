@@ -53,22 +53,22 @@ export function PassageDetailPage() {
   const { session } = useSession();
   const navigate = useNavigate();
 
-  const [passage, setPassage] = useState<Passage | null>(null);
-  const [pool, setPool] = useState<Pool | null>(null);
-  const [version, setVersion] = useState(0);
-
+  // Passage/pool are derived synchronously from storage on each render;
+  // bumping `version` after a mutation forces a fresh read.
+  const [, setVersion] = useState(0);
   const refresh = () => setVersion((v) => v + 1);
 
+  const passage: Passage | null = passageId
+    ? getPassageById(passageId) ?? null
+    : null;
+  const pool: Pool | null = passage
+    ? getPools().find((po) => po.id === passage.poolId) ?? null
+    : null;
+
+  // Unknown passage id: bounce back home.
   useEffect(() => {
-    if (!passageId) return;
-    const p = getPassageById(passageId);
-    if (!p) {
-      navigate("/", { replace: true });
-      return;
-    }
-    setPassage(p);
-    setPool(getPools().find((po) => po.id === p.poolId) ?? null);
-  }, [passageId, navigate, version]);
+    if (passageId && !passage) navigate("/", { replace: true });
+  }, [passageId, passage, navigate]);
 
   if (!session || session.role !== "participant" || !passage || !pool)
     return null;
@@ -136,7 +136,6 @@ export function PassageDetailPage() {
           className="font-mont text-tiny uppercase tracking-widest inline-flex items-center gap-1.5 transition-colors"
           style={{ color: "var(--ink-faint)", fontWeight: 800 }}
         >
-          <span aria-hidden>←</span>
           Mon parcours
         </Link>
       </div>
@@ -508,7 +507,8 @@ function DocumentsSection({
           <TemplateCard
             ownRole={ownRole}
             available={canDownloadTemplate}
-            templateUrl="/templates/fiche_synthese.pdf"
+            pdfUrl="/fiche-synthese-template.pdf"
+            texUrl="/fiche-synthese-template.tex"
           />
         )}
 
@@ -525,14 +525,6 @@ function DocumentsSection({
         )}
       </div>
 
-      <div
-        className="mt-6 font-open text-xs italic leading-relaxed"
-        style={{ color: "var(--ink-faint)" }}
-      >
-        Les <em>fiches de synthèse</em> déposées par les équipes opposant et
-        rapporteur ne sont visibles que par le jury, jamais par les autres
-        équipes du passage.
-      </div>
     </section>
   );
 }
@@ -645,11 +637,13 @@ function DefenderReportCard({
 function TemplateCard({
   ownRole,
   available,
-  templateUrl,
+  pdfUrl,
+  texUrl,
 }: {
   ownRole: "opponent" | "reporter";
   available: boolean;
-  templateUrl: string;
+  pdfUrl: string;
+  texUrl: string;
 }) {
   return (
     <BrutalCard hoverable className="p-5">
@@ -669,18 +663,26 @@ function TemplateCard({
             className="font-open text-xs mt-1"
             style={{ color: "var(--ink-soft)" }}
           >
-            Pour {ownRole === "opponent" ? "l'opposant" : "le rapporteur"}
+            Pour {ownRole === "opponent" ? "l'opposant" : "le rapporteur"} ·
+            PDF à remplir ou source LaTeX
           </div>
         </div>
         <StatusPill kind="info">Modèle</StatusPill>
       </div>
-      <div className="mt-4">
+      <div className="mt-4 flex flex-col gap-2">
         {available ? (
-          <a href={templateUrl} download target="_blank" rel="noreferrer">
-            <Btn variant="ghost" size="sm" className="w-full">
-              Télécharger le modèle
-            </Btn>
-          </a>
+          <>
+            <a href={pdfUrl} target="_blank" rel="noreferrer">
+              <Btn variant="ghost" size="sm" className="w-full">
+                Aperçu / télécharger le PDF
+              </Btn>
+            </a>
+            <a href={texUrl} download>
+              <Btn variant="ghost" size="sm" className="w-full">
+                Télécharger la source LaTeX
+              </Btn>
+            </a>
+          </>
         ) : (
           <div
             className="font-open text-xs"
