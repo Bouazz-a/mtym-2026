@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useSession } from "@/features/shared/SessionContext";
 import {
   getTeamsAssignedToJuror,
@@ -7,7 +7,7 @@ import {
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
 import { getDocuments } from "@/lib/repositories/documentRepository";
-import type { Document, Passage, Pool, Team } from "@/types";
+import type { Passage, Pool, Team } from "@/types";
 import { ROLE_PALETTE, teamRoleFromIds } from "@/features/shared/widgets";
 import { PageMotion, Stagger } from "@/features/shared/primitives";
 
@@ -20,23 +20,15 @@ const PROBLEMS = [1, 2, 3, 4] as const;
 export function JuryDashboard() {
   const { session } = useSession();
   const [round, setRound] = useState<Round>(1);
-  const [data, setData] = useState<{
-    interTeams: Team[];
-    finalTeams: Team[];
-    passages: Passage[];
-    teamById: Map<string, Team>;
-    poolById: Map<string, Pool>;
-    docs: Document[];
-  } | null>(null);
 
-  useEffect(() => {
-    if (!session || session.role !== "jury") return;
+  const data = useMemo(() => {
+    if (!session || session.role !== "jury") return null;
     const interTeams = getTeamsAssignedToJuror(session.juryMember.id, "intermediaire");
     const finalTeams = getTeamsAssignedToJuror(session.juryMember.id, "final");
     const passages = getPassagesAssignedToJuror(session.juryMember.id);
     const teamById = new Map(getTeams().map(t => [t.id, t]));
     const poolById = new Map(getPools().map(p => [p.id, p]));
-    setData({ interTeams, finalTeams, passages, teamById, poolById, docs: getDocuments() });
+    return { interTeams, finalTeams, passages, teamById, poolById, docs: getDocuments() };
   }, [session]);
 
   const passagesByRound = useMemo(() => {

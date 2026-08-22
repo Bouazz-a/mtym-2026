@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   PageHeader,
@@ -52,21 +52,28 @@ interface OralSlot {
 
 export function DocumentsPage() {
   const { session } = useSession();
-  if (!session || session.role !== "participant") return null;
+  const participantSession =
+    session?.role === "participant" ? session : null;
 
-  // Always pull fresh team data (pool ids may have changed)
-  const team = getTeamById(session.team.id) ?? session.team;
-  const canUpload = isTeamCreator(session.participant, team);
+  const team = participantSession
+    ? getTeamById(participantSession.team.id) ?? participantSession.team
+    : null;
+  const canUpload =
+    participantSession && team
+      ? isTeamCreator(participantSession.participant, team)
+      : false;
 
-  const [docs, setDocs] = useState<Document[]>([]);
-  const [oralSlots, setOralSlots] = useState<OralSlot[]>([]);
+  // Documents are derived synchronously from storage on each render;
+  // bumping `version` after an upload forces a fresh read.
+  const [, setVersion] = useState(0);
+  const refresh = () => setVersion((v) => v + 1);
 
-  const refresh = () => {
-    setDocs(getDocumentsByTeam(team.id));
-    setOralSlots(computeOralSlots(team.id, getPassagesByTeam(team.id)));
-  };
+  const docs: Document[] = team ? getDocumentsByTeam(team.id) : [];
+  const oralSlots: OralSlot[] = team
+    ? computeOralSlots(team.id, getPassagesByTeam(team.id))
+    : [];
 
-  useEffect(refresh, [team.id]);
+  if (!session || session.role !== "participant" || !team) return null;
 
   // Fixed written slots: 1 RI + 4 RFs
   const writtenSlots: WrittenSlot[] = [
@@ -462,7 +469,7 @@ function computeOralSlots(teamId: string, passages: Passage[]): OralSlot[] {
 
   const sorted = [...passages].sort((a, b) => a.label.localeCompare(b.label));
   for (const passage of sorted) {
-    const role = teamRoleFromIds({ id: teamId } as any, passage);
+    const role = teamRoleFromIds({ id: teamId }, passage);
     if (role === "defender") {
       presN++;
       slots.push({

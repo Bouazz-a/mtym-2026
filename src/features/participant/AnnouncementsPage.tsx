@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { PageHeader, BrutalCard, Badge, PageMotion } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import { getAnnouncements } from "@/lib/repositories/announcementRepository";
@@ -7,10 +7,8 @@ import type { Announcement } from "@/types";
 
 export function AnnouncementsPage() {
   const { session } = useSession();
-  const [items, setItems] = useState<Announcement[]>([]);
-
-  useEffect(() => {
-    if (!session) return;
+  const items = useMemo<Announcement[]>(() => {
+    if (!session) return [];
     const all = getAnnouncements();
     const filtered = all.filter(a => {
       if (session.role === "participant") return canViewAnnouncementAsParticipant(a);
@@ -18,7 +16,7 @@ export function AnnouncementsPage() {
       return true;
     });
     filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    setItems(filtered);
+    return filtered;
   }, [session]);
 
   return (

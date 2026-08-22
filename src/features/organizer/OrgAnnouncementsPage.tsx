@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import {
   PageHeader, BrutalCard, Badge, DiamondMarker,
@@ -12,16 +12,15 @@ import type { Announcement, Audience } from "@/types";
 
 export function OrgAnnouncementsPage() {
   const { session } = useSession();
-  const [items, setItems] = useState<Announcement[]>([]);
+  const loadItems = () =>
+    getAnnouncements().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const [items, setItems] = useState<Announcement[]>(loadItems);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<Audience>("all");
   const [pendingDelete, setPendingDelete] = useState<Announcement | null>(null);
 
-  const refresh = () => {
-    setItems(getAnnouncements().sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-  };
-  useEffect(refresh, []);
+  const refresh = () => setItems(loadItems());
 
   if (!session || session.role !== "organizer") return null;
 
@@ -54,7 +53,6 @@ export function OrgAnnouncementsPage() {
         eyebrow="Annonces"
         title="Communications"
         sub="Publier une annonce aux participants, au jury, ou aux deux."
-        right={<Badge tone="dark">{items.length} publiée{items.length > 1 ? "s" : ""}</Badge>}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-6">
@@ -108,10 +106,6 @@ export function OrgAnnouncementsPage() {
 
         {/* Feed */}
         <div>
-          <div className="font-mont text-tiny uppercase tracking-widest mb-3"
-               style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-            {items.length} annonce{items.length > 1 ? "s" : ""} publiée{items.length > 1 ? "s" : ""}
-          </div>
           {items.length === 0 ? (
             <BrutalCard className="p-8" style={{ border: "2px dashed var(--border)", boxShadow: "none" }} withCorners={false}>
               <div className="font-open text-sm" style={{ color: "var(--ink-faint)" }}>

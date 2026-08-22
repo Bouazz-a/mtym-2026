@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getPools, getPassages } from "@/lib/repositories/poolRepository";
@@ -35,9 +35,7 @@ interface State {
 }
 
 export function OrganizerDashboard() {
-  const [s, setS] = useState<State | null>(null);
-
-  useEffect(() => {
+  const s = useMemo<State>(() => {
     const teams = getTeams();
     const assignments = getJuryAssignments();
     const map = new Map<string, Set<string>>();
@@ -45,7 +43,7 @@ export function OrganizerDashboard() {
       if (!map.has(a.juryMemberId)) map.set(a.juryMemberId, new Set());
       map.get(a.juryMemberId)!.add(a.teamId);
     }
-    setS({
+    return {
       teams,
       pools: getPools(),
       passages: getPassages(),
@@ -53,10 +51,8 @@ export function OrganizerDashboard() {
       participants: getParticipants(),
       jury: getJuryMembers(),
       juryAssignedTeams: map,
-    });
+    };
   }, []);
-
-  if (!s) return null;
 
   const riDeposited = s.teams.filter((t) =>
     s.docs.some(

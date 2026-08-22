@@ -2,6 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { TopNav } from "./TopNav";
 import { BackgroundFX } from "./BackgroundFX";
+import { SiteFooter } from "./SiteFooter";
 
 // AppLayout — fixed top nav over a full-width canvas. The page atmosphere
 // (paper tone + grain overlay) is provided by the app shell in index.css.
@@ -24,15 +25,7 @@ export function AppLayout() {
           </div>
         </AnimatePresence>
       </main>
-      {/* Minimal divider only — no brand copy in the footer per design spec. */}
-      <hr
-        className="max-w-[1400px] w-full mx-auto"
-        style={{
-          border: 0,
-          borderTop: "1px solid var(--border)",
-          marginTop: 24,
-        }}
-      />
+      <SiteFooter />
     </div>
   );
 }

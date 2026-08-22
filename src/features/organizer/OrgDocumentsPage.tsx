@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { PageHeader, BrutalCard, Badge, Btn, PageMotion } from "@/features/shared/primitives";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getDocuments } from "@/lib/repositories/documentRepository";
@@ -6,17 +6,13 @@ import { createDownloadUrl } from "@/lib/storage/fileStorage";
 import type { Document, Team } from "@/types";
 
 export function OrgDocumentsPage() {
-  const [rows, setRows] = useState<{ team: Team; documents: Document[] }[]>([]);
-
-  useEffect(() => {
+  const rows = useMemo<{ team: Team; documents: Document[] }[]>(() => {
     const teams = getTeams().sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
     const allDocs = getDocuments();
-    setRows(
-      teams.map(team => ({
-        team,
-        documents: allDocs.filter(d => d.teamId === team.id).sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)),
-      })),
-    );
+    return teams.map(team => ({
+      team,
+      documents: allDocs.filter(d => d.teamId === team.id).sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)),
+    }));
   }, []);
 
   const total = rows.reduce((acc, r) => acc + r.documents.length, 0);

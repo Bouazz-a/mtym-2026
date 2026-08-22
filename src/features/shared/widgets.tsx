@@ -58,8 +58,10 @@ export function StatCounter({
       window.matchMedia &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) {
-      setN(target);
-      return;
+      // Skip the tween, but still set the value asynchronously (in a frame
+      // callback) so the effect body itself never calls setState.
+      const raf = requestAnimationFrame(() => setN(target));
+      return () => cancelAnimationFrame(raf);
     }
     const start = performance.now();
     let raf = 0;
@@ -410,7 +412,7 @@ export const ROLE_PALETTE = {
 export type RoleKey = keyof typeof ROLE_PALETTE;
 
 // Used by Team type — passage role corresponds to RoleKey.
-export function teamRoleFromIds(team: Team, passage: Passage): RoleKey | null {
+export function teamRoleFromIds(team: Pick<Team, "id">, passage: Passage): RoleKey | null {
   if (passage.defenderTeamId === team.id) return "defender";
   if (passage.opponentTeamId === team.id) return "opponent";
   if (passage.reporterTeamId === team.id) return "reporter";
@@ -438,7 +440,7 @@ export const CONSTRAINT_PALETTE: Record<
     bg: "#B91C1C",
     fg: "#FEE2E2",
     label: "OD",
-    desc: "A opposé puis défend le même problème",
+    desc: "A défendu puis oppose le même problème",
     weight: 15,
   },
   OR: {
@@ -452,14 +454,14 @@ export const CONSTRAINT_PALETTE: Record<
     bg: "#F87171",
     fg: "#7F1D1D",
     label: "DO",
-    desc: "A défendu puis oppose le même problème",
+    desc: "A opposé puis défend le même problème",
     weight: 5,
   },
   DR: {
     bg: "#FCA5A5",
     fg: "#7F1D1D",
     label: "DR",
-    desc: "A défendu puis rapporte le même problème",
+    desc: "A rapporté puis défend le même problème",
     weight: 5,
   },
 };

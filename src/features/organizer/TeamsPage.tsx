@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getParticipantsByTeam } from "@/lib/repositories/participantRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
@@ -18,22 +18,19 @@ interface Enriched {
 }
 
 export function TeamsPage() {
-  const [items, setItems] = useState<Enriched[]>([]);
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
+  const items = useMemo<Enriched[]>(() => {
     const pools = getPools();
     const poolById = new Map(pools.map(p => [p.id, p]));
     const teams = getTeams().sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
-    setItems(
-      teams.map(team => ({
-        team,
-        members: getParticipantsByTeam(team.id),
-        pool1: poolById.get(team.poolIdRound1) ?? null,
-        pool2: team.poolIdRound2 ? poolById.get(team.poolIdRound2) ?? null : null,
-        docs: getDocumentsByTeam(team.id),
-      })),
-    );
+    return teams.map(team => ({
+      team,
+      members: getParticipantsByTeam(team.id),
+      pool1: poolById.get(team.poolIdRound1) ?? null,
+      pool2: team.poolIdRound2 ? poolById.get(team.poolIdRound2) ?? null : null,
+      docs: getDocumentsByTeam(team.id),
+    }));
   }, []);
 
   const filtered = useMemo(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   PageHeader,
@@ -33,10 +33,8 @@ interface EnrichedTeam {
 
 export function JuryTeamsPage() {
   const { session } = useSession();
-  const [items, setItems] = useState<EnrichedTeam[]>([]);
-
-  useEffect(() => {
-    if (!session || session.role !== "jury") return;
+  const items = useMemo<EnrichedTeam[]>(() => {
+    if (!session || session.role !== "jury") return [];
     const jurorId = session.juryMember.id;
 
     const inter = getTeamsAssignedToJuror(jurorId, "intermediaire");
@@ -53,10 +51,8 @@ export function JuryTeamsPage() {
     for (const t of final)
       attach(byId, t, "final", allAssignments, myEvals, jurorId);
 
-    setItems(
-      [...byId.values()].sort((a, b) =>
-        a.team.quadrigramme.localeCompare(b.team.quadrigramme),
-      ),
+    return [...byId.values()].sort((a, b) =>
+      a.team.quadrigramme.localeCompare(b.team.quadrigramme),
     );
   }, [session]);
 

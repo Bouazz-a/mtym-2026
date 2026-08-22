@@ -15,7 +15,7 @@ interface NavItem {
 
 const NAV: Record<string, NavItem[]> = {
   participant: [
-    { to: "/", label: "Mon parcours", hint: "Pools & passages" },
+    { to: "/", label: "Mon parcours", hint: "Poules & passages" },
     { to: "/documents", label: "Documents", hint: "Rapports & fiches" },
     { to: "/annonces", label: "Annonces", hint: "Communications" },
     { to: "/profil", label: "Profil", hint: "Mes infos" },
