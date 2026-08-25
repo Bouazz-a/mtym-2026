@@ -10,19 +10,26 @@ const EvalSchema = z.object({
   teamId: z.string().uuid(),
   reportType: z.enum(["intermediaire", "final"]),
   problemNumber: z.number().int().min(1),
+  overallScore: z.number().min(1).max(4).optional(),
   globalRemark: z.string().optional(),
   grades: z.array(z.object({
     criterionId: z.string().uuid(),
     score: z.number(),
     remark: z.string().optional(),
   })).optional(),
-});
+}).refine(
+  (data) => data.overallScore === undefined || data.reportType === "intermediaire",
+  { message: "overallScore only applies to the intermediate report", path: ["overallScore"] },
+);
 
 // GET /api/report-evaluations?teamId=
 router.get("/", authenticate, async (req, res, next) => {
   try {
     const user = req.user!;
     const { teamId } = req.query as Record<string, string | undefined>;
+
+    if (user.role === "participant") throw new ForbiddenError();
+    if (user.role === "organizer" && user.organizerRole === "logistics") throw new ForbiddenError();
 
     const where = user.role === "jury"
       ? { juryMemberId: user.id }
@@ -53,7 +60,7 @@ router.post("/", authenticate, requireRole("jury"), async (req, res, next) => {
         },
       },
       create: { ...evalData, juryMemberId: user.id },
-      update: { globalRemark: evalData.globalRemark },
+      update: { globalRemark: evalData.globalRemark, overallScore: evalData.overallScore },
     });
 
     if (grades?.length) {

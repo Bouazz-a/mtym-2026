@@ -24,6 +24,9 @@ router.get("/", authenticate, async (req, res, next) => {
     const user = req.user!;
     const { passageId } = req.query as Record<string, string | undefined>;
 
+    if (user.role === "participant") throw new ForbiddenError();
+    if (user.role === "organizer" && user.organizerRole === "logistics") throw new ForbiddenError();
+
     const where = user.role === "jury"
       ? { juryMemberId: user.id, ...(passageId ? { passageId } : {}) }
       : passageId ? { passageId } : {};

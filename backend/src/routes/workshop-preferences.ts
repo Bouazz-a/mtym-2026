@@ -33,6 +33,16 @@ router.put("/", authenticate, async (req, res, next) => {
     if (user.role === "jury") throw new ForbiddenError();
 
     const data = PrefSchema.parse(req.body);
+
+    if (
+      user.role === "organizer" &&
+      data.participantId &&
+      user.organizerRole !== "admin" &&
+      user.organizerRole !== "logistics"
+    ) {
+      throw new ForbiddenError();
+    }
+
     const participantId =
       user.role === "organizer" && data.participantId ? data.participantId : user.id;
 

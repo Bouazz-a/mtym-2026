@@ -6,7 +6,7 @@ import { NotFoundError } from "../utils/errors";
 
 const router = Router();
 
-const adminOnly = [authenticate, requireRole("organizer"), requireOrganizerRole("admin")];
+const adminOrScientific = [authenticate, requireRole("organizer"), requireOrganizerRole("admin", "scientific")];
 
 const CriterionSchema = z.object({
   label: z.string().min(1),
@@ -14,6 +14,7 @@ const CriterionSchema = z.object({
   type: z.enum(["report", "oral"]),
   role: z.enum(["defender", "opponent", "reporter", "extra"]).optional(),
   problemNumber: z.number().int().optional(),
+  theme: z.string().optional(),
   order: z.number().int(),
 });
 
@@ -25,14 +26,14 @@ router.get("/", authenticate, async (_req, res, next) => {
 });
 
 // POST /api/criteria
-router.post("/", ...adminOnly, async (req, res, next) => {
+router.post("/", ...adminOrScientific, async (req, res, next) => {
   try {
     res.status(201).json(await db.criterion.create({ data: CriterionSchema.parse(req.body) }));
   } catch (err) { next(err); }
 });
 
 // PUT /api/criteria/:id
-router.put("/:id", ...adminOnly, async (req, res, next) => {
+router.put("/:id", ...adminOrScientific, async (req, res, next) => {
   try {
     const c = await db.criterion.findUnique({ where: { id: req.params.id } });
     if (!c) throw new NotFoundError("Criterion not found");
@@ -41,7 +42,7 @@ router.put("/:id", ...adminOnly, async (req, res, next) => {
 });
 
 // DELETE /api/criteria/:id
-router.delete("/:id", ...adminOnly, async (req, res, next) => {
+router.delete("/:id", ...adminOrScientific, async (req, res, next) => {
   try {
     const c = await db.criterion.findUnique({ where: { id: req.params.id } });
     if (!c) throw new NotFoundError("Criterion not found");

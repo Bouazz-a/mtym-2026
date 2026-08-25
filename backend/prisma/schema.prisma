@@ -173,6 +173,7 @@ model Criterion {
   type          EvaluationType
   role          PassageRole?
   problemNumber Int?
+  theme         String?
   order         Int
 }
 
@@ -182,6 +183,7 @@ model ReportEvaluation {
   teamId        String
   reportType    ReportType
   problemNumber Int
+  overallScore  Float?
   globalRemark  String?
 
   grades        ReportGrade[]
