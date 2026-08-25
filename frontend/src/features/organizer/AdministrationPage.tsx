@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
   BrutalCard,
@@ -15,19 +16,14 @@ import { ROLE_PALETTE } from "@/features/shared/widgets";
 import {
   getPools,
   getPassages,
-  upsertPassage,
-  deletePassage,
+  updatePassage,
 } from "@/lib/repositories/poolRepository";
-import { getTeams, upsertTeam } from "@/lib/repositories/teamRepository";
-import {
-  getParticipants,
-  getParticipantsByTeam,
-} from "@/lib/repositories/participantRepository";
+import { getTeams, updateTeam } from "@/lib/repositories/teamRepository";
+import { getParticipants } from "@/lib/repositories/participantRepository";
 import {
   getJuryMembers,
   getJuryAssignments,
-  upsertJuryAssignment,
-  deleteJuryAssignment,
+  saveJuryAssignments,
 } from "@/lib/repositories/juryRepository";
 import type {
   JuryAssignment,
@@ -42,6 +38,7 @@ import { CriteriaEditor } from "./CriteriaEditor";
 import { useSession } from "@/features/shared/SessionContext";
 import { isAdmin } from "@/lib/permissions";
 import { exportAppDataXlsx } from "@/lib/services/exportService";
+import { ServiceError } from "@/lib/services/errors";
 import { getPoolDisplayLabel } from "@/utils/naming";
 
 // AdministrationPage — manual editors that complement the auto-generation
@@ -49,8 +46,12 @@ import { getPoolDisplayLabel } from "@/utils/naming";
 //
 //   · Pools & passages — edit any passage's defender/opponent/reporter/
 //                        extra, problem number, day, time, room.
-//   · Équipes          — inline edit name, quadrigramme, creator transfer,
-//                        and the two pool assignments.
+//   · Équipes          — inline edit name, quadrigramme, creator transfer.
+//                        Pool assignments are read-only here — the backend
+//                        only ever writes them as a side effect of bulk
+//                        round generation (POST /api/rounds), so changing
+//                        just the FK here would desync a team from the
+//                        pool's actual passages.
 //   · Affectations jury— matrix toggle (RI / RF / both / none) per
 //                        (juror × team) pair.
 
@@ -59,21 +60,19 @@ type TabId = "pools" | "teams" | "jury" | "criteria";
 export function AdministrationPage() {
   const { session } = useSession();
   const [tab, setTab] = useState<TabId>("pools");
-  const [version, setVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
-  const refresh = () => setVersion((v) => v + 1);
 
   const canExport =
     session?.role === "organizer" && isAdmin(session.organizer);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setExporting(true);
     try {
-      exportAppDataXlsx();
+      await exportAppDataXlsx();
+    } catch (e) {
+      alert(e instanceof ServiceError ? e.message : "Export impossible.");
     } finally {
-      // The download is synchronous; clear the flag on the next tick so the
-      // button briefly shows the busy state.
-      setTimeout(() => setExporting(false), 400);
+      setExporting(false);
     }
   };
 
@@ -95,10 +94,10 @@ export function AdministrationPage() {
       <Tabs current={tab} onChange={setTab} />
 
       <div className="mt-8 space-y-10">
-        {tab === "pools" && <PoolsEditor key={version} onChange={refresh} />}
-        {tab === "teams" && <TeamsEditor key={version} />}
-        {tab === "jury" && <JuryMatrixEditor key={version} />}
-        {tab === "criteria" && <CriteriaEditor key={version} />}
+        {tab === "pools" && <PoolsEditor />}
+        {tab === "teams" && <TeamsEditor />}
+        {tab === "jury" && <JuryMatrixEditor />}
+        {tab === "criteria" && <CriteriaEditor />}
       </div>
     </PageMotion>
   );
@@ -155,20 +154,26 @@ function Tabs({
 // Pools & passages
 // ════════════════════════════════════════════════════════════════════════
 
-function PoolsEditor({ onChange }: { onChange: () => void }) {
-  const pools = useMemo(
-    () => getPools().sort((a, b) => a.label.localeCompare(b.label)),
-    [],
-  );
-  const passages = useMemo(() => getPassages(), []);
-  const teams = useMemo(() => getTeams(), []);
-  const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
+function PoolsEditor() {
+  const queryClient = useQueryClient();
+  const poolsQ = useQuery({ queryKey: ["pools"], queryFn: getPools });
+  const passagesQ = useQuery({ queryKey: ["passages"], queryFn: getPassages });
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+
+  const [editing, setEditing] = useState<Passage | null>(null);
+
+  const loading = poolsQ.isLoading || passagesQ.isLoading || teamsQ.isLoading;
+  if (loading) {
+    return <div className="py-12 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  const pools = [...(poolsQ.data ?? [])].sort((a, b) => a.label.localeCompare(b.label));
+  const passages = passagesQ.data ?? [];
+  const teams = teamsQ.data ?? [];
+  const teamById = new Map(teams.map((t) => [t.id, t]));
 
   const r1 = pools.filter((p) => p.round === 1);
   const r2 = pools.filter((p) => p.round === 2);
-
-  const [editing, setEditing] = useState<Passage | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<Passage | null>(null);
 
   return (
     <>
@@ -250,7 +255,6 @@ function PoolsEditor({ onChange }: { onChange: () => void }) {
                             passage={p}
                             teamById={teamById}
                             onEdit={() => setEditing(p)}
-                            onDelete={() => setConfirmDelete(p)}
                           />
                         </StaggerRow>
                       ))}
@@ -267,43 +271,12 @@ function PoolsEditor({ onChange }: { onChange: () => void }) {
         <PassageEditModal
           passage={editing}
           teams={teams}
-          pools={pools}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            onChange();
+            queryClient.invalidateQueries({ queryKey: ["passages"] });
           }}
         />
-      )}
-
-      {confirmDelete && (
-        <Modal
-          open
-          title="Supprimer ce passage ?"
-          onClose={() => setConfirmDelete(null)}
-          footer={
-            <>
-              <Btn variant="ghost" onClick={() => setConfirmDelete(null)}>
-                Annuler
-              </Btn>
-              <Btn
-                variant="danger"
-                onClick={() => {
-                  deletePassage(confirmDelete.id);
-                  setConfirmDelete(null);
-                  onChange();
-                }}
-              >
-                Supprimer
-              </Btn>
-            </>
-          }
-        >
-          <p className="font-open text-sm" style={{ color: "var(--ink)" }}>
-            Le passage <strong>{confirmDelete.label}</strong> sera retiré de la
-            base. Cette opération est irréversible.
-          </p>
-        </Modal>
       )}
     </>
   );
@@ -313,12 +286,10 @@ function PassageRow({
   passage,
   teamById,
   onEdit,
-  onDelete,
 }: {
   passage: Passage;
   teamById: Map<string, Team>;
   onEdit: () => void;
-  onDelete: () => void;
 }) {
   const def = teamById.get(passage.defenderTeamId)?.quadrigramme ?? "—";
   const opp = teamById.get(passage.opponentTeamId)?.quadrigramme ?? "—";
@@ -365,9 +336,6 @@ function PassageRow({
         <Btn variant="ghost" size="sm" onClick={onEdit}>
           Éditer
         </Btn>
-        <Btn variant="danger" size="sm" onClick={onDelete}>
-          ×
-        </Btn>
       </div>
     </div>
   );
@@ -398,18 +366,17 @@ function RolePill({
 function PassageEditModal({
   passage,
   teams,
-  pools,
   onClose,
   onSaved,
 }: {
   passage: Passage;
   teams: Team[];
-  pools: Pool[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [draft, setDraft] = useState<Passage>(passage);
-  void pools;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const sortedTeams = useMemo(
     () =>
@@ -432,10 +399,27 @@ function PassageEditModal({
     return new Set(ids).size !== ids.length;
   })();
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (conflict) return;
-    upsertPassage(draft);
-    onSaved();
+    setBusy(true);
+    setError(null);
+    try {
+      await updatePassage(draft.id, {
+        defenderTeamId: draft.defenderTeamId,
+        opponentTeamId: draft.opponentTeamId,
+        reporterTeamId: draft.reporterTeamId,
+        extraTeamId: draft.extraTeamId ?? null,
+        problemNumber: draft.problemNumber,
+        day: draft.day,
+        timeSlot: draft.timeSlot,
+        room: draft.room,
+      });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof ServiceError ? e.message : "Échec de l'enregistrement.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -448,8 +432,8 @@ function PassageEditModal({
           <Btn variant="ghost" onClick={onClose}>
             Annuler
           </Btn>
-          <Btn onClick={handleSave} disabled={conflict}>
-            Enregistrer
+          <Btn onClick={handleSave} disabled={conflict || busy}>
+            {busy ? "Enregistrement…" : "Enregistrer"}
           </Btn>
         </>
       }
@@ -460,6 +444,14 @@ function PassageEditModal({
           style={{ background: "rgba(178,59,27,0.08)", color: "var(--clay)" }}
         >
           Une équipe ne peut pas occuper deux rôles dans le même passage.
+        </p>
+      )}
+      {error && (
+        <p
+          className="font-open text-xs mb-4 px-3 py-2"
+          style={{ background: "rgba(178,59,27,0.08)", color: "var(--clay)" }}
+        >
+          {error}
         </p>
       )}
 
@@ -566,18 +558,24 @@ function TeamSelect({
 // ════════════════════════════════════════════════════════════════════════
 
 function TeamsEditor() {
-  // Self-managed so a save refreshes the picker (updated quad/name) without
-  // remounting the whole editor and losing the current selection.
-  const sortTeams = (list: Team[]) =>
-    [...list].sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
-  const [teams, setTeams] = useState<Team[]>(() => sortTeams(getTeams()));
-  const pools = useMemo(() => getPools(), []);
-  const participants = useMemo(() => getParticipants(), []);
+  const queryClient = useQueryClient();
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const poolsQ = useQuery({ queryKey: ["pools"], queryFn: getPools });
+  const participantsQ = useQuery({ queryKey: ["participants"], queryFn: getParticipants });
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const loading = teamsQ.isLoading || poolsQ.isLoading || participantsQ.isLoading;
+  if (loading) {
+    return <div className="py-12 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  const teams = [...(teamsQ.data ?? [])].sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
+  const pools = poolsQ.data ?? [];
+  const participants = participantsQ.data ?? [];
   const selected = teams.find((t) => t.id === selectedId) ?? null;
 
-  const reload = () => setTeams(sortTeams(getTeams()));
+  const reload = () => queryClient.invalidateQueries({ queryKey: ["teams"] });
 
   return (
     <section>
@@ -815,8 +813,7 @@ function TeamEditCard({
   const [draft, setDraft] = useState<Team>(team);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-
-  const members = useMemo(() => getParticipantsByTeam(team.id), [team.id]);
+  const [busy, setBusy] = useState(false);
 
   // Reset internal state if the canonical team prop changes (e.g. after
   // an external re-seed).
@@ -828,35 +825,38 @@ function TeamEditCard({
     setSaved(false);
   }
 
-  const r1Pools = pools.filter((p) => p.round === 1);
-  const r2Pools = pools.filter((p) => p.round === 2);
+  const poolById = new Map(pools.map((p) => [p.id, p]));
+  const pool1 = team.poolIdRound1 ? poolById.get(team.poolIdRound1) : undefined;
+  const pool2 = team.poolIdRound2 ? poolById.get(team.poolIdRound2) : undefined;
 
   const dirty =
     draft.name !== team.name ||
     draft.quadrigramme !== team.quadrigramme ||
-    draft.creatorId !== team.creatorId ||
-    draft.poolIdRound1 !== team.poolIdRound1 ||
-    draft.poolIdRound2 !== team.poolIdRound2;
+    draft.creatorId !== team.creatorId;
 
   const validQuad = /^[A-Z]{4}$/.test(draft.quadrigramme);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setError(null);
     if (!validQuad) {
       setError("Le quadrigramme doit faire exactement 4 lettres majuscules.");
       return;
     }
-    const dup = getTeams().some(
-      (t) => t.id !== draft.id && t.quadrigramme === draft.quadrigramme,
-    );
-    if (dup) {
-      setError(`Le quadrigramme ${draft.quadrigramme} est déjà utilisé.`);
-      return;
+    setBusy(true);
+    try {
+      await updateTeam(draft.id, {
+        name: draft.name,
+        quadrigramme: draft.quadrigramme,
+        creatorId: draft.creatorId,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof ServiceError ? e.message : "Échec de l'enregistrement.");
+    } finally {
+      setBusy(false);
     }
-    upsertTeam(draft);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-    onSaved();
   };
 
   // Restrict the "creator" select to participants currently in this team.
@@ -887,7 +887,7 @@ function TeamEditCard({
             className="font-mont text-micro uppercase tracking-widest mt-3"
             style={{ color: "var(--ink-faint)", fontWeight: 700 }}
           >
-            {members.length} membre{members.length > 1 ? "s" : ""}
+            {teamMembers.length} membre{teamMembers.length > 1 ? "s" : ""}
           </div>
         </div>
 
@@ -933,23 +933,18 @@ function TeamEditCard({
               ))}
             </select>
           </Field>
-          <Field label="Poule · Tour 1">
-            <PoolSelect
-              pools={r1Pools}
-              value={draft.poolIdRound1}
-              onChange={(v) => setDraft({ ...draft, poolIdRound1: v })}
-            />
-          </Field>
 
-          <Field label="Poule · Tour 2 (optionnel)">
-            <PoolSelect
-              pools={r2Pools}
-              value={draft.poolIdRound2 ?? ""}
-              onChange={(v) =>
-                setDraft({ ...draft, poolIdRound2: v || undefined })
-              }
-              allowNone
-            />
+          {/* Read-only: pool assignment is only ever written by the bulk
+              round-generation flow (POST /api/rounds) — see TournamentPage.
+              Editing it here directly would desync the team from the
+              pool's actual passages. */}
+          <Field label="Poule · Tour 1 / Tour 2">
+            <div
+              className="w-full px-3 py-2 text-sm font-mont"
+              style={{ background: "var(--paper-2)", border: "1px solid var(--border)", color: "var(--ink-soft)" }}
+            >
+              {pool1 ? getPoolDisplayLabel(pool1) : "—"} / {pool2 ? getPoolDisplayLabel(pool2) : "—"}
+            </div>
           </Field>
 
           <div className="flex items-end justify-end gap-2">
@@ -961,8 +956,8 @@ function TeamEditCard({
                 Enregistré
               </span>
             )}
-            <Btn onClick={handleSave} disabled={!dirty || !validQuad} size="sm">
-              Enregistrer
+            <Btn onClick={handleSave} disabled={!dirty || !validQuad || busy} size="sm">
+              {busy ? "Enregistrement…" : "Enregistrer"}
             </Btn>
           </div>
         </div>
@@ -976,38 +971,6 @@ function TeamEditCard({
         </div>
       )}
     </BrutalCard>
-  );
-}
-
-function PoolSelect({
-  pools,
-  value,
-  onChange,
-  allowNone = false,
-}: {
-  pools: Pool[];
-  value: string;
-  onChange: (v: string) => void;
-  allowNone?: boolean;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-2 text-sm font-mont focus-ring"
-      style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        color: "var(--ink)",
-      }}
-    >
-      {allowNone && <option value="">— Aucune —</option>}
-      {pools.map((p) => (
-        <option key={p.id} value={p.id}>
-          {getPoolDisplayLabel(p)}
-        </option>
-      ))}
-    </select>
   );
 }
 
@@ -1044,51 +1007,65 @@ function nextCell(state: CellState): CellState {
         : "none";
 }
 
+// The backend's save endpoint wipes and rewrites the *whole* assignment
+// table in one call (no per-cell upsert any more — see saveJuryAssignments
+// in juryRepository.ts), so a single cell toggle recomputes the full array
+// in memory and saves it in one shot.
 function applyCell(
+  assignments: JuryAssignment[],
   juryId: string,
   teamId: string,
-  prev: CellState,
   next: CellState,
-): void {
-  // Compute the diff between prev and next and apply only what changed.
+): JuryAssignment[] {
   const wants: Record<ReportType, boolean> = {
     intermediaire: next === "intermediaire" || next === "both",
     final: next === "final" || next === "both",
   };
-  const had: Record<ReportType, boolean> = {
-    intermediaire: prev === "intermediaire" || prev === "both",
-    final: prev === "final" || prev === "both",
-  };
+  const kept = assignments.filter(
+    (a) => !(a.juryMemberId === juryId && a.teamId === teamId),
+  );
   (Object.keys(wants) as ReportType[]).forEach((rt) => {
-    if (wants[rt] && !had[rt]) {
-      upsertJuryAssignment({ juryMemberId: juryId, teamId, reportType: rt });
-    } else if (!wants[rt] && had[rt]) {
-      deleteJuryAssignment({ juryMemberId: juryId, teamId, reportType: rt });
-    }
+    if (wants[rt]) kept.push({ juryMemberId: juryId, teamId, reportType: rt });
   });
+  return kept;
 }
 
 function JuryMatrixEditor() {
-  const jurors = useMemo(() => getJuryMembers(), []);
-  const teams = useMemo(
-    () =>
-      getTeams().sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme)),
-    [],
-  );
-  const [assignments, setAssignments] = useState<JuryAssignment[]>(() =>
-    getJuryAssignments(),
-  );
+  const jurorsQ = useQuery({ queryKey: ["jury-members"], queryFn: getJuryMembers });
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const assignmentsQ = useQuery({ queryKey: ["jury-assignments"], queryFn: getJuryAssignments });
 
-  const toggle = (juryId: string, teamId: string) => {
+  // Local optimistic copy so a click updates instantly without waiting on
+  // the round-trip, and without remounting the whole matrix.
+  const [localAssignments, setLocalAssignments] = useState<JuryAssignment[] | null>(null);
+  const [pending, setPending] = useState<string | null>(null); // "juryId::teamId"
+
+  const loading = jurorsQ.isLoading || teamsQ.isLoading || assignmentsQ.isLoading;
+  if (loading) {
+    return <div className="py-12 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  const jurors = jurorsQ.data ?? [];
+  const teams = [...(teamsQ.data ?? [])].sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
+  const assignments = localAssignments ?? assignmentsQ.data ?? [];
+
+  const toggle = async (juryId: string, teamId: string) => {
+    const key = `${juryId}::${teamId}`;
     const prev = readCell(assignments, juryId, teamId);
     const next = nextCell(prev);
-    applyCell(juryId, teamId, prev, next);
-    // Update only this editor's own state. We deliberately do NOT call the
-    // parent's onChange/refresh here: that bumps `version`, which is used as
-    // this component's React `key`, remounting the whole matrix (state reset
-    // + StaggerRow entrance animation replay). Local state already reflects
-    // the change, so React reconciles just the clicked cell in place.
-    setAssignments(getJuryAssignments());
+    const updated = applyCell(assignments, juryId, teamId, next);
+
+    setLocalAssignments(updated);
+    setPending(key);
+    try {
+      await saveJuryAssignments(updated);
+    } catch {
+      // Roll back to the server's last known state on failure.
+      setLocalAssignments(assignmentsQ.data ?? []);
+      alert("Impossible d'enregistrer cette affectation.");
+    } finally {
+      setPending((p) => (p === key ? null : p));
+    }
   };
 
   return (
@@ -1152,6 +1129,7 @@ function JuryMatrixEditor() {
                   teams={teams}
                   assignments={assignments}
                   onToggle={toggle}
+                  pending={pending}
                   rowIndex={idx}
                 />
               ))}
@@ -1177,12 +1155,14 @@ function JurorMatrixRow({
   teams,
   assignments,
   onToggle,
+  pending,
   rowIndex,
 }: {
   juror: JuryMember;
   teams: Team[];
   assignments: JuryAssignment[];
   onToggle: (juryId: string, teamId: string) => void;
+  pending: string | null;
   rowIndex: number;
 }) {
   const initials =
@@ -1234,6 +1214,7 @@ function JurorMatrixRow({
       </td>
       {teams.map((t) => {
         const state = readCell(assignments, juror.id, t.id);
+        const busy = pending === `${juror.id}::${t.id}`;
         return (
           <td
             key={t.id}
@@ -1244,12 +1225,14 @@ function JurorMatrixRow({
                 rowIndex % 2 ? "var(--surface)" : "rgba(240,235,220,0.45)",
               padding: 0,
               textAlign: "center",
+              opacity: busy ? 0.5 : 1,
             }}
           >
             <button
               onClick={() => onToggle(juror.id, t.id)}
+              disabled={busy}
               className="w-full h-full px-2 py-2 transition-colors"
-              style={{ cursor: "pointer" }}
+              style={{ cursor: busy ? "wait" : "pointer" }}
               aria-label={`${juror.firstName} ${juror.lastName} - ${t.quadrigramme}: ${state}`}
               title={`${juror.firstName} ${juror.lastName} - ${t.quadrigramme}`}
             >

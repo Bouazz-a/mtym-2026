@@ -21,7 +21,7 @@ const UpdateSchema = z.object({
 router.get("/", authenticate, async (_req, res, next) => {
   try {
     const teams = await db.team.findMany({
-      include: { participants: { select: { id: true, firstName: true, lastName: true } } },
+      include: { participants: { select: { id: true, firstName: true, lastName: true, email: true } } },
     });
     res.json(teams);
   } catch (err) { next(err); }
@@ -32,7 +32,7 @@ router.get("/:id", authenticate, async (req, res, next) => {
   try {
     const team = await db.team.findUnique({
       where: { id: req.params.id },
-      include: { participants: { select: { id: true, firstName: true, lastName: true } } },
+      include: { participants: { select: { id: true, firstName: true, lastName: true, email: true } } },
     });
     if (!team) throw new NotFoundError("Team not found");
     res.json(team);

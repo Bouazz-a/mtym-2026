@@ -1,35 +1,39 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { v4 as uuidv4 } from "uuid";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader, BrutalCard, Badge, DiamondMarker,
   Btn, Textarea, PageMotion,
 } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import { getTeamById } from "@/lib/repositories/teamRepository";
-import { getDocumentsByTeam } from "@/lib/repositories/documentRepository";
+import { getDocumentsByTeam, downloadDocument } from "@/lib/repositories/documentRepository";
 import { getJuryAssignments } from "@/lib/repositories/juryRepository";
 import {
-  getCriteriaForReport,
-  getReportEvaluation,
-  upsertReportEvaluation,
-  getReportGradesByEvaluation,
-  upsertReportGrade,
+  getCriteria,
+  filterReportCriteria,
+  getReportEvaluations,
+  saveReportEvaluation,
+  type ReportEvaluationWithGrades,
 } from "@/lib/repositories/evaluationRepository";
-import { createDownloadUrl } from "@/lib/storage/fileStorage";
 import { DocPreviewModal, useDocPreview } from "@/features/shared/DocPreview";
 import {
   runningNote, CriterionGradingTable, NotePill,
   type GradeDrafts,
 } from "./gradingWidgets";
-import type { Document, ReportEvaluation, ReportGrade, Team } from "@/types";
+import type { Criterion, Document, ReportType, Team } from "@/types";
 
 // JuryTeamDetailPage — single-team written-report grading view.
 //  · Rapport intermédiaire  → one overall grade on a 1..4 scale + remark.
 //  · Rapports finaux        → per-problem, criteria-based grading
 //    (taux de réussite 0–100 % × coefficient) + per-criterion remarks.
-// The criteria are pulled from storage, so the grids adapt to whatever the
-// scientific admin configured.
+// The criteria are pulled from the backend, so the grids adapt to whatever
+// the scientific admin configured.
+//
+// Saving used to be two calls (upsert the evaluation, then upsert each
+// criterion's grade). The backend now does both in one transaction and
+// hands back the evaluation with its grades nested (see saveReportEvaluation
+// in evaluationRepository.ts), so a save here is a single request.
 
 const PROBLEMS = [1, 2, 3, 4] as const;
 type ProblemNum = (typeof PROBLEMS)[number];
@@ -39,28 +43,47 @@ export function JuryTeamDetailPage() {
   const { session } = useSession();
   const navigate = useNavigate();
 
-  const [version, setVersion] = useState(0);
   const preview = useDocPreview();
+  const juryMemberId = session?.role === "jury" ? session.juryMember.id : undefined;
 
-  const teamData = useMemo(() => {
-    if (!session || session.role !== "jury" || !teamId) return null;
-    const t = getTeamById(teamId);
-    if (!t) return null;
-    const mine = getJuryAssignments().filter(
-      a => a.juryMemberId === session.juryMember.id && a.teamId === teamId,
-    );
-    return { team: t, scopes: mine.map(a => a.reportType) };
-  }, [session, teamId]);
+  const teamQ = useQuery({ queryKey: ["team", teamId], queryFn: () => getTeamById(teamId!), enabled: !!teamId });
+  const docsQ = useQuery({ queryKey: ["documents", "team", teamId], queryFn: () => getDocumentsByTeam(teamId!), enabled: !!teamId });
+  const assignmentsQ = useQuery({ queryKey: ["jury-assignments"], queryFn: getJuryAssignments });
+  const criteriaQ = useQuery({ queryKey: ["criteria"], queryFn: getCriteria });
+  const reportEvalsQ = useQuery({
+    queryKey: ["report-evaluations", teamId],
+    // Note: for a jury caller the backend ignores the teamId filter and
+    // always returns just "my own evaluations" (across every team I grade)
+    // — see backend/src/routes/report-evaluations.ts — so we still filter
+    // by team.id below when reading these back.
+    queryFn: () => getReportEvaluations(teamId!),
+    enabled: !!teamId,
+  });
 
-  // Unknown team id: bounce back to the list.
+  const loading = teamQ.isLoading || docsQ.isLoading || assignmentsQ.isLoading || criteriaQ.isLoading || reportEvalsQ.isLoading;
+
+  const scopes = useMemo<ReportType[]>(() => {
+    if (!juryMemberId || !teamId || !assignmentsQ.data) return [];
+    return assignmentsQ.data
+      .filter(a => a.juryMemberId === juryMemberId && a.teamId === teamId)
+      .map(a => a.reportType);
+  }, [juryMemberId, teamId, assignmentsQ.data]);
+
+  // Unknown team id: bounce back to the list once loading is done.
   useEffect(() => {
-    if (session && session.role === "jury" && teamId && !teamData) {
+    if (!loading && session && session.role === "jury" && teamId && !teamQ.data) {
       navigate("/equipes", { replace: true });
     }
-  }, [session, teamId, teamData, navigate]);
+  }, [loading, session, teamId, teamQ.data, navigate]);
 
-  if (!session || session.role !== "jury" || !teamData) return null;
-  const { team, scopes } = teamData;
+  if (!session || session.role !== "jury") return null;
+
+  if (loading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  const team = teamQ.data;
+  if (!team) return null;
 
   if (scopes.length === 0) {
     return (
@@ -79,13 +102,16 @@ export function JuryTeamDetailPage() {
     );
   }
 
-  const docs = getDocumentsByTeam(team.id);
+  const docs = docsQ.data ?? [];
   const ri = docs.find(d => d.docType === "rapport_intermediaire");
   const rfByProblem = new Map<ProblemNum, Document>();
   for (const n of PROBLEMS) {
     const d = docs.find(d => d.docType === `rapport_final_p${n}`);
     if (d) rfByProblem.set(n, d);
   }
+
+  const criteria = criteriaQ.data ?? [];
+  const reportEvals = (reportEvalsQ.data ?? []).filter(e => e.teamId === team.id);
 
   return (
     <PageMotion className="space-y-8">
@@ -112,11 +138,9 @@ export function JuryTeamDetailPage() {
       {scopes.includes("intermediaire") && (
         <Section title="Rapport intermédiaire" subtitle="Note globale unique sur une échelle de 1 à 4.">
           <RiGradingCard
-            key={`ri-${version}`}
             doc={ri}
             team={team}
-            juryMemberId={session.juryMember.id}
-            onSaved={() => setVersion(v => v + 1)}
+            existing={reportEvals.find(e => e.reportType === "intermediaire" && e.problemNumber === 0)}
             onPreview={preview.open}
           />
         </Section>
@@ -127,12 +151,12 @@ export function JuryTeamDetailPage() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {PROBLEMS.map(n => (
               <RfGradingCard
-                key={`rf-${n}-${version}`}
+                key={`rf-${n}`}
                 problemNumber={n}
                 doc={rfByProblem.get(n)}
                 team={team}
-                juryMemberId={session.juryMember.id}
-                onSaved={() => setVersion(v => v + 1)}
+                allCriteria={criteria}
+                existing={reportEvals.find(e => e.reportType === "final" && e.problemNumber === n)}
                 onPreview={preview.open}
               />
             ))}
@@ -179,12 +203,15 @@ function Section({
 
 // ─── Document strip + download ────────────────────────────────────────
 
-function downloadDoc(doc: Document) {
-  const url = createDownloadUrl(doc.storagePath, doc.mimeType);
-  if (!url) return alert("Fichier introuvable.");
-  const a = window.document.createElement("a");
-  a.href = url; a.download = doc.originalName; a.click();
-  URL.revokeObjectURL(url);
+async function downloadDoc(doc: Document) {
+  try {
+    const { url, filename } = await downloadDocument(doc.id, doc.originalName);
+    const a = window.document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    alert("Téléchargement impossible.");
+  }
 }
 
 function DocStrip({
@@ -272,18 +299,14 @@ function SaveFooter({
 const RI_SCALE = [1, 2, 3, 4] as const;
 
 function RiGradingCard({
-  doc, team, juryMemberId, onSaved, onPreview,
+  doc, team, existing, onPreview,
 }: {
   doc: Document | undefined;
   team: Team;
-  juryMemberId: string;
-  onSaved: () => void;
+  existing: ReportEvaluationWithGrades | undefined;
   onPreview: (doc: Document) => void;
 }) {
-  const existing = useMemo(
-    () => getReportEvaluation(juryMemberId, team.id, "intermediaire", 0),
-    [juryMemberId, team.id],
-  );
+  const queryClient = useQueryClient();
 
   const [score, setScore] = useState<number | undefined>(existing?.overallScore);
   const [remark, setRemark] = useState(existing?.globalRemark ?? "");
@@ -294,22 +317,21 @@ function RiGradingCard({
     score !== existing?.overallScore ||
     remark.trim() !== (existing?.globalRemark ?? "");
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!doc) return;
     setBusy(true);
     try {
-      const evaluation: ReportEvaluation = {
-        id: existing?.id ?? uuidv4(),
-        juryMemberId,
+      await saveReportEvaluation({
         teamId: team.id,
         reportType: "intermediaire",
         problemNumber: 0,
         overallScore: score,
         globalRemark: remark.trim() || undefined,
-      };
-      upsertReportEvaluation(evaluation);
+      });
+      await queryClient.invalidateQueries({ queryKey: ["report-evaluations", team.id] });
       setSaved(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
-      onSaved();
+    } catch {
+      alert("Impossible d'enregistrer l'évaluation.");
     } finally {
       setBusy(false);
     }
@@ -336,7 +358,7 @@ function RiGradingCard({
                 <button
                   key={n}
                   disabled={!doc}
-                  onClick={() => setScore(n)}
+                  onClick={() => { setScore(n); setSaved(null); }}
                   className="px-5 py-2 font-mont transition-colors disabled:opacity-40"
                   style={{
                     background: active ? "var(--forest)" : "transparent",
@@ -364,7 +386,7 @@ function RiGradingCard({
           </label>
           <Textarea
             value={remark}
-            onChange={e => setRemark(e.target.value)}
+            onChange={e => { setRemark(e.target.value); setSaved(null); }}
             placeholder={doc ? "Vos remarques sur le rapport intermédiaire…" : "Disponible une fois le document déposé."}
             rows={4}
             disabled={!doc}
@@ -385,25 +407,21 @@ function RiGradingCard({
 // ─── RF grading card (criteria-based, per problem) ────────────────────
 
 function RfGradingCard({
-  problemNumber, doc, team, juryMemberId, onSaved, onPreview,
+  problemNumber, doc, team, allCriteria, existing, onPreview,
 }: {
   problemNumber: ProblemNum;
   doc: Document | undefined;
   team: Team;
-  juryMemberId: string;
-  onSaved: () => void;
+  allCriteria: Criterion[];
+  existing: ReportEvaluationWithGrades | undefined;
   onPreview: (doc: Document) => void;
 }) {
-  const criteria = useMemo(() => getCriteriaForReport(problemNumber), [problemNumber]);
-
-  const existing = useMemo(
-    () => getReportEvaluation(juryMemberId, team.id, "final", problemNumber),
-    [juryMemberId, team.id, problemNumber],
-  );
+  const queryClient = useQueryClient();
+  const criteria = useMemo(() => filterReportCriteria(allCriteria, problemNumber), [allCriteria, problemNumber]);
 
   const initialDrafts = useMemo<GradeDrafts>(() => {
     const out: GradeDrafts = {};
-    const grades = existing ? getReportGradesByEvaluation(existing.id) : [];
+    const grades = existing?.grades ?? [];
     for (const c of criteria) {
       const g = grades.find(x => x.criterionId === c.id);
       out[c.id] = { score: g?.score ?? 0, remark: g?.remark ?? "" };
@@ -426,36 +444,25 @@ function RfGradingCard({
     setSaved(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!doc) return;
     setBusy(true);
     try {
-      const evalId = existing?.id ?? uuidv4();
-      const evaluation: ReportEvaluation = {
-        id: evalId,
-        juryMemberId,
+      await saveReportEvaluation({
         teamId: team.id,
         reportType: "final",
         problemNumber,
         globalRemark: remark.trim() || undefined,
-      };
-      upsertReportEvaluation(evaluation);
-
-      const savedGrades = getReportGradesByEvaluation(evalId);
-      for (const c of criteria) {
-        const d = drafts[c.id] ?? { score: 0, remark: "" };
-        const prev = savedGrades.find(g => g.criterionId === c.id);
-        const grade: ReportGrade = {
-          id: prev?.id ?? uuidv4(),
-          reportEvaluationId: evalId,
+        grades: criteria.map(c => ({
           criterionId: c.id,
-          score: d.score,
-          remark: d.remark.trim() || undefined,
-        };
-        upsertReportGrade(grade);
-      }
+          score: (drafts[c.id] ?? { score: 0 }).score,
+          remark: (drafts[c.id]?.remark ?? "").trim() || undefined,
+        })),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["report-evaluations", team.id] });
       setSaved(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
-      onSaved();
+    } catch {
+      alert("Impossible d'enregistrer l'évaluation.");
     } finally {
       setBusy(false);
     }

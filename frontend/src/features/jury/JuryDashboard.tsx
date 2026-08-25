@@ -1,11 +1,9 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/features/shared/SessionContext";
-import {
-  getTeamsAssignedToJuror,
-  getPassagesAssignedToJuror,
-} from "@/lib/repositories/juryRepository";
+import { getJuryAssignments, getJuryPassageAssignments } from "@/lib/repositories/juryRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
-import { getPools } from "@/lib/repositories/poolRepository";
+import { getPools, getPassages } from "@/lib/repositories/poolRepository";
 import { getDocuments } from "@/lib/repositories/documentRepository";
 import type { Passage, Pool, Team } from "@/types";
 import { ROLE_PALETTE, teamRoleFromIds } from "@/features/shared/widgets";
@@ -13,6 +11,14 @@ import { PageMotion, Stagger } from "@/features/shared/primitives";
 
 // JuryDashboard — editorial control room for a jury member.
 // Header · Per-problem progress · Assigned teams · Assigned passages.
+//
+// Every list here (assigned teams, assigned passages) used to come from a
+// pair of composite repository helpers (getTeamsAssignedToJuror /
+// getPassagesAssignedToJuror) that joined the raw assignment rows against
+// the team/passage tables internally. Now that every read is a real network
+// call, that join happens here instead: fetch the assignment rows and the
+// full team/passage lists as separate queries, then match them up with a
+// Map — same shape as the old helpers produced, just computed one level up.
 
 type Round = 1 | 2;
 const PROBLEMS = [1, 2, 3, 4] as const;
@@ -20,16 +26,44 @@ const PROBLEMS = [1, 2, 3, 4] as const;
 export function JuryDashboard() {
   const { session } = useSession();
   const [round, setRound] = useState<Round>(1);
+  const juryMemberId = session?.role === "jury" ? session.juryMember.id : undefined;
+
+  const assignmentsQ = useQuery({ queryKey: ["jury-assignments"], queryFn: getJuryAssignments });
+  const passageAssignmentsQ = useQuery({ queryKey: ["jury-passage-assignments"], queryFn: getJuryPassageAssignments });
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const poolsQ = useQuery({ queryKey: ["pools"], queryFn: getPools });
+  const passagesQ = useQuery({ queryKey: ["passages"], queryFn: getPassages });
+  const docsQ = useQuery({ queryKey: ["documents"], queryFn: getDocuments });
+
+  const loading =
+    assignmentsQ.isLoading || passageAssignmentsQ.isLoading || teamsQ.isLoading ||
+    poolsQ.isLoading || passagesQ.isLoading || docsQ.isLoading;
 
   const data = useMemo(() => {
-    if (!session || session.role !== "jury") return null;
-    const interTeams = getTeamsAssignedToJuror(session.juryMember.id, "intermediaire");
-    const finalTeams = getTeamsAssignedToJuror(session.juryMember.id, "final");
-    const passages = getPassagesAssignedToJuror(session.juryMember.id);
-    const teamById = new Map(getTeams().map(t => [t.id, t]));
-    const poolById = new Map(getPools().map(p => [p.id, p]));
-    return { interTeams, finalTeams, passages, teamById, poolById, docs: getDocuments() };
-  }, [session]);
+    if (!juryMemberId) return null;
+    if (!assignmentsQ.data || !passageAssignmentsQ.data || !teamsQ.data || !poolsQ.data || !passagesQ.data || !docsQ.data) {
+      return null;
+    }
+
+    const teamById = new Map(teamsQ.data.map(t => [t.id, t]));
+    const poolById = new Map(poolsQ.data.map(p => [p.id, p]));
+
+    const interTeams = assignmentsQ.data
+      .filter(a => a.juryMemberId === juryMemberId && a.reportType === "intermediaire")
+      .map(a => teamById.get(a.teamId))
+      .filter(Boolean) as Team[];
+    const finalTeams = assignmentsQ.data
+      .filter(a => a.juryMemberId === juryMemberId && a.reportType === "final")
+      .map(a => teamById.get(a.teamId))
+      .filter(Boolean) as Team[];
+
+    const myPassageIds = new Set(
+      passageAssignmentsQ.data.filter(a => a.juryMemberId === juryMemberId).map(a => a.passageId),
+    );
+    const passages = passagesQ.data.filter(p => myPassageIds.has(p.id));
+
+    return { interTeams, finalTeams, passages, teamById, poolById, docs: docsQ.data };
+  }, [juryMemberId, assignmentsQ.data, passageAssignmentsQ.data, teamsQ.data, poolsQ.data, passagesQ.data, docsQ.data]);
 
   const passagesByRound = useMemo(() => {
     if (!data) return { 1: [] as Passage[], 2: [] as Passage[] };
@@ -42,7 +76,11 @@ export function JuryDashboard() {
     return { 1: r1, 2: r2 };
   }, [data]);
 
-  if (!session || session.role !== "jury" || !data) return null;
+  if (!session || session.role !== "jury") return null;
+
+  if (loading || !data) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
 
   const activePassages = passagesByRound[round];
   const allAssignedTeams = uniqTeams([...data.interTeams, ...data.finalTeams]);

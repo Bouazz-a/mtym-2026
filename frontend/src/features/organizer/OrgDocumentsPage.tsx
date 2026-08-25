@@ -1,19 +1,23 @@
-import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader, BrutalCard, Badge, Btn, PageMotion } from "@/features/shared/primitives";
 import { getTeams } from "@/lib/repositories/teamRepository";
-import { getDocuments } from "@/lib/repositories/documentRepository";
-import { createDownloadUrl } from "@/lib/storage/fileStorage";
+import { getDocuments, downloadDocument } from "@/lib/repositories/documentRepository";
 import type { Document, Team } from "@/types";
 
 export function OrgDocumentsPage() {
-  const rows = useMemo<{ team: Team; documents: Document[] }[]>(() => {
-    const teams = getTeams().sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
-    const allDocs = getDocuments();
-    return teams.map(team => ({
-      team,
-      documents: allDocs.filter(d => d.teamId === team.id).sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)),
-    }));
-  }, []);
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const docsQ = useQuery({ queryKey: ["documents"], queryFn: getDocuments });
+
+  if (teamsQ.isLoading || docsQ.isLoading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  const teams = [...(teamsQ.data ?? [])].sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
+  const allDocs = docsQ.data ?? [];
+  const rows: { team: Team; documents: Document[] }[] = teams.map(team => ({
+    team,
+    documents: allDocs.filter(d => d.teamId === team.id).sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)),
+  }));
 
   const total = rows.reduce((acc, r) => acc + r.documents.length, 0);
 
@@ -36,14 +40,17 @@ export function OrgDocumentsPage() {
 }
 
 function TeamBlock({ team, documents }: { team: Team; documents: Document[] }) {
-  const handleDownload = (doc: Document) => {
-    const url = createDownloadUrl(doc.storagePath, doc.mimeType);
-    if (!url) return alert("Fichier introuvable.");
-    const a = window.document.createElement("a");
-    a.href = url;
-    a.download = doc.originalName;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleDownload = async (doc: Document) => {
+    try {
+      const { url, filename } = await downloadDocument(doc.id, doc.originalName);
+      const a = window.document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Téléchargement impossible.");
+    }
   };
 
   return (

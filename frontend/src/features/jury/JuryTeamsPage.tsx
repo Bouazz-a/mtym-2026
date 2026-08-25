@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   PageHeader,
   BrutalCard,
@@ -8,11 +9,9 @@ import {
   PageMotion,
 } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
-import {
-  getTeamsAssignedToJuror,
-  getJuryAssignments,
-} from "@/lib/repositories/juryRepository";
-import { getDocumentsByTeam } from "@/lib/repositories/documentRepository";
+import { getJuryAssignments } from "@/lib/repositories/juryRepository";
+import { getTeams } from "@/lib/repositories/teamRepository";
+import { getDocuments } from "@/lib/repositories/documentRepository";
 import { getReportEvaluations } from "@/lib/repositories/evaluationRepository";
 import type { Document, ReportEvaluation, ReportType, Team } from "@/types";
 
@@ -33,30 +32,40 @@ interface EnrichedTeam {
 
 export function JuryTeamsPage() {
   const { session } = useSession();
+  const juryMemberId = session?.role === "jury" ? session.juryMember.id : undefined;
+
+  const assignmentsQ = useQuery({ queryKey: ["jury-assignments"], queryFn: getJuryAssignments });
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const docsQ = useQuery({ queryKey: ["documents"], queryFn: getDocuments });
+  // Server-side, a jury caller's report-evaluations are already restricted
+  // to their own — no need to filter by juryMemberId again client-side.
+  const myEvalsQ = useQuery({ queryKey: ["report-evaluations", "mine"], queryFn: () => getReportEvaluations() });
+
+  const loading = assignmentsQ.isLoading || teamsQ.isLoading || docsQ.isLoading || myEvalsQ.isLoading;
+
   const items = useMemo<EnrichedTeam[]>(() => {
-    if (!session || session.role !== "jury") return [];
-    const jurorId = session.juryMember.id;
+    if (!juryMemberId || !assignmentsQ.data || !teamsQ.data || !docsQ.data || !myEvalsQ.data) return [];
 
-    const inter = getTeamsAssignedToJuror(jurorId, "intermediaire");
-    const final = getTeamsAssignedToJuror(jurorId, "final");
-    const allAssignments = getJuryAssignments();
-    const myEvals = getReportEvaluations().filter(
-      (e) => e.juryMemberId === jurorId,
-    );
+    const teamById = new Map(teamsQ.data.map(t => [t.id, t]));
+    const mine = assignmentsQ.data.filter(a => a.juryMemberId === juryMemberId);
+    const myEvals = myEvalsQ.data;
 
-    // Merge by team id, recording which report types I'm assigned to.
     const byId = new Map<string, EnrichedTeam>();
-    for (const t of inter)
-      attach(byId, t, "intermediaire", allAssignments, myEvals, jurorId);
-    for (const t of final)
-      attach(byId, t, "final", allAssignments, myEvals, jurorId);
+    for (const a of mine) {
+      const team = teamById.get(a.teamId);
+      if (team) attach(byId, team, a.reportType, myEvals, docsQ.data);
+    }
 
     return [...byId.values()].sort((a, b) =>
       a.team.quadrigramme.localeCompare(b.team.quadrigramme),
     );
-  }, [session]);
+  }, [juryMemberId, assignmentsQ.data, teamsQ.data, docsQ.data, myEvalsQ.data]);
 
   if (!session || session.role !== "jury") return null;
+
+  if (loading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
 
   const totalExpected = items.reduce((acc, it) => acc + it.expected, 0);
   const totalDone = items.reduce(
@@ -399,17 +408,12 @@ function attach(
   byId: Map<string, EnrichedTeam>,
   team: Team,
   scope: ReportType,
-  allAssignments: {
-    juryMemberId: string;
-    teamId: string;
-    reportType: ReportType;
-  }[],
   myEvals: ReportEvaluation[],
-  jurorId: string,
+  documents: Document[],
 ) {
   let entry = byId.get(team.id);
   if (!entry) {
-    const docs = getDocumentsByTeam(team.id);
+    const docs = documents.filter(d => d.teamId === team.id);
     entry = {
       team,
       scopes: [],
@@ -434,16 +438,11 @@ function attach(
     0,
   );
 
-  // Count of saved evaluations for this scope
+  // Count of saved evaluations for this scope (myEvals is already
+  // restricted to this juror by the backend).
   entry.myEvaluations = myEvals.filter(
     (e) =>
-      e.juryMemberId === jurorId &&
       e.teamId === team.id &&
       entry!.scopes.includes(e.reportType),
   ).length;
-
-  // (allAssignments not currently used past the load step, but kept for
-  // future extensions like surfacing the co-juror on the other report
-  // type.)
-  void allAssignments;
 }

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { v4 as uuidv4 } from "uuid";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BrutalCard, SectionHeading, Badge, Btn, Input } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import { canManageCriteria } from "@/lib/permissions";
 import {
   getCriteria,
-  upsertCriterion,
+  createCriterion,
+  updateCriterion,
   deleteCriterion,
 } from "@/lib/repositories/evaluationRepository";
 import type { Criterion, PassageRole } from "@/types";
@@ -24,8 +25,10 @@ const ORAL_ROLES: { role: PassageRole; label: string }[] = [
 
 export function CriteriaEditor() {
   const { session } = useSession();
-  const [all, setAll] = useState(getCriteria);
-  const refresh = () => setAll(getCriteria());
+  const queryClient = useQueryClient();
+  const criteriaQ = useQuery({ queryKey: ["criteria"], queryFn: getCriteria });
+  const all = criteriaQ.data ?? [];
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["criteria"] });
 
   const [problem, setProblem] = useState<(typeof PROBLEMS)[number]>(1);
   const [role, setRole] = useState<PassageRole>("defender");
@@ -49,6 +52,10 @@ export function CriteriaEditor() {
     );
   }
 
+  if (criteriaQ.isLoading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+
   const reportCriteria = all
     .filter((c) => c.type === "report" && c.problemNumber === problem)
     .sort((a, b) => a.order - b.order);
@@ -56,11 +63,10 @@ export function CriteriaEditor() {
     .filter((c) => c.type === "oral" && c.role === role)
     .sort((a, b) => a.order - b.order);
 
-  const addReport = () => {
+  const addReport = async () => {
     const order =
       reportCriteria.reduce((m, c) => Math.max(m, c.order), 0) + 1;
-    upsertCriterion({
-      id: uuidv4(),
+    await createCriterion({
       label: "Nouveau critère",
       coefficient: 1,
       type: "report",
@@ -70,10 +76,9 @@ export function CriteriaEditor() {
     refresh();
   };
 
-  const addOral = () => {
+  const addOral = async () => {
     const order = oralCriteria.reduce((m, c) => Math.max(m, c.order), 0) + 1;
-    upsertCriterion({
-      id: uuidv4(),
+    await createCriterion({
       label: "Nouveau critère",
       coefficient: 1,
       type: "oral",
@@ -283,18 +288,18 @@ function CriterionRowEditor({
 
   const valid = draft.label.trim().length > 0;
 
-  const save = () => {
+  const save = async () => {
     if (!valid) return;
-    upsertCriterion({
-      ...draft,
+    await updateCriterion(criterion.id, {
       label: draft.label.trim(),
+      coefficient: draft.coefficient,
       theme: draft.theme?.trim() || undefined,
     });
     onMutated();
   };
 
-  const remove = () => {
-    deleteCriterion(criterion.id);
+  const remove = async () => {
+    await deleteCriterion(criterion.id);
     onMutated();
   };
 

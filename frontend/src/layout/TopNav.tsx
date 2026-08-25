@@ -1,14 +1,22 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/features/shared/SessionContext";
 import { MtymLogo } from "@/features/shared/widgets";
 import { Popover } from "@/features/shared/primitives";
 import { getAnnouncements } from "@/lib/repositories/announcementRepository";
-import { getParticipants } from "@/lib/repositories/participantRepository";
-import { getTeams } from "@/lib/repositories/teamRepository";
-import { getJuryMembers } from "@/lib/repositories/juryRepository";
-import { getOrganizers } from "@/lib/repositories/organizerRepository";
+import { apiFetch } from "@/lib/api/client";
 import type { UserRole } from "@/types";
+
+interface DevLoginAccount {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: UserRole;
+  organizerRole?: "admin" | "logistics" | "scientific";
+  team?: { name: string; quadrigramme: string };
+}
 
 // TopNav — fixed dark top bar. Brand on the left (just the MTYM logo +
 // "Édition 2026"), nav links in the middle, account picker on the right.
@@ -40,16 +48,20 @@ const NAV: Record<UserRole, NavItem[]> = {
 };
 
 export function TopNav() {
-  const { session, role, setActiveUser } = useSession();
+  const { session, role, loginAsEmail } = useSession();
   const navigate = useNavigate();
   const [pickerOpen, setPickerOpen] = useState(false);
   const userChipRef = useRef<HTMLButtonElement>(null);
 
-  const items = NAV[role] ?? [];
-  const audienceFilter = role === "organizer"
-    ? () => true
-    : (a: { audience: string }) => a.audience === "all" || a.audience === role + "s";
-  const annCount = getAnnouncements().filter(audienceFilter).length;
+  const items = role ? NAV[role] ?? [] : [];
+  // The backend already returns only what this role is allowed to see —
+  // no audience filter needed here.
+  const announcementsQuery = useQuery({
+    queryKey: ["announcements"],
+    queryFn: getAnnouncements,
+    enabled: !!role,
+  });
+  const annCount = announcementsQuery.data?.length ?? 0;
 
   const userName = !session
     ? "—"
@@ -191,8 +203,12 @@ export function TopNav() {
                 : session?.role === "organizer" ? session.organizer.id
                 : null
               }
-              onPick={(sel) => {
-                setActiveUser(sel);
+              onPick={async (email) => {
+                try {
+                  await loginAsEmail(email);
+                } catch (err) {
+                  console.error("Dev login failed", err);
+                }
                 setPickerOpen(false);
               }}
             />
@@ -208,37 +224,46 @@ export function TopNav() {
 function AccountPicker({
   currentRole, currentId, onPick,
 }: {
-  currentRole: UserRole;
+  currentRole: UserRole | null;
   currentId: string | null;
-  onPick: (sel: { role: UserRole; id: string }) => void;
+  onPick: (email: string) => void;
 }) {
-  const data = useMemo(() => {
-    const teams = new Map(getTeams().map(t => [t.id, t]));
-    const participants = getParticipants()
-      .map(p => ({
-        id: p.id,
-        name: `${p.firstName} ${p.lastName}`,
-        sub: teams.get(p.teamId)
-          ? `${teams.get(p.teamId)!.quadrigramme} · ${teams.get(p.teamId)!.name}`
-          : "—",
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    const jury = getJuryMembers()
-      .map(j => ({ id: j.id, name: `${j.firstName} ${j.lastName}`, sub: j.city ?? "Jury" }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    const organizers = getOrganizers()
-      .map(o => ({ id: o.id, name: `${o.firstName} ${o.lastName}`, sub: o.role.toUpperCase() }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    return { participants, jury, organizers };
+  const [accounts, setAccounts] = useState<DevLoginAccount[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<DevLoginAccount[]>("/auth/dev-login/users")
+      .then((rows) => { if (!cancelled) setAccounts(rows); })
+      .catch((err) => console.error("Failed to load dev-login accounts", err));
+    return () => { cancelled = true; };
   }, []);
+
+  const data = accounts ?? [];
+  const participants = data
+    .filter(a => a.role === "participant")
+    .map(a => ({
+      id: a.id,
+      email: a.email,
+      name: `${a.firstName} ${a.lastName}`,
+      sub: a.team ? `${a.team.quadrigramme} · ${a.team.name}` : "—",
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const jury = data
+    .filter(a => a.role === "jury")
+    .map(a => ({ id: a.id, email: a.email, name: `${a.firstName} ${a.lastName}`, sub: "Jury" }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const organizers = data
+    .filter(a => a.role === "organizer")
+    .map(a => ({ id: a.id, email: a.email, name: `${a.firstName} ${a.lastName}`, sub: (a.organizerRole ?? "").toUpperCase() }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const matches = (s: string) => !q || s.toLowerCase().includes(q);
 
-  const filteredParticipants = data.participants.filter(p => matches(p.name) || matches(p.sub));
-  const filteredJury = data.jury.filter(j => matches(j.name) || matches(j.sub));
-  const filteredOrganizers = data.organizers.filter(o => matches(o.name));
+  const filteredParticipants = participants.filter(p => matches(p.name) || matches(p.sub));
+  const filteredJury = jury.filter(j => matches(j.name) || matches(j.sub));
+  const filteredOrganizers = organizers.filter(o => matches(o.name));
 
   return (
     <div className="flex flex-col" style={{ maxHeight: 480 }}>
@@ -257,6 +282,9 @@ function AccountPicker({
         />
       </div>
       <div className="flex-1 overflow-auto">
+        {accounts === null && (
+          <div className="px-4 py-6 text-center text-sm text-foreground/55">Chargement…</div>
+        )}
         <Group
           label={`Participants · ${filteredParticipants.length}`}
           rows={filteredParticipants}
@@ -290,11 +318,11 @@ function Group({
   label, rows, role, currentRole, currentId, onPick,
 }: {
   label: string;
-  rows: { id: string; name: string; sub: string }[];
+  rows: { id: string; email: string; name: string; sub: string }[];
   role: UserRole;
-  currentRole: UserRole;
+  currentRole: UserRole | null;
   currentId: string | null;
-  onPick: (sel: { role: UserRole; id: string }) => void;
+  onPick: (email: string) => void;
 }) {
   if (rows.length === 0) return null;
   return (
@@ -309,7 +337,7 @@ function Group({
           return (
             <li key={`${role}-${r.id}`}>
               <button
-                onClick={() => onPick({ role, id: r.id })}
+                onClick={() => onPick(r.email)}
                 className="w-full px-4 py-2 text-left flex items-center justify-between gap-3 transition-colors"
                 style={{
                   background: active ? "rgba(246,168,6,0.10)" : "transparent",

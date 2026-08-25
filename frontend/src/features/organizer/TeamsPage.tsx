@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getTeams } from "@/lib/repositories/teamRepository";
-import { getParticipantsByTeam } from "@/lib/repositories/participantRepository";
+import { getParticipants } from "@/lib/repositories/participantRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
-import { getDocumentsByTeam } from "@/lib/repositories/documentRepository";
+import { getDocuments } from "@/lib/repositories/documentRepository";
 import type { Document, Participant, Pool, Team } from "@/types";
 import { PageMotion } from "@/features/shared/primitives";
 
@@ -20,18 +21,25 @@ interface Enriched {
 export function TeamsPage() {
   const [query, setQuery] = useState("");
 
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const participantsQ = useQuery({ queryKey: ["participants"], queryFn: getParticipants });
+  const poolsQ = useQuery({ queryKey: ["pools"], queryFn: getPools });
+  const docsQ = useQuery({ queryKey: ["documents"], queryFn: getDocuments });
+
+  const loading = teamsQ.isLoading || participantsQ.isLoading || poolsQ.isLoading || docsQ.isLoading;
+
   const items = useMemo<Enriched[]>(() => {
-    const pools = getPools();
-    const poolById = new Map(pools.map(p => [p.id, p]));
-    const teams = getTeams().sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
+    if (!teamsQ.data || !participantsQ.data || !poolsQ.data || !docsQ.data) return [];
+    const poolById = new Map(poolsQ.data.map(p => [p.id, p]));
+    const teams = [...teamsQ.data].sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
     return teams.map(team => ({
       team,
-      members: getParticipantsByTeam(team.id),
-      pool1: poolById.get(team.poolIdRound1) ?? null,
+      members: participantsQ.data!.filter(p => p.teamId === team.id),
+      pool1: team.poolIdRound1 ? poolById.get(team.poolIdRound1) ?? null : null,
       pool2: team.poolIdRound2 ? poolById.get(team.poolIdRound2) ?? null : null,
-      docs: getDocumentsByTeam(team.id),
+      docs: docsQ.data!.filter(d => d.teamId === team.id),
     }));
-  }, []);
+  }, [teamsQ.data, participantsQ.data, poolsQ.data, docsQ.data]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -42,6 +50,10 @@ export function TeamsPage() {
       it.members.some(m => `${m.firstName} ${m.lastName}`.toLowerCase().includes(q)),
     );
   }, [items, query]);
+
+  if (loading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
 
   return (
     <PageMotion className="space-y-8">

@@ -1,30 +1,36 @@
 import type { Organizer, OrganizerRole } from "@/types";
-import { getAll, setAll } from "../storage";
+import { apiFetch, apiFetchOptional } from "@/lib/api/client";
 
-export function getOrganizers(): Organizer[] {
-  return getAll("organizers") as Organizer[];
+// Every route here is admin-only (see backend/src/routes/organizers.ts) —
+// managing organizer accounts is restricted to the "admin" organizer role.
+
+export function getOrganizers(): Promise<Organizer[]> {
+  return apiFetch<Organizer[]>("/organizers");
 }
 
-export function getOrganizerById(id: string): Organizer | undefined {
-  return getOrganizers().find(o => o.id === id);
+export function getOrganizerById(id: string): Promise<Organizer | undefined> {
+  return apiFetchOptional<Organizer>(`/organizers/${id}`);
 }
 
-export function getOrganizersByRole(role: OrganizerRole): Organizer[] {
-  return getOrganizers().filter(o => o.role === role);
+// No server-side filter for this — fetch and filter client-side.
+export async function getOrganizersByRole(role: OrganizerRole): Promise<Organizer[]> {
+  const all = await getOrganizers();
+  return all.filter(o => o.role === role);
 }
 
-export function upsertOrganizer(organizer: Organizer): void {
-  const all = getOrganizers();
-  const idx = all.findIndex(o => o.id === organizer.id);
-  if (idx === -1) {
-    setAll("organizers", [...all, organizer]);
-  } else {
-    const updated = [...all];
-    updated[idx] = organizer;
-    setAll("organizers", updated);
-  }
+export function createOrganizer(
+  data: Pick<Organizer, "firstName" | "lastName" | "email" | "phone" | "role">,
+): Promise<Organizer> {
+  return apiFetch<Organizer>("/organizers", { method: "POST", body: data });
 }
 
-export function deleteOrganizer(id: string): void {
-  setAll("organizers", getOrganizers().filter(o => o.id !== id));
+export function updateOrganizer(
+  id: string,
+  patch: Partial<Pick<Organizer, "firstName" | "lastName" | "email" | "phone" | "role">>,
+): Promise<Organizer> {
+  return apiFetch<Organizer>(`/organizers/${id}`, { method: "PUT", body: patch });
+}
+
+export function deleteOrganizer(id: string): Promise<void> {
+  return apiFetch<void>(`/organizers/${id}`, { method: "DELETE" });
 }

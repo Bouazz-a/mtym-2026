@@ -1,70 +1,64 @@
 import type { Workshop, WorkshopAssignment, WorkshopPreference } from "@/types";
-import { getAll, setAll } from "../storage";
+import { apiFetch } from "@/lib/api/client";
 
-export function getWorkshops(): Workshop[] {
-  return getAll("workshops") as Workshop[];
+// ─── Workshops ─────────────────────────────────────────────────────────
+
+export function getWorkshops(): Promise<Workshop[]> {
+  return apiFetch<Workshop[]>("/workshops");
 }
 
-export function upsertWorkshop(workshop: Workshop): void {
-  const all = getWorkshops();
-  const idx = all.findIndex(w => w.id === workshop.id);
-  if (idx === -1) {
-    setAll("workshops", [...all, workshop]);
-  } else {
-    const updated = [...all];
-    updated[idx] = workshop;
-    setAll("workshops", updated);
-  }
+// Admin/logistics-only (see backend/src/routes/workshops.ts).
+export function createWorkshop(data: Omit<Workshop, "id">): Promise<Workshop> {
+  return apiFetch<Workshop>("/workshops", { method: "POST", body: data });
 }
 
-export function getWorkshopPreference(participantId: string): WorkshopPreference | undefined {
-  return (getAll("workshopPreferences") as WorkshopPreference[])
-    .find(p => p.participantId === participantId);
+export function updateWorkshop(id: string, patch: Partial<Omit<Workshop, "id">>): Promise<Workshop> {
+  return apiFetch<Workshop>(`/workshops/${id}`, { method: "PUT", body: patch });
 }
 
-export function upsertWorkshopPreference(pref: WorkshopPreference): void {
-  const all = getAll("workshopPreferences") as WorkshopPreference[];
-  const idx = all.findIndex(p => p.participantId === pref.participantId);
-  if (idx === -1) {
-    setAll("workshopPreferences", [...all, pref]);
-  } else {
-    const updated = [...all];
-    updated[idx] = pref;
-    setAll("workshopPreferences", updated);
-  }
+export function deleteWorkshop(id: string): Promise<void> {
+  return apiFetch<void>(`/workshops/${id}`, { method: "DELETE" });
 }
 
-export function getWorkshopAssignment(participantId: string): WorkshopAssignment | undefined {
-  return (getAll("workshopAssignments") as WorkshopAssignment[])
-    .find(a => a.participantId === participantId);
+// ─── Preferences ───────────────────────────────────────────────────────
+// GET /workshop-preferences returns a different shape depending on the
+// caller: a participant gets back just their own preference (or null); an
+// organizer/jury caller gets the full list. Split into two functions so
+// each call site gets the type it actually expects.
+
+export function getMyWorkshopPreference(): Promise<WorkshopPreference | null> {
+  return apiFetch<WorkshopPreference | null>("/workshop-preferences");
 }
 
-export function upsertWorkshopAssignment(assignment: WorkshopAssignment): void {
-  const all = getAll("workshopAssignments") as WorkshopAssignment[];
-  const idx = all.findIndex(a => a.participantId === assignment.participantId);
-  if (idx === -1) {
-    setAll("workshopAssignments", [...all, assignment]);
-  } else {
-    const updated = [...all];
-    updated[idx] = assignment;
-    setAll("workshopAssignments", updated);
-  }
+export function getWorkshopPreferences(): Promise<WorkshopPreference[]> {
+  return apiFetch<WorkshopPreference[]>("/workshop-preferences");
 }
 
-export function deleteWorkshop(id: string): void {
-  setAll("workshops", getWorkshops().filter(w => w.id !== id));
+// Participant sets their own three choices; an admin/logistics organizer
+// can set them on a participant's behalf via participantId.
+export function saveWorkshopPreference(data: {
+  choice1Id: string;
+  choice2Id: string;
+  choice3Id: string;
+  participantId?: string;
+}): Promise<WorkshopPreference> {
+  return apiFetch<WorkshopPreference>("/workshop-preferences", { method: "PUT", body: data });
 }
 
-export function deleteWorkshopPreference(participantId: string): void {
-  setAll("workshopPreferences",
-    (getAll("workshopPreferences") as WorkshopPreference[])
-      .filter(p => p.participantId !== participantId)
-  );
+// ─── Assignments ───────────────────────────────────────────────────────
+// Same role-shaped response as preferences above.
+
+export function getMyWorkshopAssignment(): Promise<WorkshopAssignment | null> {
+  return apiFetch<WorkshopAssignment | null>("/workshop-assignments");
 }
 
-export function deleteWorkshopAssignment(participantId: string): void {
-  setAll("workshopAssignments",
-    (getAll("workshopAssignments") as WorkshopAssignment[])
-      .filter(a => a.participantId !== participantId)
-  );
+export function getWorkshopAssignments(): Promise<WorkshopAssignment[]> {
+  return apiFetch<WorkshopAssignment[]>("/workshop-assignments");
+}
+
+// Admin/logistics-only — wipes and recomputes every assignment in one
+// greedy pass over declared preferences (see backend/src/routes/
+// workshop-assignments.ts).
+export function runAutoWorkshopAssignment(): Promise<WorkshopAssignment[]> {
+  return apiFetch<WorkshopAssignment[]>("/workshop-assignments/auto", { method: "POST" });
 }

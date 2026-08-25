@@ -1,9 +1,9 @@
 import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader, BrutalCard, SectionHeading, Badge, DiamondMarker, PageMotion,
 } from "@/features/shared/primitives";
 import { StatCounter, ROLE_PALETTE } from "@/features/shared/widgets";
-import { useSession } from "@/features/shared/SessionContext";
 import {
   autoAssignAll, autoAssignReports, autoAssignPassages,
   computeJurorLoads,
@@ -27,49 +27,65 @@ import type { JuryAssignment, JuryPassageAssignment, Passage, Pool, Team } from 
 //  · Passage assignment table (each passage with its 2 jurors)
 
 export function JuryManagementPage() {
-  const { session } = useSession();
-  const loadState = () => ({
-    loads: computeJurorLoads(),
-    reports: getJuryAssignments(),
-    passages: getJuryPassageAssignments(),
-    teams: getTeams(),
-    passageList: getPassages(),
-    pools: getPools(),
-  });
-  const [state, setState] = useState(loadState);
+  const queryClient = useQueryClient();
+
+  const loadsQ = useQuery({ queryKey: ["jury-loads"], queryFn: computeJurorLoads });
+  const reportsQ = useQuery({ queryKey: ["jury-assignments"], queryFn: getJuryAssignments });
+  const passagesQ = useQuery({ queryKey: ["jury-passage-assignments"], queryFn: getJuryPassageAssignments });
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const passageListQ = useQuery({ queryKey: ["passages"], queryFn: getPassages });
+  const poolsQ = useQuery({ queryKey: ["pools"], queryFn: getPools });
+
   const [busy, setBusy] = useState<null | "all" | "inter" | "final" | "passages">(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const refresh = () => setState(loadState());
+  const loading =
+    loadsQ.isLoading || reportsQ.isLoading || passagesQ.isLoading ||
+    teamsQ.isLoading || passageListQ.isLoading || poolsQ.isLoading;
 
-  if (!session || session.role !== "organizer") return null;
+  const refresh = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["jury-loads"] }),
+    queryClient.invalidateQueries({ queryKey: ["jury-assignments"] }),
+    queryClient.invalidateQueries({ queryKey: ["jury-passage-assignments"] }),
+  ]);
 
-  const handle = (action: NonNullable<typeof busy>) => () => {
+  if (loading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  const state = {
+    loads: loadsQ.data ?? [],
+    reports: reportsQ.data ?? [],
+    passages: passagesQ.data ?? [],
+    teams: teamsQ.data ?? [],
+    passageList: passageListQ.data ?? [],
+    pools: poolsQ.data ?? [],
+  };
+
+  const handle = (action: NonNullable<typeof busy>) => async () => {
     setError(null); setNotice(null); setBusy(action);
-    setTimeout(() => {
-      try {
-        if (action === "all") {
-          const r = autoAssignAll(session);
-          setNotice(`Affectations régénérées : ${r.reportAssignments.length} rapports · ${r.passageAssignments.length} oraux.`);
-        } else if (action === "inter") {
-          const r = autoAssignReports(session, "intermediaire");
-          setNotice(`Rapports intermédiaires régénérés : ${r.length} affectations.`);
-        } else if (action === "final") {
-          const r = autoAssignReports(session, "final");
-          setNotice(`Rapports finaux régénérés : ${r.length} affectations.`);
-        } else {
-          const r = autoAssignPassages(session);
-          setNotice(`Passages régénérés : ${r.length} affectations.`);
-        }
-        refresh();
-      } catch (e) {
-        if (e instanceof ServiceError) setError(e.message);
-        else throw e;
-      } finally {
-        setBusy(null);
+    try {
+      if (action === "all") {
+        const r = await autoAssignAll();
+        setNotice(`Affectations régénérées : ${r.reportAssignments.length} rapports · ${r.passageAssignments.length} oraux.`);
+      } else if (action === "inter") {
+        const r = await autoAssignReports("intermediaire");
+        setNotice(`Rapports intermédiaires régénérés : ${r.length} affectations.`);
+      } else if (action === "final") {
+        const r = await autoAssignReports("final");
+        setNotice(`Rapports finaux régénérés : ${r.length} affectations.`);
+      } else {
+        const r = await autoAssignPassages();
+        setNotice(`Passages régénérés : ${r.length} affectations.`);
       }
-    }, 30);
+      await refresh();
+    } catch (e) {
+      if (e instanceof ServiceError) setError(e.message);
+      else throw e;
+    } finally {
+      setBusy(null);
+    }
   };
 
   const interCount = state.reports.filter(a => a.reportType === "intermediaire").length;

@@ -1,162 +1,83 @@
-import type { Criterion, OralEvaluation, OralGrade, PassageRole, ReportEvaluation, ReportGrade, ReportType } from "@/types";
-import { getAll, setAll } from "../storage";
+import type {
+  Criterion, OralEvaluation, OralGrade, PassageRole, ReportEvaluation, ReportGrade, ReportType,
+} from "@/types";
+import { apiFetch } from "@/lib/api/client";
 
-export function getCriteria(): Criterion[] {
-  return getAll("criteria") as Criterion[];
+// The backend saves an evaluation and all of its per-criterion grades in
+// one request (one upsert transaction — see backend/src/routes/report-
+// evaluations.ts and oral-evaluations.ts), and returns them nested
+// together. The old localStorage version modeled them as two separate
+// tables you had to upsert one row at a time (upsertReportEvaluation, then
+// upsertReportGrade per criterion) — that split doesn't exist on the wire
+// any more, so these two shapes replace ReportEvaluation/OralEvaluation
+// wherever a fetched (not freshly-composed) evaluation is used.
+export type ReportEvaluationWithGrades = ReportEvaluation & { grades: ReportGrade[] };
+export type OralEvaluationWithGrades = OralEvaluation & { grades: OralGrade[] };
+
+// ─── Criteria ──────────────────────────────────────────────────────────
+
+export function getCriteria(): Promise<Criterion[]> {
+  return apiFetch<Criterion[]>("/criteria");
 }
 
-export function getCriteriaForReport(problemNumber: number): Criterion[] {
-  return getCriteria()
+// Pure filters over an already-fetched criteria list — a page that needs
+// several slices (e.g. all three oral roles) only fetches the list once.
+export function filterReportCriteria(criteria: Criterion[], problemNumber: number): Criterion[] {
+  return criteria
     .filter(c => c.type === "report" && c.problemNumber === problemNumber)
     .sort((a, b) => a.order - b.order);
 }
 
-export function getCriteriaForOral(role: PassageRole): Criterion[] {
-  return getCriteria()
+export function filterOralCriteria(criteria: Criterion[], role: PassageRole): Criterion[] {
+  return criteria
     .filter(c => c.type === "oral" && c.role === role)
     .sort((a, b) => a.order - b.order);
 }
 
-export function upsertCriterion(criterion: Criterion): void {
-  const all = getCriteria();
-  const idx = all.findIndex(c => c.id === criterion.id);
-  if (idx === -1) {
-    setAll("criteria", [...all, criterion]);
-  } else {
-    const updated = [...all];
-    updated[idx] = criterion;
-    setAll("criteria", updated);
-  }
+// Admin/scientific-only management (the organizer's criteria editor).
+export function createCriterion(data: Omit<Criterion, "id">): Promise<Criterion> {
+  return apiFetch<Criterion>("/criteria", { method: "POST", body: data });
 }
 
-export function deleteCriterion(id: string): void {
-  setAll("criteria", getCriteria().filter(c => c.id !== id));
+export function updateCriterion(id: string, patch: Partial<Omit<Criterion, "id">>): Promise<Criterion> {
+  return apiFetch<Criterion>(`/criteria/${id}`, { method: "PUT", body: patch });
 }
 
-export function getReportEvaluations(): ReportEvaluation[] {
-  return getAll("reportEvaluations") as ReportEvaluation[];
+export function deleteCriterion(id: string): Promise<void> {
+  return apiFetch<void>(`/criteria/${id}`, { method: "DELETE" });
 }
 
-export function getReportEvaluation(
-  juryMemberId: string,
-  teamId: string,
-  reportType: ReportType,
-  problemNumber: number
-): ReportEvaluation | undefined {
-  return getReportEvaluations().find(
-    e => e.juryMemberId  === juryMemberId &&
-         e.teamId        === teamId &&
-         e.reportType    === reportType &&
-         e.problemNumber === problemNumber
-  );
+// ─── Report evaluations (rapport intermédiaire + rapports finaux) ────────
+
+// Server-side visibility rules apply: a jury member only ever gets back
+// their own evaluations; teamId is an optional extra filter for organizers.
+export function getReportEvaluations(teamId?: string): Promise<ReportEvaluationWithGrades[]> {
+  return apiFetch<ReportEvaluationWithGrades[]>("/report-evaluations", { params: { teamId } });
 }
 
-export function upsertReportEvaluation(evaluation: ReportEvaluation): void {
-  const all = getReportEvaluations();
-  const idx = all.findIndex(e => e.id === evaluation.id);
-  if (idx === -1) {
-    setAll("reportEvaluations", [...all, evaluation]);
-  } else {
-    const updated = [...all];
-    updated[idx] = evaluation;
-    setAll("reportEvaluations", updated);
-  }
+export function saveReportEvaluation(input: {
+  teamId: string;
+  reportType: ReportType;
+  problemNumber: number; // 0 for rapport intermédiaire (spans all problems)
+  overallScore?: number; // rapport intermédiaire only — 1..4
+  globalRemark?: string;
+  grades?: { criterionId: string; score: number; remark?: string }[];
+}): Promise<ReportEvaluationWithGrades> {
+  return apiFetch<ReportEvaluationWithGrades>("/report-evaluations", { method: "POST", body: input });
 }
 
-export function deleteReportEvaluation(id: string): void {
-  setAll("reportEvaluations", getReportEvaluations().filter(e => e.id !== id));
-  setAll("reportGrades", getReportGrades().filter(g => g.reportEvaluationId !== id));
+// ─── Oral evaluations (passage grading) ───────────────────────────────
+
+export function getOralEvaluations(passageId?: string): Promise<OralEvaluationWithGrades[]> {
+  return apiFetch<OralEvaluationWithGrades[]>("/oral-evaluations", { params: { passageId } });
 }
 
-export function getReportEvaluationsByTeam(teamId: string): ReportEvaluation[] {
-  return getReportEvaluations().filter(e => e.teamId === teamId);
-}
-
-export function getReportGrades(): ReportGrade[] {
-  return getAll("reportGrades") as ReportGrade[];
-}
-
-export function getReportGradesByEvaluation(reportEvaluationId: string): ReportGrade[] {
-  return getReportGrades().filter(g => g.reportEvaluationId === reportEvaluationId);
-}
-
-export function upsertReportGrade(grade: ReportGrade): void {
-  const all = getReportGrades();
-  const idx = all.findIndex(g => g.id === grade.id);
-  if (idx === -1) {
-    setAll("reportGrades", [...all, grade]);
-  } else {
-    const updated = [...all];
-    updated[idx] = grade;
-    setAll("reportGrades", updated);
-  }
-}
-
-export function deleteReportGrade(id: string): void {
-  setAll("reportGrades", getReportGrades().filter(g => g.id !== id));
-}
-
-export function getOralEvaluations(): OralEvaluation[] {
-  return getAll("oralEvaluations") as OralEvaluation[];
-}
-
-export function getOralEvaluation(
-  juryMemberId: string,
-  passageId: string,
-  teamId: string
-): OralEvaluation | undefined {
-  return getOralEvaluations().find(
-    e => e.juryMemberId === juryMemberId &&
-         e.passageId   === passageId &&
-         e.teamId      === teamId
-  );
-}
-
-export function upsertOralEvaluation(evaluation: OralEvaluation): void {
-  const all = getOralEvaluations();
-  const idx = all.findIndex(e => e.id === evaluation.id);
-  if (idx === -1) {
-    setAll("oralEvaluations", [...all, evaluation]);
-  } else {
-    const updated = [...all];
-    updated[idx] = evaluation;
-    setAll("oralEvaluations", updated);
-  }
-}
-
-export function deleteOralEvaluation(id: string): void {
-  setAll("oralEvaluations", getOralEvaluations().filter(e => e.id !== id));
-  setAll("oralGrades", getOralGrades().filter(g => g.oralEvaluationId !== id));
-}
-
-export function getOralEvaluationsByTeam(teamId: string): OralEvaluation[] {
-  return getOralEvaluations().filter(e => e.teamId === teamId);
-}
-
-export function getOralEvaluationsByPassage(passageId: string): OralEvaluation[] {
-  return getOralEvaluations().filter(e => e.passageId === passageId);
-}
-
-export function getOralGrades(): OralGrade[] {
-  return getAll("oralGrades") as OralGrade[];
-}
-
-export function getOralGradesByEvaluation(oralEvaluationId: string): OralGrade[] {
-  return getOralGrades().filter(g => g.oralEvaluationId === oralEvaluationId);
-}
-
-export function upsertOralGrade(grade: OralGrade): void {
-  const all = getOralGrades();
-  const idx = all.findIndex(g => g.id === grade.id);
-  if (idx === -1) {
-    setAll("oralGrades", [...all, grade]);
-  } else {
-    const updated = [...all];
-    updated[idx] = grade;
-    setAll("oralGrades", updated);
-  }
-}
-
-export function deleteOralGrade(id: string): void {
-  setAll("oralGrades", getOralGrades().filter(g => g.id !== id));
+export function saveOralEvaluation(input: {
+  passageId: string;
+  teamId: string;
+  role: PassageRole;
+  globalRemark?: string;
+  grades?: { criterionId: string; score: number; remark?: string }[];
+}): Promise<OralEvaluationWithGrades> {
+  return apiFetch<OralEvaluationWithGrades>("/oral-evaluations", { method: "POST", body: input });
 }

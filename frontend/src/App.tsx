@@ -1,28 +1,71 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SessionProvider, useSession } from "@/features/shared/SessionContext";
 import { AppLayout } from "@/layout/AppLayout";
 import { RoleGuard } from "@/layout/RoleGuard";
 
-import { ParcoursPage } from "@/features/participant/ParcoursPage";
-import { DocumentsPage as ParticipantDocumentsPage } from "@/features/participant/DocumentsPage";
-import { PassageDetailPage } from "@/features/participant/PassageDetailPage";
-import { ProfilPage } from "@/features/participant/ProfilPage";
-import { AnnouncementsPage } from "@/features/participant/AnnouncementsPage";
+// Route-level code splitting: each page is fetched (and its module graph
+// evaluated) only when its route is actually visited. This matters right
+// now beyond bundle size — during the ongoing backend integration, some
+// feature areas are mid-conversion and would throw at module-load time if
+// eagerly imported here, which used to take the *entire* app down on any
+// page. Lazy-loading contains that blast radius to the broken route.
+const ParcoursPage = lazy(() =>
+  import("@/features/participant/ParcoursPage").then((m) => ({ default: m.ParcoursPage })),
+);
+const ParticipantDocumentsPage = lazy(() =>
+  import("@/features/participant/DocumentsPage").then((m) => ({ default: m.DocumentsPage })),
+);
+const PassageDetailPage = lazy(() =>
+  import("@/features/participant/PassageDetailPage").then((m) => ({ default: m.PassageDetailPage })),
+);
+const ProfilPage = lazy(() =>
+  import("@/features/participant/ProfilPage").then((m) => ({ default: m.ProfilPage })),
+);
+const AnnouncementsPage = lazy(() =>
+  import("@/features/participant/AnnouncementsPage").then((m) => ({ default: m.AnnouncementsPage })),
+);
 
-import { JuryDashboard } from "@/features/jury/JuryDashboard";
-import { JuryPassagesPage } from "@/features/jury/JuryPassagesPage";
-import { JuryPassageDetailPage } from "@/features/jury/JuryPassageDetailPage";
-import { JuryTeamsPage } from "@/features/jury/JuryTeamsPage";
-import { JuryTeamDetailPage } from "@/features/jury/JuryTeamDetailPage";
+const JuryDashboard = lazy(() =>
+  import("@/features/jury/JuryDashboard").then((m) => ({ default: m.JuryDashboard })),
+);
+const JuryPassagesPage = lazy(() =>
+  import("@/features/jury/JuryPassagesPage").then((m) => ({ default: m.JuryPassagesPage })),
+);
+const JuryPassageDetailPage = lazy(() =>
+  import("@/features/jury/JuryPassageDetailPage").then((m) => ({ default: m.JuryPassageDetailPage })),
+);
+const JuryTeamsPage = lazy(() =>
+  import("@/features/jury/JuryTeamsPage").then((m) => ({ default: m.JuryTeamsPage })),
+);
+const JuryTeamDetailPage = lazy(() =>
+  import("@/features/jury/JuryTeamDetailPage").then((m) => ({ default: m.JuryTeamDetailPage })),
+);
 
-import { OrganizerDashboard } from "@/features/organizer/OrganizerDashboard";
-import { TournamentPage } from "@/features/organizer/TournamentPage";
-import { TeamsPage } from "@/features/organizer/TeamsPage";
-import { JuryManagementPage } from "@/features/organizer/JuryManagementPage";
-import { AdministrationPage } from "@/features/organizer/AdministrationPage";
-import { EvaluationsPage } from "@/features/organizer/EvaluationsPage";
-import { OrgDocumentsPage } from "@/features/organizer/OrgDocumentsPage";
-import { OrgAnnouncementsPage } from "@/features/organizer/OrgAnnouncementsPage";
+const OrganizerDashboard = lazy(() =>
+  import("@/features/organizer/OrganizerDashboard").then((m) => ({ default: m.OrganizerDashboard })),
+);
+const TournamentPage = lazy(() =>
+  import("@/features/organizer/TournamentPage").then((m) => ({ default: m.TournamentPage })),
+);
+const TeamsPage = lazy(() =>
+  import("@/features/organizer/TeamsPage").then((m) => ({ default: m.TeamsPage })),
+);
+const JuryManagementPage = lazy(() =>
+  import("@/features/organizer/JuryManagementPage").then((m) => ({ default: m.JuryManagementPage })),
+);
+const AdministrationPage = lazy(() =>
+  import("@/features/organizer/AdministrationPage").then((m) => ({ default: m.AdministrationPage })),
+);
+const EvaluationsPage = lazy(() =>
+  import("@/features/organizer/EvaluationsPage").then((m) => ({ default: m.EvaluationsPage })),
+);
+const OrgDocumentsPage = lazy(() =>
+  import("@/features/organizer/OrgDocumentsPage").then((m) => ({ default: m.OrgDocumentsPage })),
+);
+const OrgAnnouncementsPage = lazy(() =>
+  import("@/features/organizer/OrgAnnouncementsPage").then((m) => ({ default: m.OrgAnnouncementsPage })),
+);
 
 // App — wires the platform providers and the routing tree. Routes are
 // segregated by role using RoleGuard wrappers; the home "/" route is
@@ -32,6 +75,7 @@ export default function App() {
   return (
     <SessionProvider>
       <BrowserRouter>
+        <Suspense fallback={<div className="py-24 text-center text-foreground/55">Chargement…</div>}>
           <Routes>
             <Route element={<AppLayout />}>
               <Route index element={<HomeByRole />} />
@@ -69,13 +113,29 @@ export default function App() {
               <Route path="*" element={<TodoPage label="404" />} />
             </Route>
           </Routes>
+        </Suspense>
       </BrowserRouter>
     </SessionProvider>
   );
 }
 
 function HomeByRole() {
-  const { role } = useSession();
+  const { role, status } = useSession();
+
+  if (status === "loading") {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+  if (status === "anonymous" || !role) {
+    return (
+      <div className="py-24 text-center">
+        <div className="font-heading font-bold text-2xl mb-3">Connexion requise</div>
+        <div className="text-foreground/55">
+          Choisissez un compte via le sélecteur en haut à droite pour continuer.
+        </div>
+      </div>
+    );
+  }
+
   if (role === "participant") return <ParcoursPage />;
   if (role === "jury") return <JuryDashboard />;
   return <OrganizerDashboard />;

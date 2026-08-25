@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
   BrutalCard,
@@ -20,20 +21,19 @@ import {
   getPools,
   getPassagesByTeam,
 } from "@/lib/repositories/poolRepository";
-import { getTeamById } from "@/lib/repositories/teamRepository";
-import { getDocumentsByTeam } from "@/lib/repositories/documentRepository";
+import { getTeams } from "@/lib/repositories/teamRepository";
+import {
+  getDocumentsByTeam,
+  uploadDocumentFile,
+  downloadDocument,
+} from "@/lib/repositories/documentRepository";
 import {
   canDownloadDefenderReportInPassage,
   canDownloadSummarySheetTemplateInPassage,
   isTeamCreator,
 } from "@/lib/permissions";
-import { uploadDocument } from "@/lib/services/documentUploadService";
+import { validateUploadedFile } from "@/utils/validation";
 import { ServiceError } from "@/lib/services/errors";
-import {
-  createDownloadUrl,
-  fileToBase64,
-  storeFileBlob,
-} from "@/lib/storage/fileStorage";
 import type {
   Document,
   DocumentType,
@@ -52,28 +52,56 @@ export function PassageDetailPage() {
   const { passageId } = useParams<{ passageId: string }>();
   const { session } = useSession();
   const navigate = useNavigate();
+  const teamId = session?.role === "participant" ? session.team.id : null;
 
-  // Passage/pool are derived synchronously from storage on each render;
-  // bumping `version` after a mutation forces a fresh read.
-  const [, setVersion] = useState(0);
-  const refresh = () => setVersion((v) => v + 1);
+  const passageQuery = useQuery({
+    queryKey: ["passage", passageId],
+    queryFn: () => getPassageById(passageId!),
+    enabled: !!passageId,
+  });
+  const passage: Passage | null = passageQuery.data ?? null;
 
-  const passage: Passage | null = passageId
-    ? getPassageById(passageId) ?? null
-    : null;
+  const poolsQuery = useQuery({ queryKey: ["pools"], queryFn: getPools, enabled: !!passage });
   const pool: Pool | null = passage
-    ? getPools().find((po) => po.id === passage.poolId) ?? null
+    ? (poolsQuery.data ?? []).find((po) => po.id === passage.poolId) ?? null
     : null;
 
-  // Unknown passage id: bounce back home.
+  const teamsQuery = useQuery({ queryKey: ["teams"], queryFn: getTeams, enabled: !!teamId });
+  const teamById = new Map<string, Team>((teamsQuery.data ?? []).map((t) => [t.id, t]));
+
+  const ownTeamPassagesQuery = useQuery({
+    queryKey: ["team-passages", teamId],
+    queryFn: () => getPassagesByTeam(teamId!),
+    enabled: !!teamId,
+  });
+
+  const ownTeamDocsQuery = useQuery({
+    queryKey: ["documents", "team", teamId],
+    queryFn: () => getDocumentsByTeam(teamId!),
+    enabled: !!teamId,
+  });
+
+  const defenderDocsQuery = useQuery({
+    queryKey: ["documents", "team", passage?.defenderTeamId],
+    queryFn: () => getDocumentsByTeam(passage!.defenderTeamId),
+    enabled: !!passage?.defenderTeamId,
+  });
+
+  // Unknown passage id: bounce back home (only once the fetch has actually
+  // settled — don't navigate away while it's still loading).
   useEffect(() => {
-    if (passageId && !passage) navigate("/", { replace: true });
-  }, [passageId, passage, navigate]);
+    if (passageId && !passageQuery.isLoading && !passage) {
+      navigate("/", { replace: true });
+    }
+  }, [passageId, passageQuery.isLoading, passage, navigate]);
 
-  if (!session || session.role !== "participant" || !passage || !pool)
-    return null;
+  if (!session || session.role !== "participant") return null;
+  if (passageQuery.isLoading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+  if (!passage || !pool) return null;
 
-  const ownTeam = getTeamById(session.team.id) ?? session.team;
+  const ownTeam = teamById.get(session.team.id) ?? session.team;
   const ownRole = teamRoleFromIds(ownTeam, passage);
 
   if (!ownRole) {
@@ -119,11 +147,11 @@ export function PassageDetailPage() {
     );
   }
 
-  const defender = getTeamById(passage.defenderTeamId);
-  const opponent = getTeamById(passage.opponentTeamId);
-  const reporter = getTeamById(passage.reporterTeamId);
+  const defender = teamById.get(passage.defenderTeamId);
+  const opponent = teamById.get(passage.opponentTeamId);
+  const reporter = teamById.get(passage.reporterTeamId);
   const extra = passage.extraTeamId
-    ? getTeamById(passage.extraTeamId)
+    ? teamById.get(passage.extraTeamId)
     : undefined;
   const meta = ROLE_PALETTE[ownRole];
   const canUpload = isTeamCreator(session.participant, ownTeam);
@@ -293,10 +321,12 @@ export function PassageDetailPage() {
         passage={passage}
         ownTeam={ownTeam}
         defender={defender}
+        defenderDocs={defenderDocsQuery.data ?? []}
+        ownTeamDocs={ownTeamDocsQuery.data ?? []}
+        ownTeamPassages={ownTeamPassagesQuery.data ?? []}
         ownRole={ownRole}
         participant={session.participant}
         canUpload={canUpload}
-        onChanged={refresh}
       />
     </PageMotion>
   );
@@ -424,20 +454,23 @@ function DocumentsSection({
   passage,
   ownTeam,
   defender,
+  defenderDocs,
+  ownTeamDocs,
+  ownTeamPassages,
   ownRole,
   participant,
   canUpload,
-  onChanged,
 }: {
   passage: Passage;
   ownTeam: Team;
   defender: Team | undefined;
+  defenderDocs: Document[];
+  ownTeamDocs: Document[];
+  ownTeamPassages: Passage[];
   ownRole: keyof typeof ROLE_PALETTE;
   participant: Participant;
   canUpload: boolean;
-  onChanged: () => void;
 }) {
-  const defenderDocs = defender ? getDocumentsByTeam(defender.id) : [];
   const expectedRfType = `rapport_final_p${passage.problemNumber}` as const;
   const defenderRf = defenderDocs.find((d) => d.docType === expectedRfType);
   const canDownloadRf = defenderRf
@@ -456,7 +489,7 @@ function DocumentsSection({
   const isDefenderOwn = ownRole === "defender";
 
   // Determine which doc type the team needs to upload, if any.
-  const myDeposit = computeMyDeposit(ownRole, ownTeam.id, passage);
+  const myDeposit = computeMyDeposit(ownRole, ownTeam.id, passage, ownTeamPassages);
 
   return (
     <section>
@@ -515,12 +548,11 @@ function DocumentsSection({
         {/* My own deposit (upload card) */}
         {myDeposit && (
           <MyDepositCard
-            passage={passage}
             ownTeam={ownTeam}
             docType={myDeposit.docType}
             title={myDeposit.title}
+            existing={ownTeamDocs.find((d) => d.docType === myDeposit.docType)}
             canUpload={canUpload}
-            onChanged={onChanged}
           />
         )}
       </div>
@@ -544,15 +576,18 @@ function DefenderReportCard({
   isDefenderOwn: boolean;
   canDownloadRf: boolean;
 }) {
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!defenderRf) return;
-    const url = createDownloadUrl(defenderRf.storagePath, defenderRf.mimeType);
-    if (!url) return alert("Fichier introuvable.");
-    const a = window.document.createElement("a");
-    a.href = url;
-    a.download = defenderRf.originalName;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const { url, filename } = await downloadDocument(defenderRf.id, defenderRf.originalName);
+      const a = window.document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Fichier introuvable.");
+    }
   };
 
   return (
@@ -707,6 +742,7 @@ function computeMyDeposit(
   role: keyof typeof ROLE_PALETTE,
   teamId: string,
   passage: Passage,
+  teamPassages: Passage[],
 ): MyDeposit | null {
   if (role !== "defender" && role !== "opponent" && role !== "reporter")
     return null;
@@ -714,7 +750,7 @@ function computeMyDeposit(
   // We need to determine which presentation_N / fiche_synthese_*_N to use,
   // based on the chronological order of passages where the team has this
   // role. The first such passage gets N=1, the second N=2.
-  const allPassages = getPassagesByTeam(teamId).sort((a, b) =>
+  const allPassages = [...teamPassages].sort((a, b) =>
     a.label.localeCompare(b.label),
   );
   const sameRolePassages = allPassages.filter((p) => {
@@ -745,30 +781,22 @@ function computeMyDeposit(
 }
 
 function MyDepositCard({
-  passage,
   ownTeam,
   docType,
   title,
+  existing,
   canUpload,
-  onChanged,
 }: {
-  passage: Passage;
   ownTeam: Team;
   docType: DocumentType;
   title: string;
+  existing: Document | undefined;
   canUpload: boolean;
-  onChanged: () => void;
 }) {
-  const { session } = useSession();
+  const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const existing = getDocumentsByTeam(ownTeam.id).find(
-    (d) => d.docType === docType,
-  );
-
-  if (!session || session.role !== "participant") return null;
 
   const handlePick = () => {
     setError(null);
@@ -778,20 +806,18 @@ function MyDepositCard({
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validation = validateUploadedFile({ size: file.size, mimeType: file.type });
+    if (!validation.ok) {
+      setError(validation.error);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
     setBusy(true);
     try {
-      const result = uploadDocument(session, {
-        docType,
-        file: { size: file.size, mimeType: file.type, originalName: file.name },
-        passageId: passage.id,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      const base64 = await fileToBase64(file);
-      storeFileBlob(result.document.storagePath, base64);
-      onChanged();
+      await uploadDocumentFile(file, docType, ownTeam.id);
+      await queryClient.invalidateQueries({ queryKey: ["documents", "team", ownTeam.id] });
     } catch (e) {
       if (e instanceof ServiceError) setError(e.message);
       else throw e;
@@ -801,15 +827,18 @@ function MyDepositCard({
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!existing) return;
-    const url = createDownloadUrl(existing.storagePath, existing.mimeType);
-    if (!url) return setError("Fichier introuvable.");
-    const a = window.document.createElement("a");
-    a.href = url;
-    a.download = existing.originalName;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const { url, filename } = await downloadDocument(existing.id, existing.originalName);
+      const a = window.document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Fichier introuvable.");
+    }
   };
 
   return (

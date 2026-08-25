@@ -3,7 +3,7 @@ import type { Passage, Team } from "@/types";
 import type {
   ConstraintCode,
   ConstraintViolation,
-} from "@/lib/services/tournamentOptimizer";
+} from "@/lib/services/constraintReport";
 
 // Widgets — composite visuals with motion and depth: animated stat
 // counters, the SVG pool diagram, and a sentimental empty state.

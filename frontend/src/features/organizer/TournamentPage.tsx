@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader, BrutalCard, SectionHeading, Badge, PageMotion } from "@/features/shared/primitives";
 import {
   ROLE_PALETTE,
@@ -8,14 +9,13 @@ import {
   ConstraintLegend,
   StatCounter,
 } from "@/features/shared/widgets";
-import { useSession } from "@/features/shared/SessionContext";
 import {
   generateBothRoundsOptimal,
   getConstraintReport,
 } from "@/lib/services/tournamentOptimizer";
-import type { ConstraintReport, ConstraintViolation } from "@/lib/services/tournamentOptimizer";
+import type { ConstraintViolation } from "@/lib/services/tournamentOptimizer";
 import { getTeams } from "@/lib/repositories/teamRepository";
-import { getPools, getPassages } from "@/lib/repositories/poolRepository";
+import { getPools, getPassages, saveGeneratedRounds } from "@/lib/repositories/poolRepository";
 import { ServiceError } from "@/lib/services/errors";
 import { getPoolDisplayLabel } from "@/utils/naming";
 import type { Pool, Passage, Team } from "@/types";
@@ -25,47 +25,52 @@ type ViolationIndex = Map<string, ConstraintViolation[]>;
 type RoundData = { pools: Pool[]; passages: Passage[] };
 
 export function TournamentPage() {
-  const { session, refresh: refreshSession } = useSession();
-  const loadData = () => {
-    const allPools = getPools();
-    const allPassages = getPassages();
-    const r1Pools = allPools.filter(p => p.round === 1);
-    const r2Pools = allPools.filter(p => p.round === 2);
-    return {
-      teams: getTeams(),
-      round1: r1Pools.length ? {
-        pools: r1Pools,
-        passages: allPassages.filter(p => r1Pools.some(po => po.id === p.poolId)),
-      } : null as RoundData | null,
-      round2: r2Pools.length ? {
-        pools: r2Pools,
-        passages: allPassages.filter(p => r2Pools.some(po => po.id === p.poolId)),
-      } : null as RoundData | null,
-      report: getConstraintReport() as ConstraintReport | null,
-    };
-  };
-  const [data, setData] = useState(loadData);
+  const queryClient = useQueryClient();
+
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const poolsQ = useQuery({ queryKey: ["pools"], queryFn: getPools });
+  const passagesQ = useQuery({ queryKey: ["passages"], queryFn: getPassages });
+  const reportQ = useQuery({ queryKey: ["constraint-report"], queryFn: getConstraintReport });
+
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [highlight, setHighlight] = useState(false);
 
-  const refresh = () => setData(loadData());
-  const { teams, round1, round2, report } = data;
+  const loading = teamsQ.isLoading || poolsQ.isLoading || passagesQ.isLoading || reportQ.isLoading;
+
+  const teams = teamsQ.data ?? [];
+  const allPools = poolsQ.data ?? [];
+  const allPassages = passagesQ.data ?? [];
+  const r1Pools = allPools.filter(p => p.round === 1);
+  const r2Pools = allPools.filter(p => p.round === 2);
+  const round1: RoundData | null = r1Pools.length ? {
+    pools: r1Pools,
+    passages: allPassages.filter(p => r1Pools.some(po => po.id === p.poolId)),
+  } : null;
+  const round2: RoundData | null = r2Pools.length ? {
+    pools: r2Pools,
+    passages: allPassages.filter(p => r2Pools.some(po => po.id === p.poolId)),
+  } : null;
+  const report = reportQ.data ?? null;
 
   const handleGenerate = () => {
-    if (!session || session.role !== "organizer") return;
     setError(null);
     setBusy(true);
-    // Generation is synchronous and blocks the main thread. Wait for two
-    // animation frames so React commits the overlay and the browser paints
-    // it before the freeze — its CSS animations run on the compositor and
-    // keep moving while JS is blocked.
+    // The Hungarian solve below is synchronous and blocks the main thread.
+    // Wait for two animation frames so React commits the overlay and the
+    // browser paints it before the freeze — its CSS animations run on the
+    // compositor and keep moving while JS is blocked.
     requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
+      requestAnimationFrame(async () => {
         try {
-          generateBothRoundsOptimal(session, { teams, poolSize: 4, problemPool: [1, 2, 3, 4, 5, 6] });
-          refresh();
-          refreshSession();
+          const result = generateBothRoundsOptimal({ teams, poolSize: 4, problemPool: [1, 2, 3, 4, 5, 6] });
+          await saveGeneratedRounds(result);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["pools"] }),
+            queryClient.invalidateQueries({ queryKey: ["passages"] }),
+            queryClient.invalidateQueries({ queryKey: ["teams"] }),
+            queryClient.invalidateQueries({ queryKey: ["constraint-report"] }),
+          ]);
         } catch (e) {
           if (e instanceof ServiceError) setError(e.message);
           else throw e;
@@ -80,6 +85,10 @@ export function TournamentPage() {
     () => buildViolationIndex(report?.violations ?? []),
     [report],
   );
+
+  if (loading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
 
   const totalPassages = (round1?.passages.length ?? 0) + (round2?.passages.length ?? 0);
   const totalPools = (round1?.pools.length ?? 0) + (round2?.pools.length ?? 0);

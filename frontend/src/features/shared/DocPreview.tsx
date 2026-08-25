@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { Modal, Btn } from "./primitives";
-import { createDownloadUrl } from "@/lib/storage/fileStorage";
+import { downloadDocument } from "@/lib/repositories/documentRepository";
 import type { Document } from "@/types";
 
 // DocPreview — shared modal that renders a stored document inline. PDFs
 // (the primary case) are embedded via <iframe>; images via <img>. Anything
 // else falls back to a download CTA. Used wherever a download button
 // appears so users can skim a file before pulling it down.
+//
+// The file bytes come from the real backend now (a fetch-with-auth-header,
+// see downloadDocument in documentRepository.ts) instead of the old fake
+// base64-in-localStorage store, so opening a preview is an async network
+// call rather than an instant lookup.
 
 interface PreviewState {
   doc: Document;
@@ -15,14 +20,18 @@ interface PreviewState {
 
 export function useDocPreview() {
   const [state, setState] = useState<PreviewState | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const open = (doc: Document) => {
-    const url = createDownloadUrl(doc.storagePath, doc.mimeType);
-    if (!url) {
+  const open = async (doc: Document) => {
+    setLoading(true);
+    try {
+      const { url } = await downloadDocument(doc.id, doc.originalName);
+      setState({ doc, url });
+    } catch {
       alert("Fichier introuvable.");
-      return;
+    } finally {
+      setLoading(false);
     }
-    setState({ doc, url });
   };
 
   const close = () => {
@@ -38,7 +47,7 @@ export function useDocPreview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { state, open, close };
+  return { state, open, close, loading };
 }
 
 export function DocPreviewModal({

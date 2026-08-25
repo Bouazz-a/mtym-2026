@@ -1,48 +1,49 @@
 import { useState } from "react";
-import { v4 as uuidv4 } from "uuid";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader, BrutalCard, Badge, DiamondMarker,
   Btn, Field, Input, Textarea, PageMotion, Modal,
 } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import {
-  getAnnouncements, upsertAnnouncement, deleteAnnouncement,
+  getAnnouncements, createAnnouncement, deleteAnnouncement,
 } from "@/lib/repositories/announcementRepository";
 import type { Announcement, Audience } from "@/types";
 
 export function OrgAnnouncementsPage() {
   const { session } = useSession();
-  const loadItems = () =>
-    getAnnouncements().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const [items, setItems] = useState<Announcement[]>(loadItems);
+  const queryClient = useQueryClient();
+  const itemsQ = useQuery({ queryKey: ["announcements"], queryFn: getAnnouncements });
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<Audience>("all");
   const [pendingDelete, setPendingDelete] = useState<Announcement | null>(null);
 
-  const refresh = () => setItems(loadItems());
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["announcements"] });
 
   if (!session || session.role !== "organizer") return null;
 
+  if (itemsQ.isLoading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  const items = [...(itemsQ.data ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const canPublish = title.trim().length > 0 && body.trim().length > 0;
 
-  const handlePublish = () => {
-    upsertAnnouncement({
-      id: uuidv4(),
+  const handlePublish = async () => {
+    await createAnnouncement({
       title: title.trim(),
       body: body.trim(),
       audience,
       attachments: [],
-      createdBy: session.organizer.id,
-      createdAt: new Date().toISOString(),
     });
     setTitle(""); setBody(""); setAudience("all");
     refresh();
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!pendingDelete) return;
-    deleteAnnouncement(pendingDelete.id);
+    await deleteAnnouncement(pendingDelete.id);
     setPendingDelete(null);
     refresh();
   };

@@ -64,13 +64,21 @@ export interface JuryMember {
 
 // ================== Teams =================
 
+// Reduced participant projection the teams API includes inline — never
+// carries contact/health info beyond email, matching what teammates are
+// allowed to see of each other.
+export type TeamMember = Pick<Participant, "id" | "firstName" | "lastName" | "email">;
+
 export interface Team {
   id: string; //uuid
   name: string;
   quadrigramme: string; //unique 4-letter code
   creatorId: string; //participant id
-  poolIdRound1: string; //pool id for round 1
+  poolIdRound1?: string; //pool id for round 1, once assigned
   poolIdRound2?: string; //pool id for round 2, if qualified
+  // Present when fetched from GET /teams or GET /teams/:id; absent on a
+  // freshly-created team (the create response has no include).
+  participants?: TeamMember[];
 }
 
 // ================== Tournament Structure =================
@@ -217,41 +225,3 @@ export interface Deadline {
   targetRole: Audience;
 }
 
-// For demo purposes only, in a real app this would be handled by an auth system / db and not stored in the app state
-export interface AppState {
-  // Users
-  participants: Participant[];
-  teams: Team[];
-  juryMembers: JuryMember[];
-  organizers: Organizer[];
-
-  // Tournament
-  pools: Pool[];
-  passages: Passage[];
-
-  // Documents
-  documents: Document[];
-
-  // Jury
-  juryAssignments: JuryAssignment[];
-  juryPassageAssignments: JuryPassageAssignment[];
-
-  // Evaluation
-  criteria: Criterion[];
-  reportEvaluations: ReportEvaluation[];
-  reportGrades: ReportGrade[];
-  oralEvaluations: OralEvaluation[];
-  oralGrades: OralGrade[];
-
-  // Workshops
-  workshops: Workshop[];
-  workshopPreferences: WorkshopPreference[];
-  workshopAssignments: WorkshopAssignment[];
-
-  // Communication
-  announcements: Announcement[];
-  deadlines: Deadline[];
-
-  currentUserId: string;
-  currentUserRole: UserRole;
-}

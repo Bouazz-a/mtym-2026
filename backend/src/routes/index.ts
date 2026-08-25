@@ -21,10 +21,12 @@ import workshopPreferencesRouter from "./workshop-preferences";
 import workshopAssignmentsRouter from "./workshop-assignments";
 import announcementsRouter from "./announcements";
 import deadlinesRouter from "./deadlines";
+import devAuthRouter from "./dev-auth";
 
 const router = Router();
 
 router.get("/auth/me", authenticate, (req, res) => res.json(req.user));
+router.use("/auth/dev-login", devAuthRouter);
 
 router.use("/participants", participantsRouter);
 router.use("/teams", teamsRouter);

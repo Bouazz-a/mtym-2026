@@ -1,42 +1,49 @@
 import type { Announcement, Deadline } from "@/types";
-import { getAll, setAll } from "../storage";
+import { apiFetch } from "@/lib/api/client";
 
-export function getAnnouncements(): Announcement[] {
-  return getAll("announcements") as Announcement[];
+// The backend already filters both lists by the caller's role/audience —
+// no client-side audience filtering needed on the read side.
+
+export function getAnnouncements(): Promise<Announcement[]> {
+  return apiFetch<Announcement[]>("/announcements");
 }
 
-export function upsertAnnouncement(announcement: Announcement): void {
-  const all = getAnnouncements();
-  const idx = all.findIndex(a => a.id === announcement.id);
-  if (idx === -1) {
-    setAll("announcements", [...all, announcement]);
-  } else {
-    const updated = [...all];
-    updated[idx] = announcement;
-    setAll("announcements", updated);
-  }
+// Admin-only.
+export function createAnnouncement(
+  data: Pick<Announcement, "title" | "body" | "audience" | "attachments">,
+): Promise<Announcement> {
+  return apiFetch<Announcement>("/announcements", { method: "POST", body: data });
 }
 
-export function deleteAnnouncement(id: string): void {
-  setAll("announcements", getAnnouncements().filter(a => a.id !== id));
+export function updateAnnouncement(
+  id: string,
+  patch: Partial<Pick<Announcement, "title" | "body" | "audience" | "attachments">>,
+): Promise<Announcement> {
+  return apiFetch<Announcement>(`/announcements/${id}`, { method: "PUT", body: patch });
 }
 
-export function getDeadlines(): Deadline[] {
-  return getAll("deadlines") as Deadline[];
+export function deleteAnnouncement(id: string): Promise<void> {
+  return apiFetch<void>(`/announcements/${id}`, { method: "DELETE" });
 }
 
-export function upsertDeadline(deadline: Deadline): void {
-  const all = getDeadlines();
-  const idx = all.findIndex(d => d.id === deadline.id);
-  if (idx === -1) {
-    setAll("deadlines", [...all, deadline]);
-  } else {
-    const updated = [...all];
-    updated[idx] = deadline;
-    setAll("deadlines", updated);
-  }
+export function getDeadlines(): Promise<Deadline[]> {
+  return apiFetch<Deadline[]>("/deadlines");
 }
 
-export function deleteDeadline(id: string): void {
-  setAll("deadlines", getDeadlines().filter(d => d.id !== id));
+// Any organizer role.
+export function createDeadline(
+  data: Pick<Deadline, "label" | "date" | "targetRole">,
+): Promise<Deadline> {
+  return apiFetch<Deadline>("/deadlines", { method: "POST", body: data });
+}
+
+export function updateDeadline(
+  id: string,
+  patch: Partial<Pick<Deadline, "label" | "date" | "targetRole">>,
+): Promise<Deadline> {
+  return apiFetch<Deadline>(`/deadlines/${id}`, { method: "PUT", body: patch });
+}
+
+export function deleteDeadline(id: string): Promise<void> {
+  return apiFetch<void>(`/deadlines/${id}`, { method: "DELETE" });
 }

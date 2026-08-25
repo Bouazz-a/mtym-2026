@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
   BrutalCard,
@@ -10,17 +11,16 @@ import {
 } from "@/features/shared/primitives";
 import { teamRoleFromIds } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
-import { getDocumentsByTeam } from "@/lib/repositories/documentRepository";
+import {
+  getDocumentsByTeam,
+  uploadDocumentFile,
+  downloadDocument,
+} from "@/lib/repositories/documentRepository";
 import { getPassagesByTeam } from "@/lib/repositories/poolRepository";
 import { getTeamById } from "@/lib/repositories/teamRepository";
-import { uploadDocument } from "@/lib/services/documentUploadService";
+import { validateUploadedFile } from "@/utils/validation";
 import { ServiceError } from "@/lib/services/errors";
 import { isTeamCreator } from "@/lib/permissions";
-import {
-  createDownloadUrl,
-  fileToBase64,
-  storeFileBlob,
-} from "@/lib/storage/fileStorage";
 import type { Document, DocumentType, Passage } from "@/types";
 
 // DocumentsPage — participant view of expected deposits split in two
@@ -54,26 +54,40 @@ export function DocumentsPage() {
   const { session } = useSession();
   const participantSession =
     session?.role === "participant" ? session : null;
+  const teamId = participantSession?.team.id ?? null;
 
-  const team = participantSession
-    ? getTeamById(participantSession.team.id) ?? participantSession.team
-    : null;
+  const teamQuery = useQuery({
+    queryKey: ["team", teamId],
+    queryFn: () => getTeamById(teamId!),
+    enabled: !!teamId,
+  });
+  const team = teamQuery.data ?? participantSession?.team ?? null;
   const canUpload =
     participantSession && team
       ? isTeamCreator(participantSession.participant, team)
       : false;
 
-  // Documents are derived synchronously from storage on each render;
-  // bumping `version` after an upload forces a fresh read.
-  const [, setVersion] = useState(0);
-  const refresh = () => setVersion((v) => v + 1);
+  const docsQuery = useQuery({
+    queryKey: ["documents", "team", teamId],
+    queryFn: () => getDocumentsByTeam(teamId!),
+    enabled: !!teamId,
+  });
+  const docs: Document[] = docsQuery.data ?? [];
 
-  const docs: Document[] = team ? getDocumentsByTeam(team.id) : [];
+  const passagesQuery = useQuery({
+    queryKey: ["team-passages", teamId],
+    queryFn: () => getPassagesByTeam(teamId!),
+    enabled: !!teamId,
+  });
   const oralSlots: OralSlot[] = team
-    ? computeOralSlots(team.id, getPassagesByTeam(team.id))
+    ? computeOralSlots(team.id, passagesQuery.data ?? [])
     : [];
 
-  if (!session || session.role !== "participant" || !team) return null;
+  if (!session || session.role !== "participant") return null;
+  if (teamQuery.isLoading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+  if (!team) return null;
 
   // Fixed written slots: 1 RI + 4 RFs
   const writtenSlots: WrittenSlot[] = [
@@ -143,8 +157,8 @@ export function DocumentsPage() {
             key={slot.docType}
             slot={slot}
             document={docs.find((d) => d.docType === slot.docType)}
+            teamId={team.id}
             canUpload={canUpload}
-            onUploaded={refresh}
           />
         ))}
       </Section>
@@ -234,20 +248,18 @@ function Section({
 function WrittenSlotCard({
   slot,
   document,
+  teamId,
   canUpload,
-  onUploaded,
 }: {
   slot: WrittenSlot;
   document: Document | undefined;
+  teamId: string;
   canUpload: boolean;
-  onUploaded: () => void;
 }) {
-  const { session } = useSession();
+  const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!session || session.role !== "participant") return null;
 
   const handlePick = () => {
     setError(null);
@@ -257,19 +269,18 @@ function WrittenSlotCard({
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const validation = validateUploadedFile({ size: file.size, mimeType: file.type });
+    if (!validation.ok) {
+      setError(validation.error);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
     setBusy(true);
     try {
-      const result = uploadDocument(session, {
-        docType: slot.docType,
-        file: { size: file.size, mimeType: file.type, originalName: file.name },
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      const base64 = await fileToBase64(file);
-      storeFileBlob(result.document.storagePath, base64);
-      onUploaded();
+      await uploadDocumentFile(file, slot.docType, teamId);
+      await queryClient.invalidateQueries({ queryKey: ["documents", "team", teamId] });
     } catch (e) {
       if (e instanceof ServiceError) setError(e.message);
       else throw e;
@@ -279,18 +290,18 @@ function WrittenSlotCard({
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!document) return;
-    const url = createDownloadUrl(document.storagePath, document.mimeType);
-    if (!url) {
+    try {
+      const { url, filename } = await downloadDocument(document.id, document.originalName);
+      const a = window.document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
       setError("Fichier introuvable.");
-      return;
     }
-    const a = window.document.createElement("a");
-    a.href = url;
-    a.download = document.originalName;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (

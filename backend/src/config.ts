@@ -11,4 +11,12 @@ export const config = {
   authentikAudience: require("AUTHENTIK_AUDIENCE"),
   uploadsDir: process.env.UPLOADS_DIR ?? "./uploads",
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  // Dev-only login stub (sign in as any seeded user, no password) — stands
+  // in for real auth until that's decided. Off unless explicitly enabled.
+  enableDevLogin: process.env.ENABLE_DEV_LOGIN === "true",
+  devLoginSecret: process.env.DEV_LOGIN_SECRET,
 };
+
+if (config.enableDevLogin && !config.devLoginSecret) {
+  throw new Error("ENABLE_DEV_LOGIN is true but DEV_LOGIN_SECRET is not set");
+}

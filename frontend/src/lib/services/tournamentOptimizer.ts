@@ -1,22 +1,22 @@
-import type { Passage, Pool, Round, Team } from "@/types";
+import type { Passage, Pool, Team } from "@/types";
 import { v4 as uuidv4 } from "uuid";
-import { canManagePoolsAndPassages } from "@/lib/permissions";
-import {
-  deletePassage,
-  deletePool,
-  getPassagesByPool,
-  getPoolsByRound,
-  upsertPassage,
-  upsertPool,
-} from "@/lib/repositories/poolRepository";
-import {
-  getTeamById,
-  getTeams,
-  upsertTeam,
-} from "@/lib/repositories/teamRepository";
 import { buildPassageLabel, buildPoolLabel } from "@/utils/sanitize";
-import { ConflictError, ForbiddenError } from "./errors";
-import type { OrganizerSession } from "./session";
+import { ConflictError } from "./errors";
+import type {
+  ConstraintCode,
+  Round1Role,
+  Round2Role,
+  ConstraintViolation,
+  ConstraintReport,
+} from "./constraintReport";
+export type {
+  ConstraintCode,
+  Round1Role,
+  Round2Role,
+  ConstraintViolation,
+  ConstraintReport,
+} from "./constraintReport";
+export { getConstraintReport } from "./constraintReport";
 
 // tournamentOptimizer.ts — an alternative to tournamentService that solves
 // the Round 2 problem-assignment as a min-cost assignment (Hungarian
@@ -27,6 +27,18 @@ import type { OrganizerSession } from "./session";
 // lists exactly which team violates which soft constraint, with the
 // round-1 origin and round-2 occurrence of each conflict so the UI can
 // highlight the offending teams across both rounds.
+//
+// This module is pure computation — no network calls, no repository
+// reads/writes. It used to write pools/passages/team pool-refs to the old
+// local-storage repositories incrementally as it went (upsertPool,
+// upsertTeam, upsertPassage, one row at a time); now it just returns the
+// whole computed result, and the caller persists it in a single call —
+// see saveGeneratedRounds in poolRepository.ts, which POSTs the whole
+// thing to POST /api/rounds and lets the backend wipe-and-replace both
+// rounds transactionally. That also means this module no longer needs to
+// know who's allowed to call it (organizer/admin) — the backend route
+// enforces that itself and returns a 403 if it's wrong; see TournamentPage.tsx
+// for how the caller handles that.
 //
 // tournamentService.ts is intentionally left untouched; the pure helpers
 // it uses (Latin squares, pool bucketing, history, persistence) are
@@ -51,69 +63,37 @@ const FORBIDDEN = 1e7;
 
 // ================== Public API ==================
 
+export interface TeamPoolAssignment {
+  teamId: string;
+  poolId: string;
+}
+
 export interface GenerateRoundsArgs {
   teams: Team[];
   poolSize?: number; // default 4; pools of 3 emerge from team count remainder
   problemPool: number[];
 }
 
+export interface GeneratedRound {
+  pools: Pool[];
+  passages: Passage[];
+  teamPoolAssignments: TeamPoolAssignment[];
+}
+
 export interface GenerateRoundsResult {
-  round1: { pools: Pool[]; passages: Passage[] };
-  round2: { pools: Pool[]; passages: Passage[] };
+  round1: GeneratedRound;
+  round2: GeneratedRound;
   report: ConstraintReport;
 }
 
-export type ConstraintCode = "OO" | "OD" | "OR" | "DO" | "DR";
-export type Round1Role = "defended" | "opposed" | "reported";
-export type Round2Role = "defender" | "opponent" | "reporter";
-
-export interface ConstraintViolation {
-  code: ConstraintCode;
-  weight: number;
-  teamId: string;
-  teamQuad: string;
-  problemNumber: number;
-  // Where the conflict shows up in round 2.
-  round2: { poolLabel: string; passageLabel: string; role: Round2Role };
-  // Where the same team earned the conflicting history in round 1.
-  round1: { poolLabel: string; passageLabel: string; role: Round1Role };
-}
-
-export interface ConstraintReport {
-  generatedAt: string;
-  totalScore: number;
-  violations: ConstraintViolation[];
-}
-
-const REPORT_KEY = "mtym_constraint_report";
-
-export function getConstraintReport(): ConstraintReport | null {
-  try {
-    const raw = localStorage.getItem(REPORT_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as ConstraintReport;
-  } catch {
-    return null;
-  }
-}
-
-function saveConstraintReport(report: ConstraintReport): void {
-  localStorage.setItem(REPORT_KEY, JSON.stringify(report));
-}
-
-export function clearConstraintReport(): void {
-  localStorage.removeItem(REPORT_KEY);
-}
-
 // Generate both rounds. Round 2 uses the Hungarian solver and never throws
-// on soft-constraint infeasibility — the best plan found is persisted and a
-// ConstraintReport is published describing any residual violations.
+// on soft-constraint infeasibility — the best plan found is returned along
+// with a ConstraintReport describing any residual violations. Purely a
+// computation: nothing is persisted here, call saveGeneratedRounds (see
+// poolRepository.ts) with the result to actually save it.
 export function generateBothRoundsOptimal(
-  session: OrganizerSession,
   args: GenerateRoundsArgs,
 ): GenerateRoundsResult {
-  requireAdmin(session);
-
   const poolSize = args.poolSize ?? 4;
   if (poolSize < 3 || poolSize > 4) {
     throw new ConflictError("La taille de poule doit être 3 ou 4.");
@@ -129,31 +109,22 @@ export function generateBothRoundsOptimal(
     );
   }
 
-  wipeRound(1);
-  wipeRound(2);
-
   // --- Round 1: trivial round-robin ---
   const round1Composition = splitIntoPools(shuffle([...args.teams]), poolSize);
-  const round1 = persistRound1(round1Composition, args.problemPool);
+  const round1 = buildRound1(round1Composition, args.problemPool);
 
   // --- Round 2: Hungarian per Latin square, best-effort ---
   const history = buildHistory(round1.passages);
   const round2 = generateRound2BestEffort(
-    args.teams,
     poolSize,
     args.problemPool,
     round1Composition,
     history,
   );
 
-  const report = buildConstraintReport(round2.plans, round1, history);
-  saveConstraintReport(report);
+  const report = buildConstraintReport(args.teams, round2.plans, round1, history);
 
-  return {
-    round1: { pools: round1.pools, passages: round1.passages },
-    round2: { pools: round2.pools, passages: round2.passages },
-    report,
-  };
+  return { round1, round2, report };
 }
 
 // ================== Round 1 ==================
@@ -162,12 +133,13 @@ interface PoolComposition {
   teamsInPool: Team[];
 }
 
-function persistRound1(
+function buildRound1(
   composition: PoolComposition[],
   problemPool: number[],
-): { pools: Pool[]; passages: Passage[] } {
+): GeneratedRound {
   const pools: Pool[] = [];
   const passages: Passage[] = [];
+  const teamPoolAssignments: TeamPoolAssignment[] = [];
 
   composition.forEach((pc, idx) => {
     const pool: Pool = {
@@ -175,19 +147,17 @@ function persistRound1(
       label: buildPoolLabel(1, idx),
       round: 1,
     };
-    upsertPool(pool);
     pools.push(pool);
 
     for (const team of pc.teamsInPool) {
-      const current = getTeamById(team.id) ?? team;
-      upsertTeam({ ...current, poolIdRound1: pool.id });
+      teamPoolAssignments.push({ teamId: team.id, poolId: pool.id });
     }
 
     const N = pc.teamsInPool.length;
     const poolProblems = randomSample(problemPool, N);
 
     for (let i = 0; i < N; i++) {
-      const passage: Passage = {
+      passages.push({
         id: uuidv4(),
         label: buildPassageLabel(pool.label, i),
         problemNumber: poolProblems[i],
@@ -196,13 +166,11 @@ function persistRound1(
         opponentTeamId: pc.teamsInPool[(i + 1) % N].id,
         reporterTeamId: pc.teamsInPool[(i + 2) % N].id,
         extraTeamId: N === 4 ? pc.teamsInPool[(i + 3) % N].id : undefined,
-      };
-      upsertPassage(passage);
-      passages.push(passage);
+      });
     }
   });
 
-  return { pools, passages };
+  return { pools, passages, teamPoolAssignments };
 }
 
 // ================== Round 2 ==================
@@ -250,12 +218,12 @@ interface PoolPlan {
 // Hungarian assignment and keep the composition with the lowest *total*
 // penalty. Never throws on residual penalty — returns the best plan found.
 function generateRound2BestEffort(
-  allTeams: Team[],
   poolSize: number,
   problemPool: number[],
   round1Composition: PoolComposition[],
   history: Map<string, TeamHistory>,
-): { pools: Pool[]; passages: Passage[]; plans: PoolPlan[] } {
+): GeneratedRound & { plans: PoolPlan[] } {
+  const allTeams = round1Composition.flatMap((pc) => pc.teamsInPool);
   let bestPlans: PoolPlan[] | null = null;
   let bestTotal = Infinity;
 
@@ -307,15 +275,14 @@ function generateRound2BestEffort(
 
   const pools: Pool[] = [];
   const passages: Passage[] = [];
+  const teamPoolAssignments: TeamPoolAssignment[] = [];
   for (const plan of bestPlans) {
-    upsertPool(plan.pool);
     pools.push(plan.pool);
     for (const team of plan.teamsInPool) {
-      const current = getTeamById(team.id) ?? team;
-      upsertTeam({ ...current, poolIdRound2: plan.pool.id });
+      teamPoolAssignments.push({ teamId: team.id, poolId: plan.pool.id });
     }
     plan.passages.forEach((entry, i) => {
-      const passage: Passage = {
+      passages.push({
         id: uuidv4(),
         label: buildPassageLabel(plan.pool.label, i),
         problemNumber: entry.problem,
@@ -324,13 +291,11 @@ function generateRound2BestEffort(
         opponentTeamId: entry.opponent.id,
         reporterTeamId: entry.reporter.id,
         extraTeamId: entry.extra?.id,
-      };
-      upsertPassage(passage);
-      passages.push(passage);
+      });
     });
   }
 
-  return { pools, passages, plans: bestPlans };
+  return { pools, passages, teamPoolAssignments, plans: bestPlans };
 }
 
 // Compose round 2 pools by greedy maximum-mixing: each team is assigned to
@@ -530,11 +495,11 @@ function hungarian(cost: number[][]): number[] {
 // ================== Constraint report ==================
 
 function buildConstraintReport(
+  teams: Team[],
   plans: PoolPlan[],
-  round1: { pools: Pool[]; passages: Passage[] },
+  round1: GeneratedRound,
   history: Map<string, TeamHistory>,
 ): ConstraintReport {
-  const teams = getTeams();
   const quadById = new Map<string, string>();
   for (const t of teams) quadById.set(t.id, t.quadrigramme);
 
@@ -674,14 +639,6 @@ function buildConstraintReport(
 
 // ================== Pure helpers (self-contained copies) ==================
 
-function requireAdmin(session: OrganizerSession): void {
-  if (!canManagePoolsAndPassages(session.organizer)) {
-    throw new ForbiddenError(
-      "Seul l'administrateur peut gérer les poules et les passages.",
-    );
-  }
-}
-
 type LatinRow = readonly number[];
 type LatinSquare = readonly LatinRow[];
 
@@ -810,26 +767,4 @@ function randomSample<T>(arr: T[], n: number): T[] {
   if (n > arr.length)
     throw new ConflictError("Pas assez d'éléments à échantillonner.");
   return shuffle(arr).slice(0, n);
-}
-
-function wipeRound(round: Round): void {
-  const existingPools = getPoolsByRound(round);
-  const existingPoolIds = new Set(existingPools.map((p) => p.id));
-
-  for (const pool of existingPools) {
-    for (const passage of getPassagesByPool(pool.id)) {
-      deletePassage(passage.id);
-    }
-    deletePool(pool.id);
-  }
-
-  for (const team of getTeams()) {
-    const ref = round === 1 ? team.poolIdRound1 : team.poolIdRound2;
-    if (ref && existingPoolIds.has(ref)) {
-      const updated: Team = { ...team };
-      if (round === 1) updated.poolIdRound1 = "";
-      else updated.poolIdRound2 = undefined;
-      upsertTeam(updated);
-    }
-  }
 }

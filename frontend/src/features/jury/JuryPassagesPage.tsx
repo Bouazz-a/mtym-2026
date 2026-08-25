@@ -1,18 +1,17 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader, BrutalCard, SectionHeading, Badge, Btn, PageMotion, Stagger } from "@/features/shared/primitives";
 import { DocPreviewModal, useDocPreview } from "@/features/shared/DocPreview";
 import { ROLE_PALETTE, StatCounter } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
 import {
-  getPassagesAssignedToJuror,
   getJuryPassageAssignments,
   getJuryMembers,
 } from "@/lib/repositories/juryRepository";
-import { getPools } from "@/lib/repositories/poolRepository";
+import { getPools, getPassages } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
-import { getDocumentsByTeam } from "@/lib/repositories/documentRepository";
-import { createDownloadUrl } from "@/lib/storage/fileStorage";
+import { getDocuments, downloadDocument } from "@/lib/repositories/documentRepository";
 import { getPoolDisplayLabel, getRoundLabel } from "@/utils/naming";
 import type { Document, DocumentType, JuryMember, Passage, Pool, Team } from "@/types";
 
@@ -39,14 +38,41 @@ export function JuryPassagesPage() {
   const { session } = useSession();
   const [filter, setFilter] = useState<RoundFilter>("all");
   const preview = useDocPreview();
+  const juryMemberId = session?.role === "jury" ? session.juryMember.id : undefined;
+
+  const passageAssignmentsQ = useQuery({ queryKey: ["jury-passage-assignments"], queryFn: getJuryPassageAssignments });
+  const poolsQ = useQuery({ queryKey: ["pools"], queryFn: getPools });
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const passagesQ = useQuery({ queryKey: ["passages"], queryFn: getPassages });
+  const jurorsQ = useQuery({ queryKey: ["jury-members"], queryFn: getJuryMembers });
+  const docsQ = useQuery({ queryKey: ["documents"], queryFn: getDocuments });
+
+  const loading =
+    passageAssignmentsQ.isLoading || poolsQ.isLoading || teamsQ.isLoading ||
+    passagesQ.isLoading || jurorsQ.isLoading || docsQ.isLoading;
+
+  const docsByTeam = useMemo(() => {
+    const map = new Map<string, Document[]>();
+    for (const d of docsQ.data ?? []) {
+      const list = map.get(d.teamId);
+      if (list) list.push(d); else map.set(d.teamId, [d]);
+    }
+    return map;
+  }, [docsQ.data]);
 
   const items = useMemo<PassageContext[]>(() => {
-    if (!session || session.role !== "jury") return [];
-    const mine = getPassagesAssignedToJuror(session.juryMember.id);
-    const pools = new Map(getPools().map(p => [p.id, p]));
-    const teams = new Map(getTeams().map(t => [t.id, t]));
-    const allAssignments = getJuryPassageAssignments();
-    const jurors = new Map(getJuryMembers().map(j => [j.id, j]));
+    if (!juryMemberId || !passageAssignmentsQ.data || !poolsQ.data || !teamsQ.data || !passagesQ.data || !jurorsQ.data) {
+      return [];
+    }
+    const pools = new Map(poolsQ.data.map(p => [p.id, p]));
+    const teams = new Map(teamsQ.data.map(t => [t.id, t]));
+    const jurors = new Map(jurorsQ.data.map(j => [j.id, j]));
+    const allAssignments = passageAssignmentsQ.data;
+
+    const myPassageIds = new Set(
+      allAssignments.filter(a => a.juryMemberId === juryMemberId).map(a => a.passageId),
+    );
+    const mine = passagesQ.data.filter(p => myPassageIds.has(p.id));
 
     const enriched: PassageContext[] = mine.map(passage => ({
       passage,
@@ -56,14 +82,14 @@ export function JuryPassagesPage() {
       reporter: teams.get(passage.reporterTeamId),
       extra: passage.extraTeamId ? teams.get(passage.extraTeamId) : undefined,
       coJurors: allAssignments
-        .filter(a => a.passageId === passage.id && a.juryMemberId !== session.juryMember.id)
+        .filter(a => a.passageId === passage.id && a.juryMemberId !== juryMemberId)
         .map(a => jurors.get(a.juryMemberId))
         .filter(Boolean) as JuryMember[],
     }));
 
     enriched.sort((a, b) => a.passage.label.localeCompare(b.passage.label));
     return enriched;
-  }, [session]);
+  }, [juryMemberId, passageAssignmentsQ.data, poolsQ.data, teamsQ.data, passagesQ.data, jurorsQ.data]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return items;
@@ -74,6 +100,10 @@ export function JuryPassagesPage() {
   const r2Count = items.filter(it => it.pool?.round === 2).length;
 
   if (!session || session.role !== "jury") return null;
+
+  if (loading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
 
   return (
     <PageMotion className="space-y-10">
@@ -145,7 +175,9 @@ export function JuryPassagesPage() {
             key={String(filter)}
             className="grid grid-cols-1 xl:grid-cols-2 gap-6"
           >
-            {filtered.map(ctx => <PassageCard key={ctx.passage.id} ctx={ctx} onPreview={preview.open} />)}
+            {filtered.map(ctx => (
+              <PassageCard key={ctx.passage.id} ctx={ctx} docsByTeam={docsByTeam} onPreview={preview.open} />
+            ))}
           </Stagger>
         )}
       </section>
@@ -201,7 +233,13 @@ function StatCard({
 
 // ─── Per-passage card ─────────────────────────────────────────────────
 
-function PassageCard({ ctx, onPreview }: { ctx: PassageContext; onPreview: (doc: Document) => void }) {
+function PassageCard({
+  ctx, docsByTeam, onPreview,
+}: {
+  ctx: PassageContext;
+  docsByTeam: Map<string, Document[]>;
+  onPreview: (doc: Document) => void;
+}) {
   const { passage, pool, defender, opponent, reporter, extra, coJurors } = ctx;
   const accent = pool?.round === 2 ? "var(--saffron)" : "var(--forest)";
 
@@ -253,7 +291,10 @@ function PassageCard({ ctx, onPreview }: { ctx: PassageContext; onPreview: (doc:
              style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
           Documents
         </div>
-        <DocumentList passage={passage} defender={defender} opponent={opponent} reporter={reporter} onPreview={onPreview} />
+        <DocumentList
+          passage={passage} defender={defender} opponent={opponent} reporter={reporter}
+          docsByTeam={docsByTeam} onPreview={onPreview}
+        />
       </div>
 
       {/* Co-jurors */}
@@ -344,12 +385,13 @@ function TeamRow({ team, role }: { team: Team | undefined; role: keyof typeof RO
 // ─── Documents list (downloadable) ────────────────────────────────────
 
 function DocumentList({
-  passage, defender, opponent, reporter, onPreview,
+  passage, defender, opponent, reporter, docsByTeam, onPreview,
 }: {
   passage: Passage;
   defender: Team | undefined;
   opponent: Team | undefined;
   reporter: Team | undefined;
+  docsByTeam: Map<string, Document[]>;
   onPreview: (doc: Document) => void;
 }) {
   // Compute the four documents the juror can read for this passage.
@@ -362,48 +404,52 @@ function DocumentList({
     {
       label: "Présentation",
       team: defender,
-      expected: pickPresentationType(defender),
+      expected: pickPresentationType(defender, docsByTeam),
     },
     {
       label: "Fiche opposant",
       team: opponent,
-      expected: pickSummaryType("opposant", opponent),
+      expected: pickSummaryType("opposant", opponent, docsByTeam),
     },
     {
       label: "Fiche rapporteur",
       team: reporter,
-      expected: pickSummaryType("rapporteur", reporter),
+      expected: pickSummaryType("rapporteur", reporter, docsByTeam),
     },
   ];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
       {items.map((it, idx) => (
-        <DocRow key={idx} label={it.label} team={it.team} expected={it.expected} onPreview={onPreview} />
+        <DocRow key={idx} label={it.label} team={it.team} expected={it.expected} docsByTeam={docsByTeam} onPreview={onPreview} />
       ))}
     </div>
   );
 }
 
 function DocRow({
-  label, team, expected, onPreview,
+  label, team, expected, docsByTeam, onPreview,
 }: {
   label: string;
   team: Team | undefined;
   expected: DocumentType | null;
+  docsByTeam: Map<string, Document[]>;
   onPreview: (doc: Document) => void;
 }) {
   const doc = team && expected
-    ? getDocumentsByTeam(team.id).find(d => d.docType === expected)
+    ? (docsByTeam.get(team.id) ?? []).find(d => d.docType === expected)
     : undefined;
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!doc) return;
-    const url = createDownloadUrl(doc.storagePath, doc.mimeType);
-    if (!url) return alert("Fichier introuvable.");
-    const a = window.document.createElement("a");
-    a.href = url; a.download = doc.originalName; a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const { url, filename } = await downloadDocument(doc.id, doc.originalName);
+      const a = window.document.createElement("a");
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Téléchargement impossible.");
+    }
   };
 
   return (
@@ -439,12 +485,12 @@ function DocRow({
 // passage. Returns null if the defender hasn't appeared in any prior
 // passage as defender (shouldn't happen — every passage has a unique
 // defender team).
-function pickPresentationType(team: Team | undefined): DocumentType | null {
+function pickPresentationType(team: Team | undefined, docsByTeam: Map<string, Document[]>): DocumentType | null {
   if (!team) return null;
   // We don't have the team's full passage history here; the participant-
   // side flow uses index 1 or 2 (first/second time the team defends). For
   // the jury read-side we accept either: pick whichever exists in storage.
-  const docs = getDocumentsByTeam(team.id);
+  const docs = docsByTeam.get(team.id) ?? [];
   for (const n of [1, 2] as const) {
     const t = `presentation_${n}` as DocumentType;
     if (docs.some(d => d.docType === t)) return t;
@@ -455,9 +501,10 @@ function pickPresentationType(team: Team | undefined): DocumentType | null {
 function pickSummaryType(
   role: "opposant" | "rapporteur",
   team: Team | undefined,
+  docsByTeam: Map<string, Document[]>,
 ): DocumentType | null {
   if (!team) return null;
-  const docs = getDocumentsByTeam(team.id);
+  const docs = docsByTeam.get(team.id) ?? [];
   for (const n of [1, 2] as const) {
     const t = `fiche_synthese_${role}_${n}` as DocumentType;
     if (docs.some(d => d.docType === t)) return t;
@@ -478,7 +525,3 @@ function uniqueCoJurors(items: PassageContext[]): number {
   }
   return set.size;
 }
-
-// Suppress unused import warning while we wait for a future grading
-// feature that imports the Document type directly.
-void function unused(_doc: Document) { return _doc; };

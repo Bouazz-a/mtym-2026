@@ -1,9 +1,4 @@
-import type { Criterion, PassageRole } from "@/types";
-import {
-  getCriteria,
-  getReportGradesByEvaluation,
-  getOralGradesByEvaluation,
-} from "@/lib/repositories/evaluationRepository";
+import type { Criterion } from "@/types";
 
 // gradingService — pure computation of weighted notes from criteria and
 // per-criterion grades. The "score" of a grade is a 0..1 success rate
@@ -52,31 +47,24 @@ export function weightedNote(
   return { total, maxTotal, gradedCount, criterionCount: criteria.length };
 }
 
-/** Criteria configured for a final-report problem. */
-export function reportCriteria(problemNumber: number): Criterion[] {
-  return getCriteria()
-    .filter((c) => c.type === "report" && c.problemNumber === problemNumber)
-    .sort((a, b) => a.order - b.order);
-}
+// Filtering which criteria apply to a report problem / oral role is pure
+// computation over an already-fetched list — see filterReportCriteria /
+// filterOralCriteria in evaluationRepository.ts, which fetch the list from
+// the backend and do the same filtering. Kept here only as thin re-exports
+// so existing callers don't need two import sources.
+export { filterReportCriteria as reportCriteria, filterOralCriteria as oralCriteria } from "@/lib/repositories/evaluationRepository";
 
-/** Criteria configured for an oral passage role. */
-export function oralCriteria(role: PassageRole): Criterion[] {
-  return getCriteria()
-    .filter((c) => c.type === "oral" && c.role === role)
-    .sort((a, b) => a.order - b.order);
-}
-
-/** Weighted note of a saved final-report evaluation. */
-export function reportNote(
-  evaluationId: string,
-  problemNumber: number,
+/**
+ * Weighted note of a saved evaluation. The backend now returns an
+ * evaluation's grades nested on the object itself (ReportEvaluationWithGrades
+ * / OralEvaluationWithGrades — see evaluationRepository.ts), so callers pass
+ * that `grades` array directly instead of an evaluation id to look up.
+ */
+export function evaluationNote(
+  grades: ScoredGrade[],
+  criteria: Criterion[],
 ): NoteBreakdown {
-  return weightedNote(getReportGradesByEvaluation(evaluationId), reportCriteria(problemNumber));
-}
-
-/** Weighted note of a saved oral (passage) evaluation. */
-export function oralNote(evaluationId: string, role: PassageRole): NoteBreakdown {
-  return weightedNote(getOralGradesByEvaluation(evaluationId), oralCriteria(role));
+  return weightedNote(grades, criteria);
 }
 
 /** Round a note to 2 decimals for display. */

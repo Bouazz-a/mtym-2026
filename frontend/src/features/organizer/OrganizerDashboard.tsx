@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getPools, getPassages } from "@/lib/repositories/poolRepository";
 import { getDocuments } from "@/lib/repositories/documentRepository";
@@ -35,24 +36,38 @@ interface State {
 }
 
 export function OrganizerDashboard() {
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const poolsQ = useQuery({ queryKey: ["pools"], queryFn: getPools });
+  const passagesQ = useQuery({ queryKey: ["passages"], queryFn: getPassages });
+  const docsQ = useQuery({ queryKey: ["documents"], queryFn: getDocuments });
+  const participantsQ = useQuery({ queryKey: ["participants"], queryFn: getParticipants });
+  const juryQ = useQuery({ queryKey: ["jury-members"], queryFn: getJuryMembers });
+  const assignmentsQ = useQuery({ queryKey: ["jury-assignments"], queryFn: getJuryAssignments });
+
+  const loading =
+    teamsQ.isLoading || poolsQ.isLoading || passagesQ.isLoading || docsQ.isLoading ||
+    participantsQ.isLoading || juryQ.isLoading || assignmentsQ.isLoading;
+
   const s = useMemo<State>(() => {
-    const teams = getTeams();
-    const assignments = getJuryAssignments();
     const map = new Map<string, Set<string>>();
-    for (const a of assignments) {
+    for (const a of assignmentsQ.data ?? []) {
       if (!map.has(a.juryMemberId)) map.set(a.juryMemberId, new Set());
       map.get(a.juryMemberId)!.add(a.teamId);
     }
     return {
-      teams,
-      pools: getPools(),
-      passages: getPassages(),
-      docs: getDocuments(),
-      participants: getParticipants(),
-      jury: getJuryMembers(),
+      teams: teamsQ.data ?? [],
+      pools: poolsQ.data ?? [],
+      passages: passagesQ.data ?? [],
+      docs: docsQ.data ?? [],
+      participants: participantsQ.data ?? [],
+      jury: juryQ.data ?? [],
       juryAssignedTeams: map,
     };
-  }, []);
+  }, [teamsQ.data, poolsQ.data, passagesQ.data, docsQ.data, participantsQ.data, juryQ.data, assignmentsQ.data]);
+
+  if (loading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
 
   const riDeposited = s.teams.filter((t) =>
     s.docs.some(
@@ -379,7 +394,7 @@ function SubmissionTracker({
               }));
               const allRf = rfStatus.every((s) => s.done);
               const noneRf = rfStatus.every((s) => !s.done);
-              const pool = poolById.get(team.poolIdRound1);
+              const pool = team.poolIdRound1 ? poolById.get(team.poolIdRound1) : undefined;
 
               const rowTint =
                 hasRi && allRf
@@ -682,6 +697,7 @@ function PoolDistribution({
   // Group teams by pool (using poolIdRound1; round 2 falls through the same logic via poolIdRound2).
   const byPool = new Map<string, Team[]>();
   for (const t of teams) {
+    if (!t.poolIdRound1) continue;
     const k = t.poolIdRound1;
     if (!byPool.has(k)) byPool.set(k, []);
     byPool.get(k)!.push(t);

@@ -1,30 +1,35 @@
-import type { Participant } from "@/types";
-import { getAll, setAll } from "../storage";
+import type { Participant, TeamMember } from "@/types";
+import { apiFetch, apiFetchOptional } from "@/lib/api/client";
+import { getTeamById } from "./teamRepository";
 
-export function getParticipants(): Participant[] {
-  return getAll("participants") as Participant[];
+// GET /api/participants only ever returns the caller's own record for a
+// participant (never their teammates) — see backend/src/routes/participants.ts.
+// This is fine for admin/jury callers (who get the full list), but "my
+// team roster" needs to go through the team's included participants
+// instead, which every role can read.
+export function getParticipants(): Promise<Participant[]> {
+  return apiFetch<Participant[]>("/participants");
 }
 
-export function getParticipantById(id: string): Participant | undefined {
-  return getParticipants().find(p => p.id === id);
+export function getParticipantById(id: string): Promise<Participant | undefined> {
+  return apiFetchOptional<Participant>(`/participants/${id}`);
 }
 
-export function getParticipantsByTeam(teamId: string): Participant[] {
-  return getParticipants().filter(p => p.teamId === teamId);
+export async function getParticipantsByTeam(teamId: string): Promise<TeamMember[]> {
+  const team = await getTeamById(teamId);
+  return team?.participants ?? [];
 }
 
-export function upsertParticipant(participant: Participant): void {
-  const all = getParticipants();
-  const idx = all.findIndex(p => p.id === participant.id);
-  if (idx === -1) {
-    setAll("participants", [...all, participant]);
-  } else {
-    const updated = [...all];
-    updated[idx] = participant;
-    setAll("participants", updated);
-  }
+// Self or admin update — see backend UpdateSchema for the accepted fields.
+export function updateParticipant(id: string, patch: Partial<Participant>): Promise<Participant> {
+  return apiFetch<Participant>(`/participants/${id}`, { method: "PUT", body: patch });
 }
 
-export function deleteParticipant(id: string): void {
-  setAll("participants", getParticipants().filter(p => p.id !== id));
+// Admin-only create — requires an existing team.
+export function createParticipant(data: Omit<Participant, "id">): Promise<Participant> {
+  return apiFetch<Participant>("/participants", { method: "POST", body: data });
+}
+
+export function deleteParticipant(id: string): Promise<void> {
+  return apiFetch<void>(`/participants/${id}`, { method: "DELETE" });
 }

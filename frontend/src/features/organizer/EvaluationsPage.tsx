@@ -1,24 +1,24 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   PageHeader, BrutalCard, SectionHeading, Badge, PageMotion,
 } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import { canViewEvaluations } from "@/lib/permissions";
 import { getTeams } from "@/lib/repositories/teamRepository";
-import { getJuryMemberById } from "@/lib/repositories/juryRepository";
-import { getPassageById } from "@/lib/repositories/poolRepository";
+import { getJuryMembers } from "@/lib/repositories/juryRepository";
+import { getPassages } from "@/lib/repositories/poolRepository";
 import {
-  getReportEvaluationsByTeam,
-  getOralEvaluationsByTeam,
-  getReportGradesByEvaluation,
-  getOralGradesByEvaluation,
+  getCriteria,
+  getReportEvaluations,
+  getOralEvaluations,
+  filterReportCriteria,
+  filterOralCriteria,
+  type ReportEvaluationWithGrades,
+  type OralEvaluationWithGrades,
 } from "@/lib/repositories/evaluationRepository";
-import {
-  reportCriteria, oralCriteria, weightedNote, fmtNote,
-} from "@/lib/services/gradingService";
-import type {
-  Criterion, OralEvaluation, ReportEvaluation,
-} from "@/types";
+import { weightedNote, fmtNote } from "@/lib/services/gradingService";
+import type { Criterion, JuryMember } from "@/types";
 
 // EvaluationsPage — admin / scientific-admin review of every jury
 // evaluation for a team: report grades, oral (passage) grades, and the
@@ -35,10 +35,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 export function EvaluationsPage() {
   const { session } = useSession();
-  const teams = useMemo(
-    () => getTeams().sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme)),
-    [],
-  );
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
   const [teamId, setTeamId] = useState<string>("");
 
   if (!session || session.role !== "organizer") return null;
@@ -55,6 +52,11 @@ export function EvaluationsPage() {
     );
   }
 
+  if (teamsQ.isLoading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  const teams = [...(teamsQ.data ?? [])].sort((a, b) => a.quadrigramme.localeCompare(b.quadrigramme));
   const team = teams.find(t => t.id === teamId);
 
   return (
@@ -100,18 +102,40 @@ export function EvaluationsPage() {
 // ─── Per-team evaluations ─────────────────────────────────────────────
 
 function TeamEvaluations({ teamId }: { teamId: string }) {
-  const reportEvals = getReportEvaluationsByTeam(teamId);
-  const oralEvals = getOralEvaluationsByTeam(teamId);
+  const reportEvalsQ = useQuery({
+    queryKey: ["report-evaluations", teamId],
+    queryFn: () => getReportEvaluations(teamId),
+  });
+  // No teamId filter exists server-side for oral evaluations — fetch
+  // everything an organizer is allowed to see and filter client-side.
+  const oralEvalsAllQ = useQuery({ queryKey: ["oral-evaluations", "all"], queryFn: () => getOralEvaluations() });
+  const criteriaQ = useQuery({ queryKey: ["criteria"], queryFn: getCriteria });
+  const jurorsQ = useQuery({ queryKey: ["jury-members"], queryFn: getJuryMembers });
+  const passagesQ = useQuery({ queryKey: ["passages"], queryFn: getPassages });
+
+  const loading =
+    reportEvalsQ.isLoading || oralEvalsAllQ.isLoading || criteriaQ.isLoading ||
+    jurorsQ.isLoading || passagesQ.isLoading;
+
+  if (loading) {
+    return <div className="py-12 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  const criteria = criteriaQ.data ?? [];
+  const jurorById = new Map((jurorsQ.data ?? []).map(j => [j.id, j]));
+  const passageById = new Map((passagesQ.data ?? []).map(p => [p.id, p]));
+  const reportEvals = reportEvalsQ.data ?? [];
+  const oralEvals = (oralEvalsAllQ.data ?? []).filter(e => e.teamId === teamId);
 
   const riEvals = reportEvals.filter(e => e.reportType === "intermediaire");
-  const rfByProblem = new Map<number, ReportEvaluation[]>();
+  const rfByProblem = new Map<number, ReportEvaluationWithGrades[]>();
   for (const e of reportEvals.filter(x => x.reportType === "final")) {
     const list = rfByProblem.get(e.problemNumber) ?? [];
     list.push(e);
     rfByProblem.set(e.problemNumber, list);
   }
 
-  const oralByPassage = new Map<string, OralEvaluation[]>();
+  const oralByPassage = new Map<string, OralEvaluationWithGrades[]>();
   for (const e of oralEvals) {
     const list = oralByPassage.get(e.passageId) ?? [];
     list.push(e);
@@ -130,7 +154,7 @@ function TeamEvaluations({ teamId }: { teamId: string }) {
             {riEvals.map(e => (
               <BrutalCard key={e.id} className="p-4">
                 <div className="flex items-center justify-between gap-3 mb-2">
-                  <JurorTag juryMemberId={e.juryMemberId} />
+                  <JurorTag juror={jurorById.get(e.juryMemberId)} />
                   <span className="font-mont"
                         style={{ color: "var(--saffron-dark)", fontWeight: 900, fontSize: "1.1rem" }}>
                     {e.overallScore != null ? `${e.overallScore} / 4` : "Non noté"}
@@ -160,7 +184,7 @@ function TeamEvaluations({ teamId }: { teamId: string }) {
                 ) : (
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     {evals.map(e => (
-                      <ReportEvalCard key={e.id} evaluation={e} problemNumber={n} />
+                      <ReportEvalCard key={e.id} evaluation={e} criteria={criteria} juror={jurorById.get(e.juryMemberId)} />
                     ))}
                   </div>
                 )}
@@ -178,7 +202,7 @@ function TeamEvaluations({ teamId }: { teamId: string }) {
         ) : (
           <div className="space-y-6">
             {[...oralByPassage.entries()].map(([passageId, evals]) => {
-              const passage = getPassageById(passageId);
+              const passage = passageById.get(passageId);
               return (
                 <div key={passageId}>
                   <div className="font-mont text-tiny uppercase tracking-widest mb-2"
@@ -188,7 +212,7 @@ function TeamEvaluations({ teamId }: { teamId: string }) {
                   </div>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     {evals.map(e => (
-                      <OralEvalCard key={e.id} evaluation={e} />
+                      <OralEvalCard key={e.id} evaluation={e} criteria={criteria} juror={jurorById.get(e.juryMemberId)} />
                     ))}
                   </div>
                 </div>
@@ -204,51 +228,50 @@ function TeamEvaluations({ teamId }: { teamId: string }) {
 // ─── Evaluation cards ─────────────────────────────────────────────────
 
 function ReportEvalCard({
-  evaluation, problemNumber,
+  evaluation, criteria, juror,
 }: {
-  evaluation: ReportEvaluation;
-  problemNumber: number;
+  evaluation: ReportEvaluationWithGrades;
+  criteria: Criterion[];
+  juror: JuryMember | undefined;
 }) {
-  const criteria = reportCriteria(problemNumber);
-  const grades = getReportGradesByEvaluation(evaluation.id);
-  const note = weightedNote(grades, criteria);
+  const evalCriteria = filterReportCriteria(criteria, evaluation.problemNumber);
+  const note = weightedNote(evaluation.grades, evalCriteria);
   return (
     <BrutalCard className="overflow-hidden">
       <div className="px-4 py-3 flex items-center justify-between gap-3"
            style={{ borderBottom: "2px solid var(--forest)" }}>
-        <JurorTag juryMemberId={evaluation.juryMemberId} />
+        <JurorTag juror={juror} />
         <NoteChip total={note.total} maxTotal={note.maxTotal} />
       </div>
       <div className="p-4 space-y-3">
-        <Breakdown
-          criteria={criteria}
-          grades={grades.map(g => ({ criterionId: g.criterionId, score: g.score, remark: g.remark }))}
-        />
+        <Breakdown criteria={evalCriteria} grades={evaluation.grades} />
         <RemarkBlock remark={evaluation.globalRemark} />
       </div>
     </BrutalCard>
   );
 }
 
-function OralEvalCard({ evaluation }: { evaluation: OralEvaluation }) {
-  const criteria = oralCriteria(evaluation.role);
-  const grades = getOralGradesByEvaluation(evaluation.id);
-  const note = weightedNote(grades, criteria);
+function OralEvalCard({
+  evaluation, criteria, juror,
+}: {
+  evaluation: OralEvaluationWithGrades;
+  criteria: Criterion[];
+  juror: JuryMember | undefined;
+}) {
+  const evalCriteria = filterOralCriteria(criteria, evaluation.role);
+  const note = weightedNote(evaluation.grades, evalCriteria);
   return (
     <BrutalCard className="overflow-hidden">
       <div className="px-4 py-3 flex items-center justify-between gap-3"
            style={{ borderBottom: "2px solid var(--forest)" }}>
         <div className="flex items-center gap-2 min-w-0">
-          <JurorTag juryMemberId={evaluation.juryMemberId} />
+          <JurorTag juror={juror} />
           <Badge tone="neutral">{ROLE_LABEL[evaluation.role] ?? evaluation.role}</Badge>
         </div>
         <NoteChip total={note.total} maxTotal={note.maxTotal} />
       </div>
       <div className="p-4 space-y-3">
-        <Breakdown
-          criteria={criteria}
-          grades={grades.map(g => ({ criterionId: g.criterionId, score: g.score, remark: g.remark }))}
-        />
+        <Breakdown criteria={evalCriteria} grades={evaluation.grades} />
         <RemarkBlock remark={evaluation.globalRemark} />
       </div>
     </BrutalCard>
@@ -316,11 +339,10 @@ function NoteChip({ total, maxTotal }: { total: number; maxTotal: number }) {
   );
 }
 
-function JurorTag({ juryMemberId }: { juryMemberId: string }) {
-  const j = getJuryMemberById(juryMemberId);
+function JurorTag({ juror }: { juror: JuryMember | undefined }) {
   return (
     <span className="font-mont text-xs truncate" style={{ color: "var(--forest)", fontWeight: 900 }}>
-      {j ? `${j.firstName} ${j.lastName}` : "Juré inconnu"}
+      {juror ? `${juror.firstName} ${juror.lastName}` : "Juré inconnu"}
     </span>
   );
 }

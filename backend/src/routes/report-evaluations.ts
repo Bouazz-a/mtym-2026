@@ -9,7 +9,11 @@ const router = Router();
 const EvalSchema = z.object({
   teamId: z.string().uuid(),
   reportType: z.enum(["intermediaire", "final"]),
-  problemNumber: z.number().int().min(1),
+  // 0 is a real value here, not "unset": the rapport intermédiaire spans
+  // all four problems and is stored as problemNumber 0, while rapports
+  // finaux use 1..4 (one per problem). Rejecting 0 would make the RI
+  // grading flow (JuryTeamDetailPage) fail validation on every save.
+  problemNumber: z.number().int().min(0),
   overallScore: z.number().min(1).max(4).optional(),
   globalRemark: z.string().optional(),
   grades: z.array(z.object({

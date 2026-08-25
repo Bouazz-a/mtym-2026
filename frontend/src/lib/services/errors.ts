@@ -31,3 +31,21 @@ export class ConflictError extends ServiceError {
     super(message);
   }
 }
+
+// The request body failed backend (Zod) validation. `details` carries the
+// raw per-field issues from the API, when available.
+export class ValidationError extends ServiceError {
+  readonly details?: unknown;
+
+  constructor(message: string, details?: unknown) {
+    super(message);
+    this.details = details;
+  }
+}
+
+// No valid session — missing, expired, or rejected token.
+export class UnauthorizedError extends ServiceError {
+  constructor(message = "Authentification requise ou expirée.") {
+    super(message);
+  }
+}

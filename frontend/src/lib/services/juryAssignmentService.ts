@@ -6,21 +6,17 @@ import type {
   ReportType,
   Team,
 } from "@/types";
-import { canManageJuryAssignments } from "@/lib/permissions";
 import {
   getJuryMembers,
-  setJuryAssignments,
-  setJuryPassageAssignments,
   getJuryAssignments,
-  getJuryPassageAssignments,
-  clearJuryAssignmentsForReportType,
-  clearJuryPassageAssignments,
-  upsertJuryAssignment,
+  saveJuryAssignments,
+  saveJuryPassageAssignments,
+  getJurorLoads,
 } from "@/lib/repositories/juryRepository";
+export type { JurorLoad } from "@/lib/repositories/juryRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getPassages } from "@/lib/repositories/poolRepository";
-import { ConflictError, ForbiddenError } from "./errors";
-import type { OrganizerSession } from "./session";
+import { ConflictError } from "./errors";
 
 // juryAssignmentService — automatic distribution of jury workload.
 //
@@ -40,6 +36,13 @@ import type { OrganizerSession } from "./session";
 // Teams are shuffled before round-robin so consecutive runs produce
 // different but still balanced assignments. The intermédiaire and final
 // distributions use independent shuffles.
+//
+// Saving: the backend's bulk-save endpoints (POST /api/jury-assignments/
+// save and /api/jury-passage-assignments/save) each wipe and rewrite the
+// *whole* table in one transaction — there's no per-row upsert any more.
+// autoAssignAll can just POST the freshly computed lists. autoAssignReports
+// only wants to regenerate one report type, so it composes the fresh rows
+// with the other type's untouched rows before saving the combined list.
 
 export const PASSAGES_PER_JUROR_TARGET = 2;
 export const JURORS_PER_PASSAGE = 2;
@@ -56,13 +59,12 @@ export interface AssignmentSummary {
 
 // Regenerate ALL jury work for both report types and passages.
 // Use cases: initial bootstrap, full re-roll after pool regeneration.
-export function autoAssignAll(session: OrganizerSession): AssignmentSummary {
-  requireAuth(session);
-
-  const jurors = sortedJurors();
-  const teams = sortedTeams();
-  const passages = sortedPassages();
-
+export async function autoAssignAll(): Promise<AssignmentSummary> {
+  const [jurors, teams, passages] = await Promise.all([
+    sortedJurors(),
+    sortedTeams(),
+    sortedPassages(),
+  ]);
   validateJurorCount(jurors.length);
 
   // Run intermédiaire first, then feed its result as the avoidance set
@@ -74,9 +76,8 @@ export function autoAssignAll(session: OrganizerSession): AssignmentSummary {
 
   const passageAssignments = computePassageAssignments(jurors, passages);
 
-  setJuryAssignments([]);
-  reportAssignments.forEach((a) => upsertJuryAssignment(a));
-  setJuryPassageAssignments(passageAssignments);
+  await saveJuryAssignments(reportAssignments);
+  await saveJuryPassageAssignments(passageAssignments);
 
   return {
     reportAssignments,
@@ -88,20 +89,19 @@ export function autoAssignAll(session: OrganizerSession): AssignmentSummary {
 }
 
 // Regenerate only one of the three slices. The other two stay untouched.
-export function autoAssignReports(
-  session: OrganizerSession,
+export async function autoAssignReports(
   reportType: ReportType,
-): JuryAssignment[] {
-  requireAuth(session);
-  const jurors = sortedJurors();
-  const teams = sortedTeams();
+): Promise<JuryAssignment[]> {
+  const [jurors, teams, existing] = await Promise.all([
+    sortedJurors(),
+    sortedTeams(),
+    getJuryAssignments(),
+  ]);
   validateJurorCount(jurors.length);
 
   const otherType: ReportType =
     reportType === "intermediaire" ? "final" : "intermediaire";
-  const existingOther = getJuryAssignments().filter(
-    (a) => a.reportType === otherType,
-  );
+  const existingOther = existing.filter((a) => a.reportType === otherType);
 
   const fresh = computeReportAssignments(
     jurors,
@@ -110,22 +110,16 @@ export function autoAssignReports(
     existingOther,
   );
 
-  clearJuryAssignmentsForReportType(reportType);
-  fresh.forEach((a) => upsertJuryAssignment(a));
+  await saveJuryAssignments([...existingOther, ...fresh]);
   return fresh;
 }
 
-export function autoAssignPassages(
-  session: OrganizerSession,
-): JuryPassageAssignment[] {
-  requireAuth(session);
-  const jurors = sortedJurors();
-  const passages = sortedPassages();
+export async function autoAssignPassages(): Promise<JuryPassageAssignment[]> {
+  const [jurors, passages] = await Promise.all([sortedJurors(), sortedPassages()]);
   validateJurorCount(jurors.length);
 
   const fresh = computePassageAssignments(jurors, passages);
-  clearJuryPassageAssignments();
-  setJuryPassageAssignments(fresh);
+  await saveJuryPassageAssignments(fresh);
   return fresh;
 }
 
@@ -231,55 +225,32 @@ function computePassageAssignments(
 
 // ─── Queries useful to the management page ────────────────────────────
 
-export interface JurorLoad {
-  juror: JuryMember;
-  interTeams: number;
-  finalTeams: number;
-  passages: number;
-}
-
-export function computeJurorLoads(): JurorLoad[] {
-  const reportAssignments = getJuryAssignments();
-  const passageAssignments = getJuryPassageAssignments();
-  return getJuryMembers().map((juror) => ({
-    juror,
-    interTeams: reportAssignments.filter(
-      (a) => a.juryMemberId === juror.id && a.reportType === "intermediaire",
-    ).length,
-    finalTeams: reportAssignments.filter(
-      (a) => a.juryMemberId === juror.id && a.reportType === "final",
-    ).length,
-    passages: passageAssignments.filter((a) => a.juryMemberId === juror.id)
-      .length,
-  }));
-}
+// The backend computes per-juror workload directly — see getJurorLoads in
+// juryRepository.ts (GET /api/jury/loads) — so there's nothing left to
+// derive here.
+export { getJurorLoads as computeJurorLoads };
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
-function sortedJurors(): JuryMember[] {
-  return [...getJuryMembers()].sort((a, b) => a.id.localeCompare(b.id));
+async function sortedJurors(): Promise<JuryMember[]> {
+  const all = await getJuryMembers();
+  return [...all].sort((a, b) => a.id.localeCompare(b.id));
 }
 
-function sortedTeams(): Team[] {
-  return [...getTeams()].sort((a, b) => a.id.localeCompare(b.id));
+async function sortedTeams(): Promise<Team[]> {
+  const all = await getTeams();
+  return [...all].sort((a, b) => a.id.localeCompare(b.id));
 }
 
-function sortedPassages(): Passage[] {
-  return [...getPassages()].sort((a, b) => a.label.localeCompare(b.label));
+async function sortedPassages(): Promise<Passage[]> {
+  const all = await getPassages();
+  return [...all].sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function validateJurorCount(n: number): void {
   if (n < 2) {
     throw new ConflictError(
       "Au moins deux membres du jury sont requis pour distribuer la charge (un même juré ne peut pas grader le RI et le RF d'une même équipe).",
-    );
-  }
-}
-
-function requireAuth(session: OrganizerSession): void {
-  if (!canManageJuryAssignments(session.organizer)) {
-    throw new ForbiddenError(
-      "Action réservée à l'administrateur scientifique.",
     );
   }
 }

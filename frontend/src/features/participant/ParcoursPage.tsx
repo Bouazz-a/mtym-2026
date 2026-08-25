@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "@/features/shared/SessionContext";
 import {
@@ -11,36 +12,29 @@ import {
   dominantViolation,
 } from "@/features/shared/widgets";
 import { Btn, PageMotion } from "@/features/shared/primitives";
-import {
-  getConstraintReport,
-} from "@/lib/services/tournamentOptimizer";
-import type { ConstraintViolation } from "@/lib/services/tournamentOptimizer";
+import { getConstraintReport } from "@/lib/services/constraintReport";
+import type { ConstraintViolation } from "@/lib/services/constraintReport";
 import { getPools, getPassagesByTeam } from "@/lib/repositories/poolRepository";
 import { getParticipantsByTeam } from "@/lib/repositories/participantRepository";
 import { getTeamById, getTeams } from "@/lib/repositories/teamRepository";
-import { getDocumentsByTeam } from "@/lib/repositories/documentRepository";
+import { getDocumentsByTeam, uploadDocumentFile, downloadDocument } from "@/lib/repositories/documentRepository";
 import {
   getAnnouncements,
   getDeadlines,
 } from "@/lib/repositories/announcementRepository";
-import { uploadDocument } from "@/lib/services/documentUploadService";
+import { validateUploadedFile } from "@/utils/validation";
 import { ServiceError } from "@/lib/services/errors";
 import { isTeamCreator } from "@/lib/permissions";
 import { getPoolDisplayLabel, getRoundLabel } from "@/utils/naming";
-import {
-  createDownloadUrl,
-  fileToBase64,
-  storeFileBlob,
-} from "@/lib/storage/fileStorage";
 import type {
   Announcement,
   Deadline,
   Document,
   DocumentType,
-  Participant,
   Passage,
   Pool,
   Team,
+  TeamMember,
 } from "@/types";
 
 // ParcoursPage — "Espace Tournoi" (participant home).
@@ -62,45 +56,76 @@ export function ParcoursPage() {
   // lives after the last hook.
   const participantSession =
     session && session.role === "participant" ? session : null;
-  const team = participantSession
-    ? getTeamById(participantSession.team.id) ?? participantSession.team
-    : null;
+  const teamId = participantSession?.team.id ?? null;
 
   const [highlight, setHighlight] = useState(false);
 
-  // Everything below is derived synchronously from storage on each render;
-  // bumping `version` after a mutation (e.g. an upload) forces a fresh read.
-  const [, setVersion] = useState(0);
-  const refresh = () => setVersion((v) => v + 1);
+  const teamQuery = useQuery({
+    queryKey: ["team", teamId],
+    queryFn: () => getTeamById(teamId!),
+    enabled: !!teamId,
+  });
+  const team = teamQuery.data ?? participantSession?.team ?? null;
 
-  const members: Participant[] = team ? getParticipantsByTeam(team.id) : [];
-  const pools = team ? getPools() : [];
+  const membersQuery = useQuery({
+    queryKey: ["team-members", teamId],
+    queryFn: () => getParticipantsByTeam(teamId!),
+    enabled: !!teamId,
+  });
+  const members: TeamMember[] = membersQuery.data ?? [];
+
+  const poolsQuery = useQuery({ queryKey: ["pools"], queryFn: getPools, enabled: !!teamId });
+  const pools = poolsQuery.data ?? [];
   const pool1: Pool | null = team
     ? pools.find((p) => p.id === team.poolIdRound1) ?? null
     : null;
   const pool2: Pool | null = team?.poolIdRound2
     ? pools.find((p) => p.id === team.poolIdRound2) ?? null
     : null;
-  const passages: Passage[] = team ? getPassagesByTeam(team.id) : [];
-  const teamById = new Map<string, Team>(
-    team ? getTeams().map((t) => [t.id, t]) : [],
-  );
-  const docs: Document[] = team ? getDocumentsByTeam(team.id) : [];
-  const announcements: Announcement[] = team
-    ? getAnnouncements()
-        .filter((a) => a.audience === "all" || a.audience === "participants")
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .slice(0, 3)
-    : [];
-  const deadlines: Deadline[] = team
-    ? getDeadlines()
-        .filter(
-          (d) => d.targetRole === "all" || d.targetRole === "participants",
-        )
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(0, 3)
-    : [];
-  const rep = team ? getConstraintReport() : null;
+
+  const passagesQuery = useQuery({
+    queryKey: ["team-passages", teamId],
+    queryFn: () => getPassagesByTeam(teamId!),
+    enabled: !!teamId,
+  });
+  const passages: Passage[] = passagesQuery.data ?? [];
+
+  const teamsQuery = useQuery({ queryKey: ["teams"], queryFn: getTeams, enabled: !!teamId });
+  const teamById = new Map<string, Team>((teamsQuery.data ?? []).map((t) => [t.id, t]));
+
+  const docsQuery = useQuery({
+    queryKey: ["documents", "team", teamId],
+    queryFn: () => getDocumentsByTeam(teamId!),
+    enabled: !!teamId,
+  });
+  const docs: Document[] = docsQuery.data ?? [];
+
+  const announcementsQuery = useQuery({
+    queryKey: ["announcements"],
+    queryFn: getAnnouncements,
+    enabled: !!teamId,
+  });
+  // No audience filter needed — the backend already returns only what this
+  // role is allowed to see.
+  const announcements: Announcement[] = (announcementsQuery.data ?? [])
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 3);
+
+  const deadlinesQuery = useQuery({
+    queryKey: ["deadlines"],
+    queryFn: getDeadlines,
+    enabled: !!teamId,
+  });
+  const deadlines: Deadline[] = (deadlinesQuery.data ?? [])
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 3);
+
+  const constraintReportQuery = useQuery({
+    queryKey: ["constraint-report"],
+    queryFn: getConstraintReport,
+    enabled: !!teamId,
+  });
+  const rep = constraintReportQuery.data ?? null;
   const myViolations: ConstraintViolation[] =
     team && rep ? rep.violations.filter((v) => v.teamId === team.id) : [];
 
@@ -108,7 +133,11 @@ export function ParcoursPage() {
 
   // Every hook has run — safe to bail out now. TS narrows team/session to
   // non-null for all code (and JSX) below.
-  if (!participantSession || !team) return null;
+  if (!participantSession) return null;
+  if (teamQuery.isLoading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+  if (!team) return null;
 
   const canUpload = isTeamCreator(participantSession.participant, team);
   const ri = docs.find((d) => d.docType === "rapport_intermediaire");
@@ -271,7 +300,7 @@ export function ParcoursPage() {
                   docType="rapport_intermediaire"
                   document={ri}
                   canUpload={canUpload}
-                  onChange={refresh}
+                  onChange={() => {}}
                   team={team}
                 />
               </BoxedCard>
@@ -299,7 +328,7 @@ export function ParcoursPage() {
                       team={team}
                       document={doc}
                       canUpload={canUpload}
-                      onChange={refresh}
+                      onChange={() => {}}
                       className={stagger}
                     />
                   );
@@ -534,7 +563,7 @@ function BoxedCard({ children }: { children: React.ReactNode }) {
 // ─── Upload helpers ────────────────────────────────────────────────────
 
 function useUploader(team: Team, docType: DocumentType, onChange: () => void) {
-  const { session } = useSession();
+  const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -546,31 +575,22 @@ function useUploader(team: Team, docType: DocumentType, onChange: () => void) {
 
   const handle = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !session) return;
+    if (!file) return;
+
+    const validation = validateUploadedFile({ size: file.size, mimeType: file.type });
+    if (!validation.ok) {
+      setError(validation.error);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
     setBusy(true);
     try {
-      const result = uploadDocument(session, {
-        docType,
-        file: { size: file.size, mimeType: file.type, originalName: file.name },
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      // The document metadata is already persisted by uploadDocument — it,
-      // not the blob, is what drives the RI/RF "déposé" colour. Refresh now
-      // so the tile flips immediately, independently of blob storage which
-      // can fail (e.g. localStorage quota on a large PDF) without meaning
-      // the deposit failed.
+      await uploadDocumentFile(file, docType, team.id);
+      // The upload is real now (multipart to the backend) — refetch this
+      // team's documents so the tile flips to "déposé" immediately.
+      await queryClient.invalidateQueries({ queryKey: ["documents", "team", team.id] });
       onChange();
-      try {
-        const base64 = await fileToBase64(file);
-        storeFileBlob(result.document.storagePath, base64);
-      } catch {
-        setError(
-          "Document enregistré, mais l'aperçu n'a pas pu être stocké (fichier trop volumineux ?).",
-        );
-      }
     } catch (err) {
       setError(
         err instanceof ServiceError
@@ -583,21 +603,20 @@ function useUploader(team: Team, docType: DocumentType, onChange: () => void) {
     }
   };
 
-  void team;
   return { inputRef, busy, error, pick, handle };
 }
 
-function downloadDoc(doc: Document, onError: (msg: string) => void) {
-  const url = createDownloadUrl(doc.storagePath, doc.mimeType);
-  if (!url) {
-    onError("Fichier introuvable.");
-    return;
+async function downloadDoc(doc: Document, onError: (msg: string) => void) {
+  try {
+    const { url, filename } = await downloadDocument(doc.id, doc.originalName);
+    const a = window.document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    onError("Téléchargement impossible.");
   }
-  const a = window.document.createElement("a");
-  a.href = url;
-  a.download = doc.originalName;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // ─── Written file (RI wide variant) ────────────────────────────────────
@@ -1402,7 +1421,7 @@ function RosterPanel({
   youId,
 }: {
   team: Team;
-  members: Participant[];
+  members: TeamMember[];
   youId: string;
 }) {
   return (

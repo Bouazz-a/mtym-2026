@@ -1,91 +1,56 @@
-import type { JuryAssignment, JuryMember, JuryPassageAssignment, Passage, ReportType, Team } from "@/types";
-import { getAll, setAll } from "../storage";
-import { getPassageById } from "./poolRepository";
-import { getTeamById } from "./teamRepository";
+import type { JuryAssignment, JuryMember, JuryPassageAssignment } from "@/types";
+import { apiFetch, apiFetchOptional } from "@/lib/api/client";
 
-export function getJuryMembers(): JuryMember[] {
-  return getAll("juryMembers") as JuryMember[];
+// The old localStorage version also exposed composite helpers like
+// getTeamsAssignedToJuror() / getPassagesAssignedToJuror() that joined
+// assignments against the team/passage lists internally. Those relied on
+// everything being loaded synchronously in memory, which no longer holds
+// once every read is a network call. Pages now fetch the assignment list
+// and the team/passage list as two separate queries and join them locally
+// (see JuryDashboard.tsx, JuryPassagesPage.tsx, etc.) — same as the
+// pattern already used for teams+documents in the participant pages.
+
+export function getJuryMembers(): Promise<JuryMember[]> {
+  return apiFetch<JuryMember[]>("/jury");
 }
 
-export function getJuryMemberById(id: string): JuryMember | undefined {
-  return getJuryMembers().find(j => j.id === id);
+export function getJuryMemberById(id: string): Promise<JuryMember | undefined> {
+  return apiFetchOptional<JuryMember>(`/jury/${id}`);
 }
 
-export function upsertJuryMember(member: JuryMember): void {
-  const all = getJuryMembers();
-  const idx = all.findIndex(j => j.id === member.id);
-  if (idx === -1) {
-    setAll("juryMembers", [...all, member]);
-  } else {
-    const updated = [...all];
-    updated[idx] = member;
-    setAll("juryMembers", updated);
-  }
+export function getJuryAssignments(): Promise<JuryAssignment[]> {
+  return apiFetch<JuryAssignment[]>("/jury-assignments");
 }
 
-export function deleteJuryMember(id: string): void {
-  setAll("juryMembers", getJuryMembers().filter(j => j.id !== id));
+export function getJuryPassageAssignments(): Promise<JuryPassageAssignment[]> {
+  return apiFetch<JuryPassageAssignment[]>("/jury-passage-assignments");
 }
 
-export function getJuryAssignments(): JuryAssignment[] {
-  return getAll("juryAssignments") as JuryAssignment[];
+// Per-juror workload summary — the backend computes this directly
+// (see GET /api/jury/loads) instead of the frontend re-deriving it from
+// the raw assignment lists.
+export interface JurorLoad {
+  juror: JuryMember;
+  interTeams: number;
+  finalTeams: number;
+  passages: number;
 }
 
-export function getTeamsAssignedToJuror(juryMemberId: string, reportType: ReportType): Team[] {
-  const assignments = getJuryAssignments().filter(
-    a => a.juryMemberId === juryMemberId && a.reportType === reportType
-  );
-  return assignments.map(a => getTeamById(a.teamId)).filter(Boolean) as Team[];
+export function getJurorLoads(): Promise<JurorLoad[]> {
+  return apiFetch<JurorLoad[]>("/jury/loads");
 }
 
-export function getJuryPassageAssignments(): JuryPassageAssignment[] {
-  return getAll("juryPassageAssignments") as JuryPassageAssignment[];
+// ─── Admin-only bulk writes ────────────────────────────────────────────
+// Both endpoints wipe and rewrite the whole table in one transaction (see
+// backend/src/routes/jury-assignments.ts and jury-passage-assignments.ts)
+// — there's no per-row create/delete, only a full replace. That matches
+// how the organizer's assignment tools already work: recompute the whole
+// mapping, then save it in one shot.
+
+export function saveJuryAssignments(assignments: JuryAssignment[]): Promise<void> {
+  return apiFetch<void>("/jury-assignments/save", { method: "POST", body: assignments });
 }
 
-export function getPassagesAssignedToJuror(juryMemberId: string): Passage[] {
-  const assignments = getJuryPassageAssignments().filter(
-    a => a.juryMemberId === juryMemberId
-  );
-  return assignments.map(a => getPassageById(a.passageId)).filter(Boolean) as Passage[];
-}
-
-// ─── Mutation helpers ─────────────────────────────────────────────────
-
-export function setJuryAssignments(assignments: JuryAssignment[]): void {
-  setAll("juryAssignments", assignments);
-}
-
-// Toggle (or add) a single (juror, team, reportType) tuple.
-// Uniqueness key = (juryMemberId, teamId, reportType).
-export function upsertJuryAssignment(a: JuryAssignment): void {
-  const all = getJuryAssignments();
-  const exists = all.some(
-    x => x.juryMemberId === a.juryMemberId && x.teamId === a.teamId && x.reportType === a.reportType,
-  );
-  if (exists) return;
-  setAll("juryAssignments", [...all, a]);
-}
-
-export function deleteJuryAssignment(a: JuryAssignment): void {
-  setAll(
-    "juryAssignments",
-    getJuryAssignments().filter(
-      x => !(x.juryMemberId === a.juryMemberId && x.teamId === a.teamId && x.reportType === a.reportType),
-    ),
-  );
-}
-
-export function setJuryPassageAssignments(assignments: JuryPassageAssignment[]): void {
-  setAll("juryPassageAssignments", assignments);
-}
-
-export function clearJuryAssignmentsForReportType(reportType: ReportType): void {
-  setAll(
-    "juryAssignments",
-    getJuryAssignments().filter(a => a.reportType !== reportType),
-  );
-}
-
-export function clearJuryPassageAssignments(): void {
-  setAll("juryPassageAssignments", []);
+export function saveJuryPassageAssignments(assignments: JuryPassageAssignment[]): Promise<void> {
+  return apiFetch<void>("/jury-passage-assignments/save", { method: "POST", body: assignments });
 }

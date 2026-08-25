@@ -1,23 +1,19 @@
-import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader, BrutalCard, Badge, PageMotion } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import { getAnnouncements } from "@/lib/repositories/announcementRepository";
-import { canViewAnnouncementAsJury, canViewAnnouncementAsParticipant } from "@/lib/permissions";
 import type { Announcement } from "@/types";
 
 export function AnnouncementsPage() {
   const { session } = useSession();
-  const items = useMemo<Announcement[]>(() => {
-    if (!session) return [];
-    const all = getAnnouncements();
-    const filtered = all.filter(a => {
-      if (session.role === "participant") return canViewAnnouncementAsParticipant(a);
-      if (session.role === "jury") return canViewAnnouncementAsJury(a);
-      return true;
-    });
-    filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return filtered;
-  }, [session]);
+  const { data } = useQuery({
+    queryKey: ["announcements"],
+    queryFn: getAnnouncements,
+    enabled: !!session,
+  });
+  // No audience filter needed — the backend already returns only what this
+  // role is allowed to see.
+  const items = [...(data ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
     <PageMotion className="space-y-8">

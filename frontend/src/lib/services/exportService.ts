@@ -1,11 +1,17 @@
 import * as XLSX from "xlsx";
-import { getState } from "@/lib/storage/storage";
+import { getTeams } from "@/lib/repositories/teamRepository";
+import { getParticipants } from "@/lib/repositories/participantRepository";
+import { getPools, getPassages } from "@/lib/repositories/poolRepository";
+import { getJuryMembers, getJuryAssignments, getJuryPassageAssignments } from "@/lib/repositories/juryRepository";
+import { getOrganizers } from "@/lib/repositories/organizerRepository";
+import { getDocuments } from "@/lib/repositories/documentRepository";
 import {
-  getReportGradesByEvaluation,
-  getOralGradesByEvaluation,
+  getCriteria, getReportEvaluations, getOralEvaluations,
+  filterReportCriteria, filterOralCriteria,
 } from "@/lib/repositories/evaluationRepository";
-import { reportCriteria, oralCriteria, weightedNote } from "./gradingService";
-import type { AppState } from "@/types";
+import { getAnnouncements, getDeadlines } from "@/lib/repositories/announcementRepository";
+import { getWorkshops, getWorkshopPreferences, getWorkshopAssignments } from "@/lib/repositories/workshopRepository";
+import { weightedNote } from "./gradingService";
 
 // exportService — admin-only multi-sheet XLSX dump of the application
 // state. Every sheet carries the human-readable keys (quadrigrammes, juror
@@ -13,6 +19,10 @@ import type { AppState } from "@/types";
 // without spelunking through opaque uuids: pools ↔ teams via the pool
 // label; jury report assignments ↔ documents via the team quadrigramme;
 // jury passage assignments ↔ passages via the passage label; etc.
+//
+// Used to be one synchronous getState() snapshot of the local-storage
+// blob; now every collection is its own network call, made in parallel via
+// Promise.all so this doesn't turn into 20 sequential round-trips.
 
 const docTypeLabel: Record<string, string> = {
   rapport_intermediaire: "Rapport intermédiaire",
@@ -28,19 +38,30 @@ const docTypeLabel: Record<string, string> = {
   presentation_2: "Présentation (2)",
 };
 
-export function exportAppDataXlsx(): void {
-  const s: AppState = getState();
+export async function exportAppDataXlsx(): Promise<void> {
+  const [
+    teams, participants, pools, passages, juryMembers, organizers, criteria,
+    documents, juryAssignments, juryPassageAssignments, reportEvaluations,
+    oralEvaluations, announcements, deadlines, workshops, workshopPreferences,
+    workshopAssignments,
+  ] = await Promise.all([
+    getTeams(), getParticipants(), getPools(), getPassages(), getJuryMembers(), getOrganizers(), getCriteria(),
+    getDocuments(), getJuryAssignments(), getJuryPassageAssignments(), getReportEvaluations(),
+    getOralEvaluations(), getAnnouncements(), getDeadlines(), getWorkshops(), getWorkshopPreferences(),
+    getWorkshopAssignments(),
+  ]);
+
   const wb = XLSX.utils.book_new();
 
   // ── Lookup maps ─────────────────────────────────────────────────────
-  const teamById = new Map(s.teams.map((t) => [t.id, t]));
-  const partById = new Map(s.participants.map((p) => [p.id, p]));
-  const poolById = new Map(s.pools.map((p) => [p.id, p]));
-  const passById = new Map(s.passages.map((p) => [p.id, p]));
-  const juryById = new Map(s.juryMembers.map((j) => [j.id, j]));
-  const orgById = new Map(s.organizers.map((o) => [o.id, o]));
-  const critById = new Map(s.criteria.map((c) => [c.id, c]));
-  const wsById = new Map(s.workshops.map((w) => [w.id, w]));
+  const teamById = new Map(teams.map((t) => [t.id, t]));
+  const partById = new Map(participants.map((p) => [p.id, p]));
+  const poolById = new Map(pools.map((p) => [p.id, p]));
+  const passById = new Map(passages.map((p) => [p.id, p]));
+  const juryById = new Map(juryMembers.map((j) => [j.id, j]));
+  const orgById = new Map(organizers.map((o) => [o.id, o]));
+  const critById = new Map(criteria.map((c) => [c.id, c]));
+  const wsById = new Map(workshops.map((w) => [w.id, w]));
 
   const tq = (id: string | undefined) =>
     id ? (teamById.get(id)?.quadrigramme ?? "—") : "";
@@ -65,14 +86,14 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Équipes",
-    s.teams.map((t) => ({
+    teams.map((t) => ({
       id: t.id,
       quadrigramme: t.quadrigramme,
       nom: t.name,
       createur: pn(t.creatorId),
       pool_tour1: pl(t.poolIdRound1),
       pool_tour2: pl(t.poolIdRound2),
-      membres: s.participants
+      membres: participants
         .filter((p) => p.teamId === t.id)
         .map((p) => `${p.firstName} ${p.lastName}`)
         .join(", "),
@@ -83,7 +104,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Participants",
-    s.participants.map((p) => ({
+    participants.map((p) => ({
       id: p.id,
       prenom: p.firstName,
       nom: p.lastName,
@@ -105,11 +126,11 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Poules",
-    s.pools.map((p) => ({
+    pools.map((p) => ({
       id: p.id,
       label: p.label,
       tour: p.round,
-      equipes: s.teams
+      equipes: teams
         .filter(
           (t) => t.poolIdRound1 === p.id || t.poolIdRound2 === p.id,
         )
@@ -122,7 +143,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Passages",
-    s.passages.map((p) => ({
+    passages.map((p) => ({
       id: p.id,
       label: p.label,
       pool_label: pl(p.poolId),
@@ -142,7 +163,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Jury",
-    s.juryMembers.map((j) => ({
+    juryMembers.map((j) => ({
       id: j.id,
       prenom: j.firstName,
       nom: j.lastName,
@@ -158,7 +179,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Organisateurs",
-    s.organizers.map((o) => ({
+    organizers.map((o) => ({
       id: o.id,
       prenom: o.firstName,
       nom: o.lastName,
@@ -172,8 +193,8 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Affectations rapports",
-    s.juryAssignments.map((a) => {
-      const docs = s.documents.filter((d) => d.teamId === a.teamId);
+    juryAssignments.map((a) => {
+      const docs = documents.filter((d) => d.teamId === a.teamId);
       return {
         juree: jn(a.juryMemberId),
         equipe_quadrigramme: tq(a.teamId),
@@ -192,7 +213,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Affectations passages",
-    s.juryPassageAssignments.map((a) => {
+    juryPassageAssignments.map((a) => {
       const p = passById.get(a.passageId);
       return {
         juree: jn(a.juryMemberId),
@@ -214,7 +235,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Documents",
-    s.documents.map((d) => ({
+    documents.map((d) => ({
       id: d.id,
       equipe_quadrigramme: tq(d.teamId),
       equipe_nom: tn(d.teamId),
@@ -234,7 +255,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Critères",
-    s.criteria
+    criteria
       .slice()
       .sort((a, b) => {
         const k = a.type.localeCompare(b.type);
@@ -258,7 +279,7 @@ export function exportAppDataXlsx(): void {
   );
 
   // ── Sheet: Notes RI (synthèse) ──────────────────────────────────────
-  const riEvals = s.reportEvaluations.filter((e) => e.reportType === "intermediaire");
+  const riEvals = reportEvaluations.filter((e) => e.reportType === "intermediaire");
   append(
     wb,
     "Notes RI",
@@ -272,14 +293,13 @@ export function exportAppDataXlsx(): void {
   );
 
   // ── Sheet: Notes RF (synthèse pondérée par évaluation) ──────────────
-  const rfEvals = s.reportEvaluations.filter((e) => e.reportType === "final");
+  const rfEvals = reportEvaluations.filter((e) => e.reportType === "final");
   append(
     wb,
     "Notes RF",
     rfEvals.map((e) => {
-      const criteria = reportCriteria(e.problemNumber);
-      const grades = getReportGradesByEvaluation(e.id);
-      const note = weightedNote(grades, criteria);
+      const evalCriteria = filterReportCriteria(criteria, e.problemNumber);
+      const note = weightedNote(e.grades, evalCriteria);
       return {
         juree: jn(e.juryMemberId),
         equipe_quadrigramme: tq(e.teamId),
@@ -297,9 +317,8 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Détails RF",
-    rfEvals.flatMap((e) => {
-      const grades = getReportGradesByEvaluation(e.id);
-      return grades.map((g) => {
+    rfEvals.flatMap((e) =>
+      e.grades.map((g) => {
         const c = critById.get(g.criterionId);
         return {
           juree: jn(e.juryMemberId),
@@ -311,18 +330,17 @@ export function exportAppDataXlsx(): void {
           note: c ? round2(g.score * c.coefficient) : "",
           remarque: g.remark ?? "",
         };
-      });
-    }),
+      }),
+    ),
   );
 
   // ── Sheet: Notes orales (synthèse) ──────────────────────────────────
   append(
     wb,
     "Notes orales",
-    s.oralEvaluations.map((e) => {
-      const criteria = oralCriteria(e.role);
-      const grades = getOralGradesByEvaluation(e.id);
-      const note = weightedNote(grades, criteria);
+    oralEvaluations.map((e) => {
+      const evalCriteria = filterOralCriteria(criteria, e.role);
+      const note = weightedNote(e.grades, evalCriteria);
       const p = passById.get(e.passageId);
       return {
         juree: jn(e.juryMemberId),
@@ -342,10 +360,9 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Détails oraux",
-    s.oralEvaluations.flatMap((e) => {
-      const grades = getOralGradesByEvaluation(e.id);
+    oralEvaluations.flatMap((e) => {
       const p = passById.get(e.passageId);
-      return grades.map((g) => {
+      return e.grades.map((g) => {
         const c = critById.get(g.criterionId);
         return {
           juree: jn(e.juryMemberId),
@@ -367,7 +384,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Annonces",
-    s.announcements.map((a) => ({
+    announcements.map((a) => ({
       id: a.id,
       titre: a.title,
       audience: a.audience,
@@ -382,7 +399,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Deadlines",
-    s.deadlines.map((d) => ({
+    deadlines.map((d) => ({
       id: d.id,
       label: d.label,
       date: d.date,
@@ -394,7 +411,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Ateliers",
-    s.workshops.map((w) => ({
+    workshops.map((w) => ({
       id: w.id,
       nom: w.name,
       intervenant: w.instructor,
@@ -408,7 +425,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Préférences ateliers",
-    s.workshopPreferences.map((p) => ({
+    workshopPreferences.map((p) => ({
       participant: pn(p.participantId),
       equipe: tq(partById.get(p.participantId)?.teamId ?? ""),
       choix_1: wsById.get(p.choice1Id)?.name ?? "",
@@ -421,7 +438,7 @@ export function exportAppDataXlsx(): void {
   append(
     wb,
     "Affectations ateliers",
-    s.workshopAssignments.map((a) => ({
+    workshopAssignments.map((a) => ({
       participant: pn(a.participantId),
       equipe: tq(partById.get(a.participantId)?.teamId ?? ""),
       atelier: wsById.get(a.workshopId)?.name ?? "",

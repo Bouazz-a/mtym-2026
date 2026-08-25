@@ -1,24 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { v4 as uuidv4 } from "uuid";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader, BrutalCard, Badge, Btn, Textarea, PageMotion,
 } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
-import { getPassageById, getPools } from "@/lib/repositories/poolRepository";
-import { getTeamById } from "@/lib/repositories/teamRepository";
-import { getDocumentsByTeam } from "@/lib/repositories/documentRepository";
+import { getPassages, getPools } from "@/lib/repositories/poolRepository";
+import { getTeams } from "@/lib/repositories/teamRepository";
+import { getDocuments, downloadDocument } from "@/lib/repositories/documentRepository";
 import {
-  getJuryPassageAssignments, getJuryMemberById,
+  getJuryPassageAssignments, getJuryMembers,
 } from "@/lib/repositories/juryRepository";
 import {
-  getCriteriaForOral,
-  getOralEvaluation,
-  upsertOralEvaluation,
-  getOralGradesByEvaluation,
-  upsertOralGrade,
+  getCriteria,
+  filterOralCriteria,
+  getOralEvaluations,
+  saveOralEvaluation,
+  type OralEvaluationWithGrades,
 } from "@/lib/repositories/evaluationRepository";
-import { createDownloadUrl } from "@/lib/storage/fileStorage";
 import {
   runningNote, CriterionGradingTable, NotePill,
   type GradeDrafts,
@@ -26,13 +25,19 @@ import {
 import { DocPreviewModal, useDocPreview } from "@/features/shared/DocPreview";
 import { getPoolDisplayLabel, getRoundLabel } from "@/utils/naming";
 import type {
-  Document, DocumentType, OralEvaluation, OralGrade, Passage, PassageRole, Team,
+  Criterion, Document, DocumentType, PassageRole, Team,
 } from "@/types";
 
 // JuryPassageDetailPage — oral grading sheet for one passage. Mirrors the
 // historic spreadsheet: a fixed header (jury members, room, slot, problem
 // defended) pulled from the Passage, then one criteria-based panel per
 // graded role (defender / opponent / reporter).
+//
+// Saving used to be two calls (upsert the evaluation row, then upsert each
+// criterion's grade row separately). The backend now does both in one
+// transaction and hands back the evaluation with its grades nested — see
+// saveOralEvaluation in evaluationRepository.ts — so a save here is a
+// single request.
 
 const GRADED_ROLES: { role: Exclude<PassageRole, "extra">; label: string; tone: "sage" | "saffron" | "dark" }[] = [
   { role: "defender", label: "Défenseur", tone: "sage" },
@@ -47,30 +52,60 @@ export function JuryPassageDetailPage() {
 
   const [version, setVersion] = useState(0);
   const preview = useDocPreview();
+  const juryMemberId = session?.role === "jury" ? session.juryMember.id : undefined;
+
+  const passagesQ = useQuery({ queryKey: ["passages"], queryFn: getPassages });
+  const poolsQ = useQuery({ queryKey: ["pools"], queryFn: getPools });
+  const teamsQ = useQuery({ queryKey: ["teams"], queryFn: getTeams });
+  const docsQ = useQuery({ queryKey: ["documents"], queryFn: getDocuments });
+  const passageAssignmentsQ = useQuery({ queryKey: ["jury-passage-assignments"], queryFn: getJuryPassageAssignments });
+  const jurorsQ = useQuery({ queryKey: ["jury-members"], queryFn: getJuryMembers });
+  const criteriaQ = useQuery({ queryKey: ["criteria"], queryFn: getCriteria });
+
+  const loading =
+    passagesQ.isLoading || poolsQ.isLoading || teamsQ.isLoading || docsQ.isLoading ||
+    passageAssignmentsQ.isLoading || jurorsQ.isLoading || criteriaQ.isLoading;
+
+  const docsByTeam = useMemo(() => {
+    const map = new Map<string, Document[]>();
+    for (const d of docsQ.data ?? []) {
+      const list = map.get(d.teamId);
+      if (list) list.push(d); else map.set(d.teamId, [d]);
+    }
+    return map;
+  }, [docsQ.data]);
 
   const passageData = useMemo(() => {
-    if (!session || session.role !== "jury" || !passageId) return null;
-    const p = getPassageById(passageId);
+    if (!juryMemberId || !passageId) return null;
+    if (!passagesQ.data || !passageAssignmentsQ.data || !jurorsQ.data) return null;
+    const p = passagesQ.data.find(x => x.id === passageId);
     if (!p) return null;
-    const passageAssignments = getJuryPassageAssignments().filter(a => a.passageId === p.id);
+    const passageAssignments = passageAssignmentsQ.data.filter(a => a.passageId === p.id);
+    const jurorsById = new Map(jurorsQ.data.map(j => [j.id, j]));
     return {
       passage: p,
-      assigned: passageAssignments.some(a => a.juryMemberId === session.juryMember.id),
+      assigned: passageAssignments.some(a => a.juryMemberId === juryMemberId),
       jurorNames: passageAssignments
-        .map(a => getJuryMemberById(a.juryMemberId))
+        .map(a => jurorsById.get(a.juryMemberId))
         .filter(Boolean)
         .map(j => `${j!.firstName} ${j!.lastName}`),
     };
-  }, [session, passageId]);
+  }, [juryMemberId, passageId, passagesQ.data, passageAssignmentsQ.data, jurorsQ.data]);
 
-  // Unknown passage id: bounce back to the list.
+  // Unknown passage id: bounce back to the list once loading is done.
   useEffect(() => {
-    if (session && session.role === "jury" && passageId && !passageData) {
+    if (!loading && session && session.role === "jury" && passageId && !passageData) {
       navigate("/passages", { replace: true });
     }
-  }, [session, passageId, passageData, navigate]);
+  }, [loading, session, passageId, passageData, navigate]);
 
-  if (!session || session.role !== "jury" || !passageData) return null;
+  if (!session || session.role !== "jury") return null;
+
+  if (loading) {
+    return <div className="py-24 text-center text-foreground/55">Chargement…</div>;
+  }
+
+  if (!passageData) return null;
   const { passage, assigned, jurorNames } = passageData;
 
   if (!assigned) {
@@ -90,11 +125,12 @@ export function JuryPassageDetailPage() {
     );
   }
 
-  const pool = getPools().find(p => p.id === passage.poolId);
+  const pool = poolsQ.data?.find(p => p.id === passage.poolId);
+  const teamById = new Map((teamsQ.data ?? []).map(t => [t.id, t]));
   const teamFor: Record<string, Team | undefined> = {
-    defender: getTeamById(passage.defenderTeamId),
-    opponent: getTeamById(passage.opponentTeamId),
-    reporter: getTeamById(passage.reporterTeamId),
+    defender: teamById.get(passage.defenderTeamId),
+    opponent: teamById.get(passage.opponentTeamId),
+    reporter: teamById.get(passage.reporterTeamId),
   };
 
   return (
@@ -146,7 +182,8 @@ export function JuryPassageDetailPage() {
             tone={tone}
             team={teamFor[role]}
             passage={passage}
-            juryMemberId={session.juryMember.id}
+            allCriteria={criteriaQ.data ?? []}
+            docsByTeam={docsByTeam}
             onSaved={() => setVersion(v => v + 1)}
             onPreview={preview.open}
           />
@@ -164,8 +201,9 @@ interface RoleDoc { label: string; expected: DocumentType }
 
 function docsForRole(
   role: Exclude<PassageRole, "extra">,
-  passage: Passage,
+  passage: { problemNumber: number },
   team: Team | undefined,
+  docsByTeam: Map<string, Document[]>,
 ): RoleDoc[] {
   if (!team) return [];
   const candidates: Record<typeof role, DocumentType[][]> = {
@@ -187,33 +225,37 @@ function docsForRole(
   };
   const out: RoleDoc[] = [];
   candidates[role].forEach((group, i) => {
-    const found = pickFirstExisting(team, group);
+    const found = pickFirstExisting(team, group, docsByTeam);
     if (found) out.push({ label: labels[role][i], expected: found });
   });
   return out;
 }
 
-function pickFirstExisting(team: Team, candidates: DocumentType[]): DocumentType | null {
-  const docs = getDocumentsByTeam(team.id);
+function pickFirstExisting(team: Team, candidates: DocumentType[], docsByTeam: Map<string, Document[]>): DocumentType | null {
+  const docs = docsByTeam.get(team.id) ?? [];
   for (const t of candidates) {
     if (docs.some(d => d.docType === t)) return t;
   }
   return null;
 }
 
-function downloadDoc(doc: Document) {
-  const url = createDownloadUrl(doc.storagePath, doc.mimeType);
-  if (!url) return alert("Fichier introuvable.");
-  const a = window.document.createElement("a");
-  a.href = url; a.download = doc.originalName; a.click();
-  URL.revokeObjectURL(url);
+async function downloadDoc(doc: Document) {
+  try {
+    const { url, filename } = await downloadDocument(doc.id, doc.originalName);
+    const a = window.document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    alert("Téléchargement impossible.");
+  }
 }
 
 function RoleDocStrip({
-  team, items, onPreview,
+  team, items, docsByTeam, onPreview,
 }: {
   team: Team | undefined;
   items: RoleDoc[];
+  docsByTeam: Map<string, Document[]>;
   onPreview: (doc: Document) => void;
 }) {
   if (!team) return null;
@@ -228,7 +270,7 @@ function RoleDocStrip({
       </div>
     );
   }
-  const docs = getDocumentsByTeam(team.id);
+  const docs = docsByTeam.get(team.id) ?? [];
   return (
     <div className="px-5 py-2.5 flex flex-col gap-1.5"
          style={{ borderBottom: "1px solid var(--border)", background: "var(--paper-2)" }}>
@@ -280,27 +322,34 @@ function InfoCell({ label, value }: { label: string; value: string }) {
 // ─── Per-role grading panel ───────────────────────────────────────────
 
 function RolePanel({
-  role, roleLabel, tone, team, passage, juryMemberId, onSaved, onPreview,
+  role, roleLabel, tone, team, passage, allCriteria, docsByTeam, onSaved, onPreview,
 }: {
   role: Exclude<PassageRole, "extra">;
   roleLabel: string;
   tone: "sage" | "saffron" | "dark";
   team: Team | undefined;
-  passage: Passage;
-  juryMemberId: string;
+  passage: { id: string; problemNumber: number };
+  allCriteria: Criterion[];
+  docsByTeam: Map<string, Document[]>;
   onSaved: () => void;
   onPreview: (doc: Document) => void;
 }) {
-  const criteria = useMemo(() => getCriteriaForOral(role), [role]);
+  const queryClient = useQueryClient();
+  const criteria = useMemo(() => filterOralCriteria(allCriteria, role), [allCriteria, role]);
 
-  const existing = useMemo(
-    () => team ? getOralEvaluation(juryMemberId, passage.id, team.id) : undefined,
-    [juryMemberId, passage.id, team],
+  const oralEvalsQ = useQuery({
+    queryKey: ["oral-evaluations", passage.id],
+    queryFn: () => getOralEvaluations(passage.id),
+  });
+
+  const existing = useMemo<OralEvaluationWithGrades | undefined>(
+    () => team ? oralEvalsQ.data?.find(e => e.teamId === team.id) : undefined,
+    [oralEvalsQ.data, team],
   );
 
   const initialDrafts = useMemo<GradeDrafts>(() => {
     const out: GradeDrafts = {};
-    const grades = existing ? getOralGradesByEvaluation(existing.id) : [];
+    const grades = existing?.grades ?? [];
     for (const c of criteria) {
       const g = grades.find(x => x.criterionId === c.id);
       out[c.id] = { score: g?.score ?? 0, remark: g?.remark ?? "" };
@@ -323,42 +372,32 @@ function RolePanel({
     setSaved(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!team) return;
     setBusy(true);
     try {
-      const evalId = existing?.id ?? uuidv4();
-      const evaluation: OralEvaluation = {
-        id: evalId,
-        juryMemberId,
+      await saveOralEvaluation({
         passageId: passage.id,
         teamId: team.id,
         role,
         globalRemark: remark.trim() || undefined,
-      };
-      upsertOralEvaluation(evaluation);
-
-      const savedGrades = getOralGradesByEvaluation(evalId);
-      for (const c of criteria) {
-        const d = drafts[c.id] ?? { score: 0, remark: "" };
-        const prev = savedGrades.find(g => g.criterionId === c.id);
-        const grade: OralGrade = {
-          id: prev?.id ?? uuidv4(),
-          oralEvaluationId: evalId,
+        grades: criteria.map(c => ({
           criterionId: c.id,
-          score: d.score,
-          remark: d.remark.trim() || undefined,
-        };
-        upsertOralGrade(grade);
-      }
+          score: (drafts[c.id] ?? { score: 0 }).score,
+          remark: (drafts[c.id]?.remark ?? "").trim() || undefined,
+        })),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["oral-evaluations", passage.id] });
       setSaved(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
       onSaved();
+    } catch {
+      alert("Impossible d'enregistrer l'évaluation.");
     } finally {
       setBusy(false);
     }
   };
 
-  const docItems = docsForRole(role, passage, team);
+  const docItems = docsForRole(role, passage, team, docsByTeam);
 
   return (
     <BrutalCard className="flex flex-col overflow-hidden">
@@ -379,7 +418,7 @@ function RolePanel({
         </div>
       </div>
 
-      <RoleDocStrip team={team} items={docItems} onPreview={onPreview} />
+      <RoleDocStrip team={team} items={docItems} docsByTeam={docsByTeam} onPreview={onPreview} />
 
       <div className="p-5 space-y-4 flex-1">
         <CriterionGradingTable
