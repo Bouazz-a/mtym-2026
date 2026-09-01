@@ -40,6 +40,7 @@ import { isAdmin } from "@/lib/permissions";
 import { exportAppDataXlsx } from "@/lib/services/exportService";
 import { ServiceError } from "@/lib/services/errors";
 import { getPoolDisplayLabel } from "@/utils/naming";
+import { isValidQuadrigramme } from "@/utils/validation";
 
 // AdministrationPage — manual editors that complement the auto-generation
 // flows. Three sub-sections:
@@ -834,7 +835,7 @@ function TeamEditCard({
     draft.quadrigramme !== team.quadrigramme ||
     draft.creatorId !== team.creatorId;
 
-  const validQuad = /^[A-Z]{4}$/.test(draft.quadrigramme);
+  const validQuad = isValidQuadrigramme(draft.quadrigramme);
 
   const handleSave = async () => {
     setError(null);

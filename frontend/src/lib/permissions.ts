@@ -186,9 +186,12 @@ export function canManagePoolsAndPassages(organizer: Organizer): boolean {
   return isAdmin(organizer);
 }
 
-// Resolve the role a team plays in a given passage.
-// Returns null if the team is not part of the passage.
-export function getTeamRoleInPassage(
+// Resolve the role a team plays in a given passage. Returns null if the
+// team is not part of the passage. Kept local (not exported) — the
+// canonical, exported version other files actually import is
+// teamRoleFromIds in features/shared/widgets.tsx; this file only needs it
+// for the two report-visibility checks below.
+function getTeamRoleInPassage(
   team: Team,
   passage: Passage,
 ): "defender" | "opponent" | "reporter" | "extra" | null {
