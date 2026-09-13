@@ -1,0 +1,282 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum OrganizerRole {
+  admin
+  logistics
+  scientific
+}
+
+enum TransportMode {
+  train
+  voiture
+  bus
+  autre
+}
+
+enum Audience {
+  all
+  participants
+  jury
+}
+
+enum ReportType {
+  intermediaire
+  final
+}
+
+enum PassageRole {
+  defender
+  opponent
+  reporter
+  extra
+}
+
+enum EvaluationType {
+  report
+  oral
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+model Participant {
+  id            String         @id @default(uuid())
+  teamId        String
+  firstName     String
+  lastName      String
+  email         String         @unique
+  phone         String?
+  city          String?
+  region        String?
+  birthDate     String?        // "DD-MM-YYYY"
+  schoolLevel   String?        // "3AC" | "TC" | "1BAC" | "2BAC"
+  hoodieSize    String?        // "S" | "M" | "L" | "XL" | "XXL"
+  healthInfo    Json?
+  transportInfo TransportMode?
+  roommatePrefs String?
+
+  team          Team           @relation(fields: [teamId], references: [id])
+}
+
+model Organizer {
+  id        String        @id @default(uuid())
+  firstName String
+  lastName  String
+  email     String        @unique
+  phone     String?
+  role      OrganizerRole
+}
+
+model JuryMember {
+  id            String         @id @default(uuid())
+  firstName     String
+  lastName      String
+  email         String         @unique
+  phone         String?
+  city          String?
+  region        String?
+  transportInfo TransportMode?
+}
+
+// ─── Teams ────────────────────────────────────────────────────────────────────
+
+model Team {
+  id           String  @id @default(uuid())
+  name         String
+  quadrigramme String  @unique
+  creatorId    String
+  poolIdRound1 String?
+  poolIdRound2 String?
+
+  participants Participant[]
+  poolRound1   Pool?         @relation("PoolRound1", fields: [poolIdRound1], references: [id])
+  poolRound2   Pool?         @relation("PoolRound2", fields: [poolIdRound2], references: [id])
+}
+
+// ─── Tournament ───────────────────────────────────────────────────────────────
+
+model Pool {
+  id    String @id @default(uuid())
+  label String
+  round Int    // 1 or 2
+
+  teamsRound1 Team[]    @relation("PoolRound1")
+  teamsRound2 Team[]    @relation("PoolRound2")
+  passages    Passage[]
+}
+
+model Passage {
+  id             String  @id @default(uuid())
+  label          String
+  problemNumber  Int
+  poolId         String
+  defenderTeamId String
+  opponentTeamId String
+  reporterTeamId String
+  extraTeamId    String?
+  day            String? // "DD-MM-YYYY"
+  timeSlot       String? // "HH:MM"
+  room           String?
+
+  pool           Pool    @relation(fields: [poolId], references: [id])
+}
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+model Document {
+  id           String  @id @default(uuid())
+  docType      String
+  uploadedById String
+  teamId       String
+  originalName String
+  renamedAs    String
+  storagePath  String
+  size         Int
+  mimeType     String
+  uploadedAt   String
+  isLocked     Boolean @default(false)
+}
+
+// ─── Jury Assignments ─────────────────────────────────────────────────────────
+
+model JuryAssignment {
+  id           String     @id @default(uuid())
+  juryMemberId String
+  teamId       String
+  reportType   ReportType
+
+  @@unique([juryMemberId, teamId, reportType])
+}
+
+model JuryPassageAssignment {
+  id           String @id @default(uuid())
+  juryMemberId String
+  passageId    String
+
+  @@unique([juryMemberId, passageId])
+}
+
+// ─── Grading ─────────────────────────────────────────────────────────────────
+
+model Criterion {
+  id            String         @id @default(uuid())
+  label         String
+  coefficient   Float
+  type          EvaluationType
+  role          PassageRole?
+  problemNumber Int?
+  theme         String?
+  order         Int
+}
+
+model ReportEvaluation {
+  id            String     @id @default(uuid())
+  juryMemberId  String
+  teamId        String
+  reportType    ReportType
+  problemNumber Int
+  overallScore  Float?
+  globalRemark  String?
+
+  grades        ReportGrade[]
+
+  @@unique([juryMemberId, teamId, reportType, problemNumber])
+}
+
+model ReportGrade {
+  id                 String           @id @default(uuid())
+  reportEvaluationId String
+  criterionId        String
+  score              Float
+  remark             String?
+
+  evaluation         ReportEvaluation @relation(fields: [reportEvaluationId], references: [id], onDelete: Cascade)
+
+  @@unique([reportEvaluationId, criterionId])
+}
+
+model OralEvaluation {
+  id           String      @id @default(uuid())
+  juryMemberId String
+  passageId    String
+  teamId       String
+  role         PassageRole
+  globalRemark String?
+
+  grades       OralGrade[]
+
+  @@unique([juryMemberId, passageId, teamId])
+}
+
+model OralGrade {
+  id               String         @id @default(uuid())
+  oralEvaluationId String
+  criterionId      String
+  score            Float
+  remark           String?
+
+  evaluation       OralEvaluation @relation(fields: [oralEvaluationId], references: [id], onDelete: Cascade)
+
+  @@unique([oralEvaluationId, criterionId])
+}
+
+// ─── Workshops ────────────────────────────────────────────────────────────────
+
+model Workshop {
+  id         String   @id @default(uuid())
+  name       String
+  instructor String
+  capacity   Int
+  slot       String
+  tags       String[]
+}
+
+model WorkshopPreference {
+  id            String @id @default(uuid())
+  participantId String @unique
+  choice1Id     String
+  choice2Id     String
+  choice3Id     String
+}
+
+model WorkshopAssignment {
+  id            String @id @default(uuid())
+  participantId String @unique
+  workshopId    String
+}
+
+// ─── Communication ────────────────────────────────────────────────────────────
+
+model Announcement {
+  id          String   @id @default(uuid())
+  title       String
+  body        String
+  audience    Audience
+  attachments String[]
+  createdBy   String
+  createdAt   String
+}
+
+model Deadline {
+  id         String   @id @default(uuid())
+  label      String
+  date       String
+  targetRole Audience
+}
+
+// ─── Tournament constraint report (singleton — overwritten on each generation) ─
+
+model ConstraintReport {
+  id          String @id @default(uuid())
+  generatedAt String
+  totalScore  Int
+  violations  Json
+}
