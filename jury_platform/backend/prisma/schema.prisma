@@ -1,0 +1,209 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  admin
+  jury
+}
+
+// Mirrors teams_qualifcenter_enum on the main site (mtym.mathmaroc.org).
+enum Center {
+  casablanca
+  rabat
+  martil
+  benguerir
+  agadir
+  fez
+  oujda
+  online
+}
+
+enum PassageRole {
+  defender
+  opponent
+  reporter
+  extra
+}
+
+enum EvaluationType {
+  report
+  oral
+}
+
+// ─── Accounts ─────────────────────────────────────────────────────────────────
+
+model Account {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  role         Role
+  createdAt    DateTime @default(now())
+
+  poolSeats         PoolJuror[]
+  reportEvaluations ReportEvaluation[]
+  oralEvaluations   OralEvaluation[]
+}
+
+// ─── Teams (imported from the main site's dump) ──────────────────────────────
+
+model CenterDay {
+  id     String @id @default(uuid())
+  center Center
+  date   String // "YYYY-MM-DD"
+
+  teams Team[]
+  pools Pool[]
+
+  @@unique([center, date])
+}
+
+model Team {
+  id          String  @id @default(uuid())
+  sourceId    Int     @unique // teams.id on the main site — re-imports upsert on it
+  name        String
+  quadrigram  String
+  center      Center
+  members     Json // [{ firstName, lastName }] — names only, no contact/health data
+  centerDayId String? // a team plays on exactly one day of its center
+
+  centerDay         CenterDay?         @relation(fields: [centerDayId], references: [id], onDelete: SetNull)
+  reports           TeamReport[]
+  defended          Passage[]          @relation("PassageDefender")
+  opposed           Passage[]          @relation("PassageOpponent")
+  reported          Passage[]          @relation("PassageReporter")
+  observed          Passage[]          @relation("PassageExtra")
+  reportEvaluations ReportEvaluation[]
+}
+
+// FINAL reports only — the file itself lives in the main site's S3 bucket.
+model TeamReport {
+  id            String @id @default(uuid())
+  teamId        String
+  problemNumber Int
+  fileUrl       String
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, problemNumber])
+}
+
+// ─── Tournament ───────────────────────────────────────────────────────────────
+
+model Pool {
+  id          String  @id @default(uuid())
+  label       String
+  round       Int     @default(1) // qualifs are single-round; kept for the finale
+  centerDayId String? // null only for future finale pools
+
+  centerDay CenterDay?  @relation(fields: [centerDayId], references: [id], onDelete: Cascade)
+  passages  Passage[]
+  jurors    PoolJuror[]
+}
+
+model PoolJuror {
+  poolId    String
+  accountId String
+
+  pool    Pool    @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([poolId, accountId])
+}
+
+model Passage {
+  id             String  @id @default(uuid())
+  label          String
+  problemNumber  Int
+  poolId         String
+  defenderTeamId String
+  opponentTeamId String
+  reporterTeamId String
+  extraTeamId    String?
+  timeSlot       String? // "HH:MM"
+  room           String?
+
+  pool            Pool             @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  defender        Team             @relation("PassageDefender", fields: [defenderTeamId], references: [id])
+  opponent        Team             @relation("PassageOpponent", fields: [opponentTeamId], references: [id])
+  reporter        Team             @relation("PassageReporter", fields: [reporterTeamId], references: [id])
+  extra           Team?            @relation("PassageExtra", fields: [extraTeamId], references: [id])
+  oralEvaluations OralEvaluation[]
+}
+
+// ─── Grading ─────────────────────────────────────────────────────────────────
+
+model Criterion {
+  id            String         @id @default(uuid())
+  label         String
+  coefficient   Float
+  type          EvaluationType
+  role          PassageRole?
+  problemNumber Int?
+  theme         String?
+  order         Int
+}
+
+// One per (juror × team × defended problem) — graded by the pool's jurors.
+model ReportEvaluation {
+  id            String  @id @default(uuid())
+  juryId        String
+  teamId        String
+  problemNumber Int
+  globalRemark  String?
+
+  jury   Account       @relation(fields: [juryId], references: [id])
+  team   Team          @relation(fields: [teamId], references: [id])
+  grades ReportGrade[]
+
+  @@unique([juryId, teamId, problemNumber])
+}
+
+model ReportGrade {
+  id                 String  @id @default(uuid())
+  reportEvaluationId String
+  criterionId        String
+  score              Float
+  remark             String?
+
+  evaluation ReportEvaluation @relation(fields: [reportEvaluationId], references: [id], onDelete: Cascade)
+
+  @@unique([reportEvaluationId, criterionId])
+}
+
+model OralEvaluation {
+  id           String      @id @default(uuid())
+  juryId       String
+  passageId    String
+  teamId       String
+  role         PassageRole
+  globalRemark String?
+
+  jury    Account     @relation(fields: [juryId], references: [id])
+  passage Passage     @relation(fields: [passageId], references: [id])
+  grades  OralGrade[]
+
+  @@unique([juryId, passageId, teamId])
+}
+
+model OralGrade {
+  id               String  @id @default(uuid())
+  oralEvaluationId String
+  criterionId      String
+  score            Float
+  remark           String?
+
+  evaluation OralEvaluation @relation(fields: [oralEvaluationId], references: [id], onDelete: Cascade)
+
+  @@unique([oralEvaluationId, criterionId])
+}
