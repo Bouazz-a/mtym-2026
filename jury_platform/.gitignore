@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+
+# Main-site DB dumps contain personal data — never commit them.
+*.sql
+*.dump
+!backend/prisma/migrations/**/migration.sql
