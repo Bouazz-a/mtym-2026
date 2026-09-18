@@ -1,0 +1,253 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Open+Sans:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #faf7ee;
+  --paper-2: #f0ebdc;
+  --surface: #ffffff;
+  --forest: #122019;
+  --forest-soft: #244b3a;
+  --saffron: #f6a806;
+  --saffron-dark: #c8870d;
+  --sage: #629f73;
+  --sage-dark: #244b3a;
+  --clay: #b23b1b;
+  --ink: #122019;
+  --ink-soft: #4a5550;
+  --ink-faint: #8a9290;
+  --border: #e1dcc9;
+}
+
+body {
+  /* Global 133% zoom — scales the entire UI *and* the fixed particle
+     canvas uniformly, reflowing like native browser zoom. */
+  zoom: 1.33;
+  color: var(--ink);
+  font-family: "Open Sans", system-ui, sans-serif;
+  background-color: var(--paper);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 90% 70% at 50% 50%,
+      rgba(212, 175, 55, 0.09) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 90% 75% at 50% 50%,
+      rgba(18, 32, 25, 0.05) 0%,
+      transparent 70%
+    );
+  background-repeat: no-repeat;
+  background-size:
+    180% 160%,
+    180% 170%;
+  background-position:
+    85% 10%,
+    15% 90%;
+  animation: ambient-warmth 16s ease-in-out infinite;
+}
+
+#root,
+.app-shell {
+  background-color: transparent;
+  background-image: none;
+}
+/* Make the app content sit above the fixed atmosphere layers */
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: var(--saffron);
+  color: var(--forest);
+}
+
+/* Typography helpers (matching the old platform) */
+.font-mont {
+  font-family: "Montserrat", system-ui, sans-serif;
+}
+.font-open {
+  font-family: "Open Sans", system-ui, sans-serif;
+}
+.text-tiny {
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+.text-micro {
+  font-size: 9.5px;
+  line-height: 1.4;
+}
+
+/* Button hover effect */
+.btn-fx {
+  transition: all 150ms;
+}
+.btn-fx:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(18, 32, 25, 0.08);
+}
+.btn-fx:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Focus ring on inputs */
+.focus-ring:focus {
+  border-color: var(--saffron) !important;
+  box-shadow: 0 0 0 3px rgba(246, 168, 6, 0.18);
+  outline: none;
+}
+
+/* Hover row (for tables) */
+.hover-row:hover {
+  background: rgba(18, 32, 25, 0.04);
+}
+
+.clip-triangle-tr {
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.diamond-marker {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--forest);
+  transform: rotate(45deg);
+}
+
+/* Brutal card hover lift */
+.brutal-hover {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms;
+}
+.brutal-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 4px 4px 0 0 var(--forest) !important;
+}
+
+/* ── Modal overlay + dialog ── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 32, 25, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+  animation: backdropIn 160ms ease-out;
+}
+.modal-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 101;
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  background: var(--surface);
+  border: 2px solid var(--forest);
+  box-shadow: 6px 6px 0 0 var(--forest);
+  animation: dialogIn 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ── Popover (account menu) ── */
+.popover {
+  position: absolute;
+  z-index: 60;
+  background: var(--surface);
+  border: 2px solid var(--forest);
+  box-shadow: 4px 4px 0 0 var(--forest);
+  animation: popIn 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ambient-warmth {
+  0% {
+    background-position:
+      85% 10%,
+      15% 90%;
+  }
+  50% {
+    background-position:
+      60% 6%,
+      25% 94%;
+  }
+  100% {
+    background-position:
+      85% 10%,
+      15% 90%;
+  }
+}
+
+/* Brutal table */
+.brutal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "Montserrat", sans-serif;
+}
+.brutal-table thead tr {
+  background: var(--forest-soft);
+  color: var(--paper);
+}
+.brutal-table th {
+  text-align: left;
+  padding: 12px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+.brutal-table td {
+  padding: 12px;
+  border-right: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.brutal-table tbody tr {
+  transition: background 150ms;
+}
+.brutal-table tbody tr:hover {
+  background: rgba(18, 32, 25, 0.04);
+}

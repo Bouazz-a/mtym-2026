@@ -71,6 +71,7 @@ router.post("/:id/reset-password", async (req, res, next) => {
 });
 
 // DELETE /api/accounts/:id — refused (409) while the account has evaluations
+// or sits in a duo
 router.delete("/:id", async (req, res, next) => {
   try {
     if (req.params.id === req.user!.id) {
@@ -78,11 +79,14 @@ router.delete("/:id", async (req, res, next) => {
     }
     const account = await db.account.findUnique({
       where: { id: req.params.id },
-      include: { _count: { select: { reportEvaluations: true, oralEvaluations: true } } },
+      include: { _count: { select: { reportEvaluations: true, oralEvaluations: true, duoSeats: true } } },
     });
     if (!account) throw new NotFoundError("Account not found");
     if (account._count.reportEvaluations + account._count.oralEvaluations > 0) {
       throw new ConflictError("Ce juré a déjà saisi des notes — son compte ne peut pas être supprimé");
+    }
+    if (account._count.duoSeats > 0) {
+      throw new ConflictError("Ce juré fait partie d'un duo — retirez-le d'abord de son duo");
     }
     await db.account.delete({ where: { id: account.id } });
     res.status(204).send();
