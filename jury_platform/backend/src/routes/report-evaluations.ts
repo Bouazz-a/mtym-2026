@@ -8,7 +8,8 @@ import { ForbiddenError } from "../utils/errors";
 
 const router = Router();
 
-// Final report of the problem a team defends, graded by its pool's jurors.
+// Final report of the problem a team defends, graded by the duo judging
+// the passage where it defends.
 const EvalSchema = z.object({
   teamId: z.string().uuid(),
   problemNumber: z.number().int().min(1).max(4),

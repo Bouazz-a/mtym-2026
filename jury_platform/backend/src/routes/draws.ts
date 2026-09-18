@@ -41,7 +41,8 @@ async function assertNotGraded(centerDayId: string) {
 }
 
 // PUT /api/center-days/:id/draw — replace the day's pools with a draw
-// computed by the admin UI. Pool jurors must be re-entered afterwards.
+// computed by the admin UI. The day's duos stay, but the new passages have
+// no duo yet.
 router.put("/:id/draw", async (req, res, next) => {
   try {
     const { pools } = DrawSchema.parse(req.body);

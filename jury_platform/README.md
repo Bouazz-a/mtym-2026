@@ -17,7 +17,19 @@ npx prisma migrate dev                    # applies prisma/migrations
 npm run db:seed                           # default grading criteria
 npm run create-admin -- you@example.com Prénom Nom
 npm run dev                               # http://localhost:3001/api/health
+
+# in another terminal
+cd frontend
+npm install
+npm run dev                               # http://localhost:5173 (proxies /api to :3001)
 ```
+
+The frontend calls the API on its own origin (`/api`). If the backend
+listens on another port, start Vite with
+`API_PROXY_TARGET=http://localhost:<port> npm run dev`.
+
+Checks: `npm run lint`, `npx tsc -b` and `npm test` (pool draw rules) in
+`frontend/`; `npm run typecheck` in `backend/`.
 
 ## Importing teams from the main site
 

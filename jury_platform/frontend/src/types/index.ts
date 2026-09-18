@@ -1,0 +1,113 @@
+// Shapes returned by the jury platform API (jury_platform/backend).
+
+export type Role = "admin" | "jury";
+export type Center =
+  | "casablanca"
+  | "rabat"
+  | "martil"
+  | "benguerir"
+  | "agadir"
+  | "fez"
+  | "oujda"
+  | "online";
+export type PassageRole = "defender" | "opponent" | "reporter" | "extra";
+export type EvaluationType = "report" | "oral";
+export type Round = 1 | 2; // qualifs are round 1; round 2 only exists in the finale
+
+// ================== Accounts ==================
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: Role;
+}
+
+export interface Account extends AuthUser {
+  phone: string | null;
+  createdAt: string;
+}
+
+// How a juror appears in a duo
+export type Juror = Pick<Account, "id" | "firstName" | "lastName" | "email">;
+
+// Two jurors who judge together for a whole center day; each passage of
+// that day gets one duo.
+export interface JuryDuo {
+  id: string;
+  centerDayId: string;
+  number: number; // "Duo 1", "Duo 2"… within the day
+  members: Juror[];
+}
+
+// ================== Teams ==================
+
+export interface TeamMember {
+  firstName: string;
+  lastName: string;
+}
+
+export interface Team {
+  id: string;
+  sourceId: number; // team id on the main site
+  name: string;
+  quadrigram: string;
+  center: Center;
+  members: TeamMember[];
+  centerDayId: string | null;
+  reports: { id: string; problemNumber: number }[]; // FINAL reports submitted
+}
+
+export interface CenterDay {
+  id: string;
+  center: Center;
+  date: string; // "YYYY-MM-DD"
+  _count: { teams: number; pools: number };
+}
+
+// ================== Tournament ==================
+
+export interface Pool {
+  id: string;
+  label: string;
+  round: Round;
+  centerDayId?: string | null; // null only for future finale pools
+}
+
+export interface Passage {
+  id: string;
+  label: string;
+  problemNumber: number; // 1..4
+  poolId: string;
+  defenderTeamId: string;
+  opponentTeamId: string;
+  reporterTeamId: string;
+  extraTeamId?: string | null; // observer — pools of 4 only
+  timeSlot?: string | null; // "HH:MM"
+  room?: string | null;
+}
+
+// A passage as returned by the API, with its judging duo
+export interface PassageDetails extends Passage {
+  duo: JuryDuo | null;
+}
+
+// GET /api/pools
+export interface PoolDetails extends Pool {
+  centerDay: Omit<CenterDay, "_count"> | null;
+  passages: PassageDetails[];
+}
+
+// ================== Grading ==================
+
+export interface Criterion {
+  id: string;
+  label: string;
+  coefficient: number; // may be negative (malus)
+  type: EvaluationType;
+  role?: PassageRole | null; // oral only
+  problemNumber?: number | null; // report only — 1..4
+  theme?: string | null; // grouping label, e.g. "Débat", "Malus"
+  order: number;
+}

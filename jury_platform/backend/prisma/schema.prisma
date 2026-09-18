@@ -50,7 +50,7 @@ model Account {
   role         Role
   createdAt    DateTime @default(now())
 
-  poolSeats         PoolJuror[]
+  duoSeats          DuoMember[]
   reportEvaluations ReportEvaluation[]
   oralEvaluations   OralEvaluation[]
 }
@@ -64,6 +64,7 @@ model CenterDay {
 
   teams Team[]
   pools Pool[]
+  duos  JuryDuo[]
 
   @@unique([center, date])
 }
@@ -106,19 +107,32 @@ model Pool {
   round       Int     @default(1) // qualifs are single-round; kept for the finale
   centerDayId String? // null only for future finale pools
 
-  centerDay CenterDay?  @relation(fields: [centerDayId], references: [id], onDelete: Cascade)
+  centerDay CenterDay? @relation(fields: [centerDayId], references: [id], onDelete: Cascade)
   passages  Passage[]
-  jurors    PoolJuror[]
 }
 
-model PoolJuror {
-  poolId    String
+// Two jurors who judge together for a whole day; each passage gets one duo.
+// A juror sits in at most one duo per day (enforced by the duos route).
+model JuryDuo {
+  id          String @id @default(uuid())
+  centerDayId String
+  number      Int // "Duo 1", "Duo 2"… within the day
+
+  centerDay CenterDay   @relation(fields: [centerDayId], references: [id], onDelete: Cascade)
+  members   DuoMember[]
+  passages  Passage[]
+
+  @@unique([centerDayId, number])
+}
+
+model DuoMember {
+  duoId     String
   accountId String
 
-  pool    Pool    @relation(fields: [poolId], references: [id], onDelete: Cascade)
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  duo     JuryDuo @relation(fields: [duoId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id])
 
-  @@id([poolId, accountId])
+  @@id([duoId, accountId])
 }
 
 model Passage {
@@ -132,12 +146,14 @@ model Passage {
   extraTeamId    String?
   timeSlot       String? // "HH:MM"
   room           String?
+  duoId          String? // the duo judging this passage
 
   pool            Pool             @relation(fields: [poolId], references: [id], onDelete: Cascade)
   defender        Team             @relation("PassageDefender", fields: [defenderTeamId], references: [id])
   opponent        Team             @relation("PassageOpponent", fields: [opponentTeamId], references: [id])
   reporter        Team             @relation("PassageReporter", fields: [reporterTeamId], references: [id])
   extra           Team?            @relation("PassageExtra", fields: [extraTeamId], references: [id])
+  duo             JuryDuo?         @relation(fields: [duoId], references: [id], onDelete: SetNull)
   oralEvaluations OralEvaluation[]
 }
 
@@ -154,7 +170,8 @@ model Criterion {
   order         Int
 }
 
-// One per (juror × team × defended problem) — graded by the pool's jurors.
+// One per (juror × team × defended problem) — graded by the duo of the
+// passage where the team defends.
 model ReportEvaluation {
   id            String  @id @default(uuid())
   juryId        String

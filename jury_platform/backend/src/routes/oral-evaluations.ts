@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { authenticate, requireRole } from "../middleware/auth";
-import { isPoolJuror } from "../services/access";
+import { isPassageJuror } from "../services/access";
 import { GradesSchema, assertCriteriaApply } from "../services/grading";
 import { roleOf } from "../services/passages";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors";
@@ -41,8 +41,8 @@ router.post("/", authenticate, requireRole("jury"), async (req, res, next) => {
 
     const passage = await db.passage.findUnique({ where: { id: evalData.passageId } });
     if (!passage) throw new NotFoundError("Passage not found");
-    if (!(await isPoolJuror(user.id, passage.poolId))) {
-      throw new ForbiddenError("Vous n'êtes pas juré de cette poule");
+    if (!(await isPassageJuror(user.id, passage.id))) {
+      throw new ForbiddenError("Votre duo ne juge pas ce passage");
     }
 
     const role = roleOf(passage, evalData.teamId);

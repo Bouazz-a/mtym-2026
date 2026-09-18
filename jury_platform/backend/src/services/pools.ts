@@ -1,20 +1,23 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "../db";
+import { duoInclude, toDuoResponse } from "./duos";
 
 export const poolInclude = {
   centerDay: true,
-  passages: { orderBy: { label: "asc" } },
-  jurors: {
-    select: { account: { select: { id: true, firstName: true, lastName: true, email: true } } },
-    orderBy: { account: { lastName: "asc" } },
+  passages: {
+    include: { duo: { include: duoInclude } },
+    orderBy: { label: "asc" },
   },
 } satisfies Prisma.PoolInclude;
 
 type PoolRow = Prisma.PoolGetPayload<{ include: typeof poolInclude }>;
 
-// Flattens the PoolJuror join rows into a plain `jurors: Account[]`.
-export function toPoolResponse({ jurors, ...pool }: PoolRow) {
-  return { ...pool, jurors: jurors.map((j) => j.account) };
+// Each passage carries its judging duo (or null) with the duo's jurors.
+export function toPoolResponse({ passages, ...pool }: PoolRow) {
+  return {
+    ...pool,
+    passages: passages.map(({ duo, ...p }) => ({ ...p, duo: duo && toDuoResponse(duo) })),
+  };
 }
 
 export async function findPools(where: Prisma.PoolWhereInput) {
