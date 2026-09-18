@@ -4,7 +4,7 @@ import { db } from "../db";
 import { adminOnly } from "../middleware/auth";
 import { publicAccountSelect } from "../types";
 import { generatePassword, hashPassword } from "../utils/passwords";
-import { BadRequestError, NotFoundError } from "../utils/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
 router.use(...adminOnly);
@@ -76,8 +76,14 @@ router.delete("/:id", async (req, res, next) => {
     if (req.params.id === req.user!.id) {
       throw new BadRequestError("Vous ne pouvez pas supprimer votre propre compte");
     }
-    const account = await db.account.findUnique({ where: { id: req.params.id } });
+    const account = await db.account.findUnique({
+      where: { id: req.params.id },
+      include: { _count: { select: { reportEvaluations: true, oralEvaluations: true } } },
+    });
     if (!account) throw new NotFoundError("Account not found");
+    if (account._count.reportEvaluations + account._count.oralEvaluations > 0) {
+      throw new ConflictError("Ce juré a déjà saisi des notes — son compte ne peut pas être supprimé");
+    }
     await db.account.delete({ where: { id: account.id } });
     res.status(204).send();
   } catch (err) { next(err); }

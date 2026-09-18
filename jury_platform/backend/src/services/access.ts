@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "../db";
+import { teamsOf } from "./passages";
 
 // Passages in which the team plays any role.
 function passagesOfTeam(teamId: string): Prisma.PassageWhereInput {
@@ -19,20 +20,17 @@ export async function isTeamInPool(teamId: string): Promise<boolean> {
   return (await db.passage.count({ where: passagesOfTeam(teamId) })) > 0;
 }
 
+export async function isPoolJuror(accountId: string, poolId: string): Promise<boolean> {
+  return (await db.poolJuror.count({ where: { accountId, poolId } })) > 0;
+}
+
 // Teams a juror may see: every team of every pool they sit on.
 export async function juryTeamIds(accountId: string): Promise<string[]> {
   const passages = await db.passage.findMany({
     where: { pool: { jurors: { some: { accountId } } } },
     select: { defenderTeamId: true, opponentTeamId: true, reporterTeamId: true, extraTeamId: true },
   });
-  const ids = new Set<string>();
-  for (const p of passages) {
-    ids.add(p.defenderTeamId);
-    ids.add(p.opponentTeamId);
-    ids.add(p.reporterTeamId);
-    if (p.extraTeamId) ids.add(p.extraTeamId);
-  }
-  return [...ids];
+  return [...new Set(passages.flatMap(teamsOf))];
 }
 
 // A juror grades (and so may read) a team's report only for the problem
@@ -50,4 +48,14 @@ export async function juryCanAccessReport(
     },
   });
   return count > 0;
+}
+
+// Once any grade exists for a day, its pools are frozen: redrawing or
+// swapping teams would detach those grades from the lineup they were given for.
+export async function isDayGraded(centerDayId: string): Promise<boolean> {
+  const [oral, report] = await Promise.all([
+    db.oralEvaluation.count({ where: { passage: { pool: { centerDayId } } } }),
+    db.reportEvaluation.count({ where: { team: { centerDayId } } }),
+  ]);
+  return oral + report > 0;
 }

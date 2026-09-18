@@ -7,6 +7,7 @@
 // team id (sourceId), and only names are kept from `users`.
 import "dotenv/config";
 import { Center, PrismaClient } from "@prisma/client";
+import { teamsOf } from "../src/services/passages";
 
 const SOURCE_DB = "mainsite_import";
 const CENTERS = new Set<string>(Object.values(Center));
@@ -90,10 +91,7 @@ async function main() {
       select: { defenderTeamId: true, opponentTeamId: true, reporterTeamId: true, extraTeamId: true },
     });
     const graded = await db.reportEvaluation.findMany({ select: { teamId: true }, distinct: ["teamId"] });
-    const locked = new Set<string>([
-      ...passages.flatMap((p) => [p.defenderTeamId, p.opponentTeamId, p.reporterTeamId, p.extraTeamId ?? ""]),
-      ...graded.map((g) => g.teamId),
-    ]);
+    const locked = new Set<string>([...passages.flatMap(teamsOf), ...graded.map((g) => g.teamId)]);
 
     const existing = new Map((await db.team.findMany()).map((t) => [t.sourceId, t]));
     const stats = { created: 0, updated: 0, reports: 0, withoutFinal: 0, removed: 0 };
