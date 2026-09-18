@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "create-admin": "tsx scripts/create-admin.ts",
+    "import:teams": "tsx scripts/import-teams.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
@@ -18,6 +19,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1135.0",
+    "@aws-sdk/s3-request-presigner": "^3.1135.0",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.2",
     "dotenv": "^17.2.3",
