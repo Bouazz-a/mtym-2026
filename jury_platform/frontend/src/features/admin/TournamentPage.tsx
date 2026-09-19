@@ -123,7 +123,7 @@ function DaysSection({ center, days, withoutDay }: { center: Center; days: Cente
       />
       {error && <div className="mb-4"><Alert>{error}</Alert></div>}
       <BrutalCard className="overflow-hidden">
-        <ul>
+        <ul className="striped-rows">
           {days.map((day, i) => (
             <DayRow key={day.id} day={day} index={i} />
           ))}
@@ -152,7 +152,7 @@ function DayRow({ day, index }: { day: CenterDay; index: number }) {
   const hasPools = day._count.pools > 0;
 
   return (
-    <li className="px-4 py-3 hover-row transition-colors" style={{ borderBottom: "1px solid var(--border)" }}>
+    <li className="px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
       <div className="flex items-center gap-4 flex-wrap">
         <Badge tone="dark">J{index + 1}</Badge>
         <span className="font-mont" style={{ color: "var(--forest)", fontWeight: 900, minWidth: 120 }}>

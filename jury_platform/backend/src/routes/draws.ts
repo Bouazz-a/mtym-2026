@@ -21,6 +21,7 @@ const DrawSchema = z.object({
       opponentTeamId: z.string().uuid(),
       reporterTeamId: z.string().uuid(),
       extraTeamId: z.string().uuid().nullable().optional(),
+      timeSlot: z.string().regex(/^\d{2}:\d{2}$/, "Heure au format HH:MM").nullable().optional(),
     })),
   })).min(1),
 });

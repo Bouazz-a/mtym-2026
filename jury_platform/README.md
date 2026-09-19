@@ -47,6 +47,12 @@ these columns are read, so an export limited to them is enough:
 scripts/import-dump.sh path/to/dump.sql     # or a pg_dump -Fc .dump file
 ```
 
+Reports: for each team and problem the jury grades the **final** report when
+there is one, otherwise the **intermediate** one (it stands in until the finals
+are submitted — a plain re-import then switches to them). Force one type with
+`--reports final` (e.g. on competition day, so nobody is graded on an
+intermediate report) or `--reports intermediate`.
+
 It imports the teams that are `APPROVED`, whose intermediate report is `PASS`
 and that have a qualification center, with their members' names and their
 FINAL reports. Re-run it with a newer dump at any time: teams are matched on

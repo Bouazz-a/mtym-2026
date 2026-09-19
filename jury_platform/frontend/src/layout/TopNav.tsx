@@ -31,8 +31,9 @@ export function TopNav() {
       <div className="h-full max-w-[1600px] mx-auto px-6 lg:px-12 flex items-center justify-between">
         <button onClick={() => navigate("/")} className="flex items-center gap-3 group" aria-label="Accueil">
           <MtymLogo size={22} />
+          {/* Hidden between xl and 1400px, where the inline links need its room */}
           <div
-            className="hidden sm:block font-mont text-micro uppercase tracking-[0.22em] pl-3"
+            className="hidden sm:block xl:hidden min-[1400px]:block font-mont text-micro uppercase tracking-[0.22em] pl-3"
             style={{
               color: "rgba(244,236,216,0.55)",
               fontWeight: 500,
@@ -43,7 +44,9 @@ export function TopNav() {
           </div>
         </button>
 
-        <div className="hidden lg:flex items-center gap-7">
+        {/* Inline from xl: below, the zoomed page is too narrow and the links
+            live in the account menu */}
+        <div className="hidden xl:flex items-center gap-6">
           {items.map((item) => (
             <NavItemLink key={item.to} item={item} />
           ))}
@@ -96,7 +99,7 @@ export function TopNav() {
                 </div>
                 <div className="font-open text-xs truncate" style={{ color: "var(--ink-soft)" }}>{user.email}</div>
               </div>
-              <ul className="lg:hidden py-1" style={{ borderBottom: "1px solid var(--border)" }}>
+              <ul className="xl:hidden py-1" style={{ borderBottom: "1px solid var(--border)" }}>
                 {items.map((item) => (
                   <li key={item.to}>
                     <MenuButton onClick={() => { setMenuOpen(false); navigate(item.to); }}>{item.label}</MenuButton>
@@ -125,7 +128,7 @@ function NavItemLink({ item }: { item: NavItem }) {
     <NavLink
       to={item.to}
       end={item.to === "/"}
-      className="font-mont text-tiny uppercase tracking-[0.14em] transition-colors"
+      className="font-mont text-tiny uppercase tracking-[0.14em] whitespace-nowrap transition-colors"
       style={({ isActive }) => ({
         color: isActive ? "var(--saffron)" : "rgba(244,236,216,0.62)",
         fontWeight: isActive ? 800 : 600,

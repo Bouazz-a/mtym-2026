@@ -13,8 +13,10 @@ export const NAV: Record<Role, NavItem[]> = {
     { to: "/tournoi", label: "Tournoi" },
     { to: "/jury", label: "Jury" },
     { to: "/criteres", label: "Critères" },
+    { to: "/notes", label: "Notes" },
+    { to: "/comptes", label: "Comptes" },
   ],
-  jury: [{ to: "/", label: "Tableau de bord" }],
+  jury: [{ to: "/", label: "Mes passages" }],
 };
 
 export const ROLE_LABEL: Record<Role, string> = { admin: "Administration", jury: "Jury" };

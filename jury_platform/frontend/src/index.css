@@ -19,15 +19,29 @@
   --ink-soft: #4a5550;
   --ink-faint: #8a9290;
   --border: #e1dcc9;
+  --row-alt: #f2f3f2; /* zebra stripe */
+  --row-hover: #e7eae8; /* clickable row under the pointer */
+  /* Page zoom (see below) — viewport-based sizes divide by it, because the
+     zoom also scales vh/vw inside the page. */
+  --zoom: 1;
 }
 
 body {
-  /* Global 133% zoom — scales the entire UI *and* the fixed particle
-     canvas uniformly, reflowing like native browser zoom. */
-  zoom: 1.33;
   color: var(--ink);
   font-family: "Open Sans", system-ui, sans-serif;
   background-color: var(--paper);
+}
+
+/* Global 133% zoom on large screens — scales the entire UI *and* the fixed
+   particle canvas uniformly, reflowing like native browser zoom. Phones
+   keep their full width (jurors grade on them). */
+@media (min-width: 1024px) {
+  :root {
+    --zoom: 1.33;
+  }
+  body {
+    zoom: var(--zoom);
+  }
 }
 
 body::before {
@@ -113,7 +127,7 @@ body::before {
   outline: none;
 }
 
-/* Hover row (for tables) */
+/* Hover feedback for clickable list items (menus) */
 .hover-row:hover {
   background: rgba(18, 32, 25, 0.04);
 }
@@ -127,17 +141,6 @@ body::before {
   height: 6px;
   background: var(--forest);
   transform: rotate(45deg);
-}
-
-/* Brutal card hover lift */
-.brutal-hover {
-  transition:
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 180ms;
-}
-.brutal-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 4px 4px 0 0 var(--forest) !important;
 }
 
 /* ── Modal overlay + dialog ── */
@@ -156,7 +159,7 @@ body::before {
   transform: translate(-50%, -50%);
   z-index: 101;
   width: min(640px, calc(100% - 32px));
-  max-height: calc(100vh - 64px);
+  max-height: calc((100vh - 64px) / var(--zoom));
   overflow: auto;
   background: var(--surface);
   border: 2px solid var(--forest);
@@ -245,9 +248,52 @@ body::before {
   border-top: 1px solid var(--border);
   font-size: 13px;
 }
-.brutal-table tbody tr {
+/* Zebra rows, like a spreadsheet: white / light grey — tables, and lists
+   laid out as rows (.striped-rows). */
+.brutal-table tbody tr:nth-child(even),
+.striped-rows > :nth-child(even) {
+  background: var(--row-alt);
+}
+/* Tables whose rows aren't one <tr> each (expandable details) stripe by
+   hand: .row-alt on the grey ones. */
+.brutal-table--manual-stripes tbody tr:nth-child(even) {
+  background: transparent;
+}
+.brutal-table--manual-stripes tbody tr.row-alt {
+  background: var(--row-alt);
+}
+/* Only rows that do something on click react to the pointer — a hover on
+   a static row suggests an action that isn't there. */
+.brutal-table tbody tr.row-clickable {
+  cursor: pointer;
   transition: background 150ms;
 }
-.brutal-table tbody tr:hover {
-  background: rgba(18, 32, 25, 0.04);
+.brutal-table tbody tr.row-clickable:hover {
+  background: var(--row-hover);
+}
+.brutal-table tbody tr.row-clickable:focus-visible {
+  outline: 2px solid var(--saffron);
+  outline-offset: -2px;
+}
+
+/* Jury timetable: a passage cell, and the duo choices of its picker */
+.slot-cell,
+.duo-option {
+  transition: background 150ms;
+}
+.slot-cell,
+.duo-option {
+  background: var(--surface);
+}
+.duo-option[aria-checked="true"] {
+  background: rgba(98, 159, 115, 0.14);
+}
+.slot-cell:hover,
+.duo-option:hover:not(:disabled):not([aria-checked="true"]) {
+  background: var(--row-hover);
+}
+.slot-cell:focus-visible,
+.duo-option:focus-visible {
+  outline: 2px solid var(--saffron);
+  outline-offset: -2px;
 }

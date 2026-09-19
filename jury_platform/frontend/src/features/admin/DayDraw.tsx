@@ -120,8 +120,9 @@ export function DayDraw({
         }
       >
         <p className="font-open text-sm" style={{ color: "var(--ink)" }}>
-          Les poules actuelles de ce jour, leurs horaires et leurs jurés seront supprimés
-          {confirm === "redraw" ? " et remplacés par un nouveau tirage" : ""}. Impossible une fois des notes saisies.
+          Les poules actuelles de ce jour et les duos attribués à leurs passages seront supprimés
+          {confirm === "redraw" ? " et remplacés par un nouveau tirage" : ""} ; les duos du jour, eux, restent.
+          Impossible une fois des notes saisies.
         </p>
       </Modal>
     </section>

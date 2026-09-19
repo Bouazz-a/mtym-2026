@@ -105,6 +105,17 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
+export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      rows={props.rows ?? 3}
+      className={`w-full px-3 py-2 text-sm font-open resize-y focus-ring ${props.className || ""}`}
+      style={{ ...INPUT_STYLE, ...props.style }}
+    />
+  );
+}
+
 // ─── Page header (unified across all role pages) ───────────────────────
 
 export function PageHeader({
@@ -149,7 +160,7 @@ export function PageHeader({
           </p>
         )}
       </div>
-      {right}
+      {right && <div className="shrink-0">{right}</div>}
     </header>
   );
 }
@@ -190,7 +201,6 @@ function DiamondMarker({ color = "var(--saffron)" }: { color?: string }) {
 interface BrutalCardProps extends HTMLAttributes<HTMLDivElement> {
   dark?: boolean;
   highlight?: boolean;
-  hoverable?: boolean;
   withCorners?: boolean;
   children: ReactNode;
 }
@@ -198,7 +208,6 @@ interface BrutalCardProps extends HTMLAttributes<HTMLDivElement> {
 export function BrutalCard({
   dark = false,
   highlight = false,
-  hoverable = false,
   withCorners = true,
   className,
   style,
@@ -213,7 +222,7 @@ export function BrutalCard({
   return (
     <div
       {...rest}
-      className={`relative overflow-hidden ${hoverable ? "brutal-hover" : ""} ${className || ""}`}
+      className={`relative overflow-hidden ${className || ""}`}
       style={{
         background: dark ? "var(--forest)" : "var(--surface)",
         color: dark ? "var(--paper)" : "var(--ink)",
@@ -332,7 +341,7 @@ export function Modal({
   children: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
-  width?: number;
+  width?: number | string; // px, or any CSS width
 }) {
   // Lock the body scroll while a modal is open.
   useEffect(() => {

@@ -3,6 +3,10 @@
 #
 #   scripts/import-dump.sh path/to/dump.sql     # plain pg_dump output
 #   scripts/import-dump.sh path/to/dump.dump    # pg_dump -Fc
+#   … --reports final|intermediate             # force one report type; by
+#                                               # default each team × problem
+#                                               # gets its final report, else
+#                                               # its intermediate one
 #
 # The dump is loaded into a throwaway database (mainsite_import) next to
 # the platform's own, the teams are copied over by backend/scripts/
@@ -10,7 +14,16 @@
 # data kept is what the import copies (teams, member names, report keys).
 set -euo pipefail
 
-DUMP="${1:?usage: scripts/import-dump.sh <dump.sql|dump.dump>}"
+DUMP="${1:?usage: scripts/import-dump.sh <dump.sql|dump.dump> [--reports auto|final|intermediate]}"
+REPORT_MODE=AUTO
+if [[ "${2:-}" == "--reports" ]]; then
+  case "${3:-}" in
+    auto) REPORT_MODE=AUTO ;;
+    final) REPORT_MODE=FINAL ;;
+    intermediate) REPORT_MODE=INTERMEDIATE ;;
+    *) echo "--reports expects auto, final or intermediate" >&2; exit 1 ;;
+  esac
+fi
 [[ -f "$DUMP" ]] || { echo "No such file: $DUMP" >&2; exit 1; }
 DUMP="$(cd "$(dirname "$DUMP")" && pwd)/$(basename "$DUMP")"
 
@@ -42,4 +55,4 @@ case "$DUMP" in
 esac
 
 echo "Importing teams…"
-(cd backend && npm run --silent import:teams)
+(cd backend && REPORT_MODE=$REPORT_MODE npm run --silent import:teams)

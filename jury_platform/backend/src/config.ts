@@ -13,7 +13,11 @@ function s3Config() {
     bucket,
     region: requiredEnv("S3_REGION"),
     endpoint: process.env.S3_ENDPOINT || undefined, // non-AWS providers (R2, Spaces, MinIO…)
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+    // Path-style URLs (endpoint/bucket/key) by default with a custom
+    // endpoint: MinIO needs them and R2/Spaces accept them.
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE
+      ? process.env.S3_FORCE_PATH_STYLE === "true"
+      : Boolean(process.env.S3_ENDPOINT),
     accessKeyId: requiredEnv("S3_ACCESS_KEY_ID"),
     secretAccessKey: requiredEnv("S3_SECRET_ACCESS_KEY"),
   };

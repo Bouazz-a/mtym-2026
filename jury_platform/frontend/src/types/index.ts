@@ -111,3 +111,32 @@ export interface Criterion {
   theme?: string | null; // grouping label, e.g. "Débat", "Malus"
   order: number;
 }
+
+// Grades are success rates in 0..1; a criterion's note is score × coefficient.
+export interface Grade {
+  id: string;
+  criterionId: string;
+  score: number;
+  remark: string | null;
+}
+
+// One per juror × passage × graded team (defender, opponent, reporter)
+export interface OralEvaluation {
+  id: string;
+  juryId: string;
+  passageId: string;
+  teamId: string;
+  role: PassageRole;
+  globalRemark: string | null;
+  grades: Grade[];
+}
+
+// One per juror × team × defended problem (the defender's report)
+export interface ReportEvaluation {
+  id: string;
+  juryId: string;
+  teamId: string;
+  problemNumber: number;
+  globalRemark: string | null;
+  grades: Grade[];
+}

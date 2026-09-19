@@ -10,6 +10,14 @@ import { Center, PrismaClient } from "@prisma/client";
 import { teamsOf } from "../src/services/passages";
 
 const SOURCE_DB = "mainsite_import";
+// Which main-site report the jury grades for each team × problem:
+//   AUTO (default)        the FINAL report when there is one, otherwise the
+//                         INTERMEDIATE one — it stands in until finals are in
+//   FINAL / INTERMEDIATE  only that type
+const REPORT_MODE = (process.env.REPORT_MODE ?? "AUTO").toUpperCase();
+if (!["AUTO", "FINAL", "INTERMEDIATE"].includes(REPORT_MODE)) {
+  throw new Error(`REPORT_MODE must be AUTO, FINAL or INTERMEDIATE, got "${REPORT_MODE}"`);
+}
 const CENTERS = new Set<string>(Object.values(Center));
 
 interface SourceTeam {
@@ -25,6 +33,7 @@ interface SourceMember {
 }
 interface SourceReport {
   teamId: number;
+  reportType: string;
   problemNumber: number | null;
   fileUrl: string | null;
 }
@@ -57,10 +66,22 @@ async function readSource(src: PrismaClient) {
     ORDER BY "lastName", "firstName"`;
 
   const reports = await src.$queryRaw<SourceReport[]>`
-    SELECT "teamId", "problemNumber", "fileUrl" FROM team_reports
-    WHERE "reportType"::text = 'FINAL' AND "teamId" = ANY(${ids})`;
+    SELECT "teamId", "reportType"::text AS "reportType", "problemNumber", "fileUrl" FROM team_reports
+    WHERE "reportType"::text IN ('FINAL', 'INTERMEDIATE') AND "teamId" = ANY(${ids})`;
 
-  return { teams, members, reports };
+  return { teams, members, reports: pickReports(reports) };
+}
+
+// One report per team × problem, following REPORT_MODE.
+function pickReports(rows: SourceReport[]): SourceReport[] {
+  if (REPORT_MODE !== "AUTO") return rows.filter((r) => r.reportType === REPORT_MODE);
+  const chosen = new Map<string, SourceReport>();
+  for (const r of rows) {
+    const key = `${r.teamId}:${r.problemNumber}`;
+    const current = chosen.get(key);
+    if (!current || (current.reportType !== "FINAL" && r.reportType === "FINAL")) chosen.set(key, r);
+  }
+  return [...chosen.values()];
 }
 
 function groupBy<T>(rows: T[], key: (row: T) => number): Map<number, T[]> {
@@ -94,7 +115,7 @@ async function main() {
     const locked = new Set<string>([...passages.flatMap(teamsOf), ...graded.map((g) => g.teamId)]);
 
     const existing = new Map((await db.team.findMany()).map((t) => [t.sourceId, t]));
-    const stats = { created: 0, updated: 0, reports: 0, withoutFinal: 0, removed: 0 };
+    const stats = { created: 0, updated: 0, removed: 0, withoutReport: 0, reports: { FINAL: 0, INTERMEDIATE: 0 } as Record<string, number> };
     const kept: string[] = [];
 
     await db.$transaction(async (tx) => {
@@ -130,7 +151,7 @@ async function main() {
 
         const reports = (reportsByTeam.get(t.id) ?? []).filter((r) => {
           if (r.problemNumber && r.problemNumber >= 1 && r.problemNumber <= 4 && r.fileUrl) return true;
-          warnings.push(`${data.quadrigram}: FINAL report with problem ${r.problemNumber} / file "${r.fileUrl}" — skipped`);
+          warnings.push(`${data.quadrigram}: ${r.reportType} report with problem ${r.problemNumber} / file "${r.fileUrl}" — skipped`);
           return false;
         });
         for (const r of reports) {
@@ -143,8 +164,8 @@ async function main() {
         await tx.teamReport.deleteMany({
           where: { teamId, problemNumber: { notIn: reports.map((r) => r.problemNumber!) } },
         });
-        stats.reports += reports.length;
-        if (!reports.length) stats.withoutFinal++;
+        for (const r of reports) stats.reports[r.reportType]++;
+        if (!reports.length) stats.withoutReport++;
       }
 
       // Teams that are no longer eligible on the main site
@@ -166,7 +187,8 @@ async function main() {
     console.log(`Eligible teams in the dump: ${teams.length}`);
     console.log(`  ${[...perCenter].sort().map(([c, n]) => `${c} ${n}`).join(" · ")}`);
     console.log(`Teams: ${stats.created} created, ${stats.updated} updated, ${stats.removed} removed (no longer eligible)`);
-    console.log(`Final reports: ${stats.reports} imported — ${stats.withoutFinal} team(s) have none yet`);
+    const { FINAL, INTERMEDIATE } = stats.reports;
+    console.log(`Reports graded (mode ${REPORT_MODE.toLowerCase()}): ${FINAL + INTERMEDIATE} — ${FINAL} final, ${INTERMEDIATE} intermediate — ${stats.withoutReport} team(s) have none yet`);
     if (kept.length) {
       console.log(`Kept although no longer eligible (already drawn or graded): ${kept.join(", ")}`);
     }
