@@ -1,6 +1,7 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
+import { config } from "../config";
 import { db } from "../db";
 import { authenticate, signToken } from "../middleware/auth";
 import { audit } from "../services/audit";
@@ -10,11 +11,15 @@ import { BadRequestError, UnauthorizedError } from "../utils/errors";
 
 const router = Router();
 
+// Keyed on the visitor's IP. In production Cloudflare then Caddy sit in
+// front, so the socket address is a proxy's: CLIENT_IP_HEADER names the
+// header holding the real one (cf-connecting-ip).
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 10,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  keyGenerator: (req) => (config.clientIpHeader && req.get(config.clientIpHeader)) || req.ip || "unknown",
   message: { error: "Trop de tentatives, réessayez dans une minute" },
 });
 

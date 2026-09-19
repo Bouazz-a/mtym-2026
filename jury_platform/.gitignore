@@ -5,4 +5,5 @@ dist/
 # Main-site DB dumps contain personal data — never commit them.
 *.sql
 *.dump
+backups/
 !backend/prisma/migrations/**/migration.sql

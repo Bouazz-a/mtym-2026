@@ -1,15 +1,16 @@
 # MTYM jury platform
 
 Jury and admin platform for the MTYM qualifications, served at
-`jury.mtym.mathmaroc.org`. Jurors grade final reports and oral passages;
-admins import teams, draw pools per center/day and assign 2 jurors per pool.
+`mtym-jury.mathmaroc.org`. Jurors grade the reports and the oral passages;
+admins import teams, draw pools per center and day, form jury duos and give
+each passage a duo. Deployment: see [DEPLOY.md](DEPLOY.md).
 
 ## Local development
 
 ```bash
 cp .env.example .env                      # compose: database credentials
 cp backend/.env.example backend/.env      # backend: DATABASE_URL, JWT_SECRET
-docker compose up -d db
+docker compose up -d db                   # only the database in dev (not the backup service)
 
 cd backend
 npm install
@@ -26,7 +27,8 @@ npm run dev                               # http://localhost:5173 (proxies /api 
 
 The frontend calls the API on its own origin (`/api`). If the backend
 listens on another port, start Vite with
-`API_PROXY_TARGET=http://localhost:<port> npm run dev`.
+`API_PROXY_TARGET=http://127.0.0.1:<port> npm run dev`. The backend listens
+on 127.0.0.1 unless `HOST` says otherwise.
 
 Checks: `npm run lint`, `npx tsc -b` and `npm test` (pool draw rules) in
 `frontend/`; `npm run typecheck` in `backend/`.
@@ -45,6 +47,7 @@ these columns are read, so an export limited to them is enough:
 
 ```bash
 scripts/import-dump.sh path/to/dump.sql     # or a pg_dump -Fc .dump file
+scripts/import-from-mainsite.sh             # on the server: straight from the main site's database
 ```
 
 Reports: for each team and problem the jury grades the **final** report when
