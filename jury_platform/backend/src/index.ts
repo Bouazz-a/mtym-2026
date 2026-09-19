@@ -14,6 +14,6 @@ app.use(express.json());
 app.use("/api", apiRouter);
 app.use(errorHandler);
 
-app.listen(config.port, () => {
-  console.log(`MTYM jury backend running on http://localhost:${config.port}`);
+app.listen(config.port, config.host, () => {
+  console.log(`MTYM jury backend running on http://${config.host}:${config.port}`);
 });

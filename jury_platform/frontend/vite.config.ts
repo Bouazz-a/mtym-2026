@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 
 // The app calls the API on its own origin (/api). In production Caddy
 // routes /api to the backend; in dev this proxy does the same.
-const apiTarget = process.env.API_PROXY_TARGET ?? 'http://localhost:3001'
+const apiTarget = process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3001'
 
 export default defineConfig({
   plugins: [react()],

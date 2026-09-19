@@ -25,6 +25,12 @@ function s3Config() {
 
 export const config = {
   port: parseInt(process.env.PORT ?? "3001", 10),
+  // Loopback by default: in production Caddy is the only way in (the
+  // server's firewall is off, so anything on 0.0.0.0 would be public).
+  host: process.env.HOST || "127.0.0.1",
+  // Header carrying the visitor's IP when proxies sit in front, e.g.
+  // cf-connecting-ip behind Cloudflare. Unset: the socket / X-Forwarded-For.
+  clientIpHeader: process.env.CLIENT_IP_HEADER?.trim().toLowerCase() || undefined,
   databaseUrl: requiredEnv("DATABASE_URL"),
   jwtSecret: requiredEnv("JWT_SECRET"),
   s3: s3Config(),

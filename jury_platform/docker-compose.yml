@@ -7,8 +7,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-mtym_jury}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in jury_platform/.env}
     # Loopback only — reachable by the local backend, never from outside.
+    # (5432 is the main site's database on the server.)
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:${DB_PORT:-5434}:5432"
     volumes:
       # postgres >= 18 keeps its data under /var/lib/postgresql/<major>/
       - pgdata:/var/lib/postgresql
@@ -17,6 +18,29 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Daily dumps into BACKUP_DIR, with the same image and settings as the
+  # main site's mtym_db_backup (7 daily, 4 weekly, 6 monthly). The server
+  # starts it with `docker compose up -d`; in dev only `db` is started.
+  backup:
+    image: prodrigestivill/postgres-backup-local:18
+    restart: unless-stopped
+    user: postgres:postgres
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-mtym_jury}
+      POSTGRES_USER: ${POSTGRES_USER:-mtym_jury}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
 
 volumes:
   pgdata:
