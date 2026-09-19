@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "../db";
+import type { ScheduleSlot } from "./schedule";
 
 // A duo = two jurors who judge together for a whole day. Each passage of
 // that day gets one duo.
@@ -40,11 +41,12 @@ export async function isDuoGraded(duoId: string): Promise<boolean> {
 // Scheduling hints for a duo's passages — never blocking:
 //   · the same duo on 2+ passages of one pool (a duo should judge at most
 //     one passage per pool)
-//   · the same duo on 2+ passages at the same time slot
+//   · the same duo on 2+ passages of the same slot (the day's pools play
+//     their passage n in parallel)
 export async function duoPassageWarnings(duoId: string): Promise<string[]> {
   const duo = await db.juryDuo.findUnique({
     where: { id: duoId },
-    include: { passages: { include: { pool: true }, orderBy: { label: "asc" } } },
+    include: { passages: { include: { pool: true }, orderBy: { label: "asc" } }, centerDay: true },
   });
   if (!duo) return [];
 
@@ -55,10 +57,12 @@ export async function duoPassageWarnings(duoId: string): Promise<string[]> {
       warnings.push(`Duo ${duo.number} juge ${passages.length} passages de la poule ${poolLabel} (${passages.map((p) => p.label).join(", ")})`);
     }
   }
-  const bySlot = Map.groupBy(duo.passages.filter((p) => p.timeSlot), (p) => p.timeSlot!);
+  const schedule = duo.centerDay.schedule as unknown as ScheduleSlot[];
+  const bySlot = Map.groupBy(duo.passages, (p) => p.slot);
   for (const [slot, passages] of bySlot) {
     if (passages.length > 1) {
-      warnings.push(`Duo ${duo.number} a ${passages.length} passages à ${slot} (${passages.map((p) => p.label).join(", ")})`);
+      const time = schedule[slot - 1]?.start ?? `créneau ${slot}`;
+      warnings.push(`Duo ${duo.number} a ${passages.length} passages à ${time} (${passages.map((p) => p.label).join(", ")})`);
     }
   }
   return warnings;

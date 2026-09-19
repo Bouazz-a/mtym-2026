@@ -42,6 +42,12 @@ describe("column filters", () => {
     expect(ids(filterAndSort(rows, [note], {}, { key: "note", dir: "desc" }))).toEqual(["d", "a", "c", "b"]);
   });
 
+  it("sorts text columns alphabetically", () => {
+    const who: FilterColumn<Row> = { key: "who", label: "Qui", value: (r) => r.id.toUpperCase(), text: (r) => r.id };
+    expect(ids(filterAndSort(rows, [who], {}, { key: "who", dir: "desc" }))).toEqual(["d", "c", "b", "a"]);
+    expect(distinctValues(rows, who)).toEqual(["a", "b", "c", "d"]);
+  });
+
   it("lists distinct values, empty first then ascending", () => {
     expect(distinctValues([...rows, { id: "e", note: 3 }], note)).toEqual(["", "3", "7.5", "9"]);
   });

@@ -4,12 +4,13 @@ import { ROLE_PALETTE } from "@/features/shared/widgets";
 import { updatePassage } from "@/lib/repositories/poolRepository";
 import { QUALIFS_PROBLEMS } from "@/lib/services/tournamentOptimizer";
 import type { Passage, PoolDetails, Team } from "@/types";
+import { slotTime } from "@/utils/schedule";
 import { hasFinalReport } from "@/utils/teams";
 import { repeatedDuos } from "@/utils/duos";
 import { useAction, TOURNAMENT_QUERIES } from "./useAction";
 
 // A drawn pool: its passages with their jury duo, each passage editable
-// (schedule, or a manual lineup fix). Duos are assigned on the Jury page.
+// (room, or a manual lineup fix). Duos and hours are set on the Jury page.
 
 export function PoolCard({ pool, teamById }: { pool: PoolDetails; teamById: Map<string, Team> }) {
   const [editing, setEditing] = useState<Passage | null>(null);
@@ -85,8 +86,8 @@ export function PoolCard({ pool, teamById }: { pool: PoolDetails; teamById: Map<
                     </span>
                   </td>
                   <td>
-                    <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>
-                      {[p.timeSlot, p.room].filter(Boolean).join(" · ") || "—"}
+                    <span className="font-mont text-micro uppercase tracking-widest tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>
+                      {[slotTime(pool.centerDay, p.slot)?.start, p.room].filter(Boolean).join(" · ") || "—"}
                     </span>
                   </td>
                   <td>
@@ -163,7 +164,6 @@ function PassageEditModal({
         opponentTeamId: draft.opponentTeamId,
         reporterTeamId: draft.reporterTeamId,
         extraTeamId: draft.extraTeamId ?? null,
-        timeSlot: draft.timeSlot || null,
         room: draft.room?.trim() || null,
       }),
     );
@@ -205,15 +205,12 @@ function PassageEditModal({
               {QUALIFS_PROBLEMS.map((n) => <option key={n} value={n}>Problème {n}</option>)}
             </Select>
           </Field>
-          <Field label="Horaire">
-            <Input type="time" value={draft.timeSlot ?? ""} onChange={(e) => set("timeSlot", e.target.value)} />
-          </Field>
           <Field label="Salle">
             <Input value={draft.room ?? ""} placeholder="Amphi A" onChange={(e) => set("room", e.target.value)} />
           </Field>
         </div>
         <p className="font-open text-xs" style={{ color: "var(--ink-faint)" }}>
-          Une fois le passage noté, seuls l'horaire et la salle peuvent encore changer.
+          L'horaire suit le planning du jour (page Jury). Une fois le passage noté, seule la salle peut encore changer.
         </p>
       </div>
     </Modal>

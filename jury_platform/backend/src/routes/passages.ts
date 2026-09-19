@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { adminOnly, authenticate } from "../middleware/auth";
 import { isPassageJuror } from "../services/access";
+import { audit } from "../services/audit";
 import { duoInclude, duoPassageWarnings, toDuoResponse } from "../services/duos";
 import { teamsOf } from "../services/passages";
 import { toPoolResponse, poolInclude } from "../services/pools";
@@ -27,10 +28,9 @@ router.get("/:id", authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Schedule fields round-trip as null from a fetched passage, so null is
-// accepted (and means "clear").
+// The room round-trips as null from a fetched passage, so null is accepted
+// (and means "clear"). The time comes from the day's schedule.
 const UpdateSchema = z.object({
-  timeSlot: z.string().regex(/^\d{2}:\d{2}$/, "Heure au format HH:MM").nullable().optional(),
   room: z.string().trim().nullable().optional(),
   problemNumber: z.number().int().min(1).max(4).optional(),
   defenderTeamId: z.string().uuid().optional(),
@@ -39,8 +39,8 @@ const UpdateSchema = z.object({
   extraTeamId: z.string().uuid().nullable().optional(),
 });
 
-// PUT /api/passages/:id — schedule, or a manual lineup correction. The
-// lineup (problem + roles) is frozen once the passage has been graded.
+// PUT /api/passages/:id — room, or a manual lineup correction. The lineup
+// (problem + roles) is frozen once the passage has been graded.
 router.put("/:id", ...adminOnly, async (req, res, next) => {
   try {
     const data = UpdateSchema.parse(req.body);
@@ -71,11 +71,40 @@ router.put("/:id", ...adminOnly, async (req, res, next) => {
         }),
       ]);
       if (oral + report > 0) {
-        throw new ConflictError("Ce passage est déjà noté — seuls l'heure et la salle peuvent changer");
+        throw new ConflictError("Ce passage est déjà noté — seule la salle peut encore changer");
       }
     }
 
-    res.json(await db.passage.update({ where: { id: passage.id }, data }));
+    const quads = new Map(
+      (await db.team.findMany({ where: { id: { in: [...teamsOf(passage), ...teamsOf(edited)] } }, select: { id: true, quadrigram: true } }))
+        .map((t) => [t.id, t.quadrigram]),
+    );
+    const describe = (p: typeof edited) => ({
+      problème: p.problemNumber,
+      défenseur: quads.get(p.defenderTeamId),
+      opposant: quads.get(p.opponentTeamId),
+      rapporteur: quads.get(p.reporterTeamId),
+      observateur: p.extraTeamId ? quads.get(p.extraTeamId) : null,
+      salle: p.room ?? null,
+    });
+    const [before, after] = [describe(passage), describe(edited)];
+    const changed = (Object.keys(after) as (keyof typeof after)[])
+      .filter((k) => before[k] !== after[k])
+      .map((k) => `${k} ${before[k] ?? "vide"} devient ${after[k] ?? "vide"}`);
+
+    const updated = await db.$transaction(async (tx) => {
+      const saved = await tx.passage.update({ where: { id: passage.id }, data });
+      if (changed.length) {
+        await audit(tx, req.user!, {
+          category: "Passages",
+          action: "passage.update",
+          summary: `Passage ${passage.label} : ${changed.join(", ")}`,
+          details: { before, after },
+        });
+      }
+      return saved;
+    });
+    res.json(updated);
   } catch (err) { next(err); }
 });
 
@@ -87,13 +116,14 @@ router.put("/:id/duo", ...adminOnly, async (req, res, next) => {
     const passage = await db.passage.findUnique({ where: { id: req.params.id }, include: { pool: true } });
     if (!passage) throw new NotFoundError("Passage not found");
 
+    const duo = duoId ? await db.juryDuo.findUnique({ where: { id: duoId } }) : null;
     if (duoId) {
-      const duo = await db.juryDuo.findUnique({ where: { id: duoId } });
       if (!duo) throw new NotFoundError("Duo not found");
       if (duo.centerDayId !== passage.pool.centerDayId) {
         throw new BadRequestError("Ce duo n'est pas formé pour le jour de ce passage");
       }
     }
+    const previous = passage.duoId ? await db.juryDuo.findUnique({ where: { id: passage.duoId } }) : null;
 
     if (duoId !== passage.duoId) {
       const [oral, report] = await Promise.all([
@@ -105,14 +135,26 @@ router.put("/:id/duo", ...adminOnly, async (req, res, next) => {
       if (oral + report > 0) throw new ConflictError("Ce passage est déjà noté — son duo ne peut plus changer");
     }
 
-    const updated = await db.passage.update({
-      where: { id: passage.id },
-      data: { duoId },
-      include: { duo: { include: duoInclude } },
+    const updated = await db.$transaction(async (tx) => {
+      const saved = await tx.passage.update({
+        where: { id: passage.id },
+        data: { duoId },
+        include: { duo: { include: duoInclude } },
+      });
+      if (duoId !== passage.duoId) {
+        await audit(tx, req.user!, {
+          category: "Duos",
+          action: "passage.duo",
+          summary: duo
+            ? `Duo ${duo.number} attribué à ${passage.label}${previous ? ` (à la place du duo ${previous.number})` : ""}`
+            : `Duo ${previous?.number ?? "?"} retiré de ${passage.label}`,
+        });
+      }
+      return saved;
     });
-    const { duo, ...rest } = updated;
+    const { duo: savedDuo, ...rest } = updated;
     res.json({
-      passage: { ...rest, duo: duo && toDuoResponse(duo) },
+      passage: { ...rest, duo: savedDuo && toDuoResponse(savedDuo) },
       warnings: duoId ? await duoPassageWarnings(duoId) : [],
     });
   } catch (err) { next(err); }

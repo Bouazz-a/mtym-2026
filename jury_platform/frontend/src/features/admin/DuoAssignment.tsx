@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Alert, Badge, Btn, BrutalCard, SectionHeading, Select } from "@/features/shared/primitives";
 import { createDuo, deleteDuo, updateDuo } from "@/lib/repositories/duoRepository";
-import type { Account, CenterDay, JuryDuo, PoolDetails, Team } from "@/types";
+import type { Account, CenterDay, JuryDuo, PoolDetails, ScheduleSlot, Team } from "@/types";
 import { formatDay } from "@/utils/labels";
 import { DayTimetable } from "./JuryTimetable";
+import { ScheduleEditor } from "./ScheduleEditor";
 import { DUO_QUERIES, useAction } from "./useAction";
 
 // One center day: form its jury duos, then give each passage of the day's
@@ -27,6 +28,9 @@ export function DayJury({
   teamById: Map<string, Team>;
 }) {
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [draft, setDraft] = useState<ScheduleSlot[] | null>(null); // hours being edited
+  const [activeSlot, setActiveSlot] = useState<number | null>(null);
+  const schedule = draft ?? day.schedule;
   const busyJurors = new Set(duos.flatMap((d) => d.members.map((m) => m.id)));
   const passages = pools.flatMap((p) => p.passages);
   const withDuo = passages.filter((p) => p.duo).length;
@@ -74,6 +78,9 @@ export function DayJury({
             </Alert>
           </div>
         )}
+        <div className="mb-6">
+          <ScheduleEditor day={day} schedule={schedule} onDraft={setDraft} onActive={setActiveSlot} />
+        </div>
         {pools.length === 0 ? (
           <BrutalCard className="p-6" withCorners={false} style={{ borderStyle: "dashed", boxShadow: "none" }}>
             <p className="font-open text-sm italic" style={{ color: "var(--ink-faint)" }}>
@@ -81,7 +88,19 @@ export function DayJury({
             </p>
           </BrutalCard>
         ) : (
-          <DayTimetable pools={pools} duos={duos} teamById={teamById} onWarnings={setWarnings} />
+          <DayTimetable
+            schedule={schedule}
+            pools={pools}
+            duos={duos}
+            teamById={teamById}
+            activeSlot={activeSlot}
+            onEditSlot={(i) => {
+              const field = document.getElementById(`schedule-start-${i}`);
+              field?.scrollIntoView({ block: "center", behavior: "smooth" });
+              field?.focus({ preventScroll: true });
+            }}
+            onWarnings={setWarnings}
+          />
         )}
       </section>
     </div>
@@ -145,8 +164,8 @@ function DuoRow({
     <li>
       <div className="flex items-center gap-3 flex-wrap">
         <Badge tone="dark">Duo {duo.number}</Badge>
-        <JurorSelect value={a} jurors={jurors} unavailable={busyJurors} placeholder="— Juré 1 —" disabled={busy} onChange={(id) => change(0, id)} />
-        <JurorSelect value={b} jurors={jurors} unavailable={busyJurors} placeholder="— Juré 2 —" disabled={busy} onChange={(id) => change(1, id)} />
+        <JurorSelect value={a} jurors={jurors} unavailable={busyJurors} placeholder="Juré 1" disabled={busy} onChange={(id) => change(0, id)} />
+        <JurorSelect value={b} jurors={jurors} unavailable={busyJurors} placeholder="Juré 2" disabled={busy} onChange={(id) => change(1, id)} />
         <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800, minWidth: 90 }}>
           {passages} passage{passages > 1 ? "s" : ""}
         </span>
@@ -195,9 +214,9 @@ function NewDuoRow({
     <li className="pt-2" style={{ borderTop: "1px dashed var(--border)" }}>
       <div className="flex items-center gap-3 flex-wrap">
         <Badge tone="neutral">Nouveau</Badge>
-        <JurorSelect value={a} jurors={jurors} unavailable={unavailable} placeholder="— Juré 1 —" onChange={setA} />
-        <JurorSelect value={b} jurors={jurors} unavailable={unavailable} placeholder="— Juré 2 —" onChange={setB} />
-        <Btn size="sm" disabled={!a || !b || a === b || busy} onClick={create}>+ Créer le duo</Btn>
+        <JurorSelect value={a} jurors={jurors} unavailable={unavailable} placeholder="Juré 1" onChange={setA} />
+        <JurorSelect value={b} jurors={jurors} unavailable={unavailable} placeholder="Juré 2" onChange={setB} />
+        <Btn size="sm" disabled={!a || !b || a === b || busy} onClick={create}>Créer le duo</Btn>
       </div>
       {error && <div className="mt-2"><Alert>{error}</Alert></div>}
     </li>

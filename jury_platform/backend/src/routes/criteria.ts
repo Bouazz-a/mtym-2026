@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { Criterion } from "@prisma/client";
 import { db } from "../db";
 import { adminOnly, authenticate } from "../middleware/auth";
+import { audit } from "../services/audit";
 import { ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
@@ -31,7 +33,17 @@ router.get("/", authenticate, async (_req, res, next) => {
 // POST /api/criteria
 router.post("/", ...adminOnly, async (req, res, next) => {
   try {
-    res.status(201).json(await db.criterion.create({ data: CriterionSchema.parse(req.body) }));
+    const data = CriterionSchema.parse(req.body);
+    const criterion = await db.$transaction(async (tx) => {
+      const created = await tx.criterion.create({ data });
+      await audit(tx, req.user!, {
+        category: "Critères",
+        action: "criterion.create",
+        summary: `Critère ajouté à la grille ${gridName(created)} : « ${created.label} » (coef. ${created.coefficient})`,
+      });
+      return created;
+    });
+    res.status(201).json(criterion);
   } catch (err) { next(err); }
 });
 
@@ -40,23 +52,55 @@ router.put("/:id", ...adminOnly, async (req, res, next) => {
   try {
     const { id, ...current } = await findOrThrow(req.params.id);
     const data = CriterionSchema.parse({ ...current, ...req.body });
-    res.json(await db.criterion.update({ where: { id }, data }));
+    const updated = await db.$transaction(async (tx) => {
+      const saved = await tx.criterion.update({ where: { id }, data });
+      const fields = { label: "intitulé", coefficient: "coefficient", theme: "thème" } as const;
+      const changed = (Object.keys(fields) as (keyof typeof fields)[]).filter((k) => (current[k] ?? null) !== (saved[k] ?? null));
+      if (changed.length) {
+        await audit(tx, req.user!, {
+          category: "Critères",
+          action: "criterion.update",
+          summary: `Critère « ${saved.label} » (grille ${gridName(saved)}) : ${changed.map((k) => `${fields[k]} ${current[k] ?? "vide"} devient ${saved[k] ?? "vide"}`).join(", ")}`,
+          details: {
+            before: Object.fromEntries(changed.map((k) => [fields[k], current[k]])),
+            after: Object.fromEntries(changed.map((k) => [fields[k], saved[k]])),
+          },
+        });
+      }
+      return saved;
+    });
+    res.json(updated);
   } catch (err) { next(err); }
 });
 
 // DELETE /api/criteria/:id — refused once grades use it
 router.delete("/:id", ...adminOnly, async (req, res, next) => {
   try {
-    const { id } = await findOrThrow(req.params.id);
+    const criterion = await findOrThrow(req.params.id);
+    const { id } = criterion;
     const [report, oral] = await Promise.all([
       db.reportGrade.count({ where: { criterionId: id } }),
       db.oralGrade.count({ where: { criterionId: id } }),
     ]);
     if (report + oral > 0) throw new ConflictError("Des notes utilisent déjà ce critère");
-    await db.criterion.delete({ where: { id } });
+    await db.$transaction(async (tx) => {
+      await tx.criterion.delete({ where: { id } });
+      await audit(tx, req.user!, {
+        category: "Critères",
+        action: "criterion.delete",
+        summary: `Critère supprimé de la grille ${gridName(criterion)} : « ${criterion.label} »`,
+      });
+    });
     res.status(204).send();
   } catch (err) { next(err); }
 });
+
+const ROLE_NAMES: Record<string, string> = { defender: "Défenseur", opponent: "Opposant", reporter: "Rapporteur", extra: "Observateur" };
+
+// "oral Défenseur", "rapport problème 2"
+function gridName(c: Criterion): string {
+  return c.type === "oral" ? `oral ${ROLE_NAMES[c.role ?? ""] ?? "?"}` : `rapport problème ${c.problemNumber}`;
+}
 
 async function findOrThrow(id: string) {
   const criterion = await db.criterion.findUnique({ where: { id } });

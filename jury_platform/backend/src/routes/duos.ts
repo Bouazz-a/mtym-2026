@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { adminOnly } from "../middleware/auth";
+import { audit, dayName } from "../services/audit";
 import { duoInclude, isDuoGraded, jurorDateWarnings, toDuoResponse } from "../services/duos";
 import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
@@ -32,9 +33,15 @@ async function assertJurors(accountIds: string[], centerDayId: string, exceptDuo
 }
 
 async function findDuoOrThrow(id: string) {
-  const duo = await db.juryDuo.findUnique({ where: { id }, include: duoInclude });
+  const duo = await db.juryDuo.findUnique({ where: { id }, include: { ...duoInclude, centerDay: true } });
   if (!duo) throw new NotFoundError("Duo not found");
   return duo;
+}
+
+// "Ines Uitest et Karim Uitest"
+async function jurorNames(accountIds: string[]): Promise<string> {
+  const accounts = await db.account.findMany({ where: { id: { in: accountIds } }, orderBy: { lastName: "asc" } });
+  return accounts.map((a) => `${a.firstName} ${a.lastName}`).join(" et ");
 }
 
 // GET /api/duos?centerDayId=
@@ -67,9 +74,14 @@ router.post("/", async (req, res, next) => {
     let number = 1;
     while (used.has(number)) number++;
 
-    const duo = await db.juryDuo.create({
-      data: { centerDayId: day.id, number, members: { create: accountIds.map((accountId) => ({ accountId })) } },
-      include: duoInclude,
+    const names = await jurorNames(accountIds);
+    const duo = await db.$transaction(async (tx) => {
+      const created = await tx.juryDuo.create({
+        data: { centerDayId: day.id, number, members: { create: accountIds.map((accountId) => ({ accountId })) } },
+        include: duoInclude,
+      });
+      await audit(tx, req.user!, { category: "Duos", action: "duo.create", summary: `Duo ${number} formé pour ${dayName(day)} : ${names}` });
+      return created;
     });
     res.status(201).json({ duo: toDuoResponse(duo), warnings: await jurorDateWarnings(accountIds, day.id) });
   } catch (err) { next(err); }
@@ -87,13 +99,20 @@ router.put("/:id", async (req, res, next) => {
         throw new ConflictError(`Le Duo ${duo.number} a déjà noté des passages — ses jurés ne peuvent plus changer`);
       }
       await assertJurors(accountIds, duo.centerDayId, duo.id);
-      await db.$transaction([
-        db.duoMember.deleteMany({ where: { duoId: duo.id } }),
-        db.duoMember.createMany({ data: accountIds.map((accountId) => ({ duoId: duo.id, accountId })) }),
-      ]);
+      const [before, after] = [await jurorNames(duo.members.map((m) => m.account.id)), await jurorNames(accountIds)];
+      await db.$transaction(async (tx) => {
+        await tx.duoMember.deleteMany({ where: { duoId: duo.id } });
+        await tx.duoMember.createMany({ data: accountIds.map((accountId) => ({ duoId: duo.id, accountId })) });
+        await audit(tx, req.user!, {
+          category: "Duos",
+          action: "duo.update",
+          summary: `Duo ${duo.number} de ${dayName(duo.centerDay)} : ${after} (avant : ${before})`,
+          details: { before: { jurés: before }, after: { jurés: after } },
+        });
+      });
     }
 
-    const updated = await findDuoOrThrow(duo.id);
+    const updated = await db.juryDuo.findUniqueOrThrow({ where: { id: duo.id }, include: duoInclude });
     res.json({ duo: toDuoResponse(updated), warnings: await jurorDateWarnings(accountIds, duo.centerDayId) });
   } catch (err) { next(err); }
 });
@@ -105,7 +124,11 @@ router.delete("/:id", async (req, res, next) => {
     if (await isDuoGraded(duo.id)) {
       throw new ConflictError(`Le Duo ${duo.number} a déjà noté des passages — il ne peut plus être supprimé`);
     }
-    await db.juryDuo.delete({ where: { id: duo.id } });
+    const names = await jurorNames(duo.members.map((m) => m.account.id));
+    await db.$transaction(async (tx) => {
+      await tx.juryDuo.delete({ where: { id: duo.id } });
+      await audit(tx, req.user!, { category: "Duos", action: "duo.delete", summary: `Duo ${duo.number} de ${dayName(duo.centerDay)} supprimé (${names})` });
+    });
     res.status(204).send();
   } catch (err) { next(err); }
 });

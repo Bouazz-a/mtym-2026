@@ -45,7 +45,7 @@ export function AccountsPage() {
         eyebrow="Administration"
         title="Comptes"
         sub="Les comptes des jurés et des administrateurs. Le mot de passe d'un nouveau compte n'est affiché qu'une fois : transmettez-le à la personne."
-        right={<Btn onClick={() => setEditing("new")}>+ Nouveau compte</Btn>}
+        right={<Btn onClick={() => setEditing("new")}>Nouveau compte</Btn>}
       />
 
       <Stagger className="grid grid-cols-2 lg:grid-cols-3 gap-6">

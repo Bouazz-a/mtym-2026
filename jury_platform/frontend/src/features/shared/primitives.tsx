@@ -1,5 +1,6 @@
 import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
 import { motion, useReducedMotion, type Transition } from "framer-motion";
+import { CloseIcon } from "./icons";
 
 // Primitives — visual building blocks aligned with the MTYM aesthetic:
 // editorial typography (Montserrat display + Open Sans body), saturated
@@ -374,10 +375,10 @@ export function Modal({
           <button
             onClick={onClose}
             aria-label="Fermer"
-            className="font-mont text-lg leading-none px-2 py-1"
-            style={{ color: "var(--ink-faint)", fontWeight: 800 }}
+            className="p-2 -mr-2"
+            style={{ color: "var(--ink-faint)" }}
           >
-            ×
+            <CloseIcon size={16} />
           </button>
         </header>
         <div className="p-6">{children}</div>
@@ -451,7 +452,7 @@ export function Popover({
   //
   // On narrow screens the popover is clamped inside the viewport (8px
   // margin) rather than anchored off its left edge.
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight?: number; placed: boolean } | null>(null);
   useLayoutEffect(() => {
     if (!open) return;
     const anchor = anchorRef.current;
@@ -466,8 +467,34 @@ export function Popover({
       top: (rect.bottom + 8) / zoom,
       left: Math.max(8, Math.min(left, viewport - w - 8)),
       width: w,
+      placed: false,
     });
   }, [open, align, width, anchorRef]);
+
+  // Second pass, once the popover is in the DOM and has a height: if it
+  // would run past the bottom of the viewport (a fixed element can't be
+  // scrolled to), open it above its anchor instead; when neither side has
+  // room, pin it inside the viewport and let it scroll. Both passes run
+  // before paint.
+  useLayoutEffect(() => {
+    if (!open || !pos || pos.placed || !ref.current || !anchorRef.current) return;
+    const zoom =
+      parseFloat(getComputedStyle(document.body).getPropertyValue("zoom")) || 1;
+    const viewportHeight = window.innerHeight / zoom;
+    const height = ref.current.offsetHeight;
+    const anchorTop = anchorRef.current.getBoundingClientRect().top / zoom;
+    let { top } = pos;
+    let maxHeight: number | undefined;
+    if (top + height > viewportHeight - 8) {
+      const above = anchorTop - 8 - height;
+      if (above >= 8) top = above;
+      else {
+        top = 8;
+        maxHeight = viewportHeight - 16;
+      }
+    }
+    setPos({ ...pos, top, maxHeight, placed: true });
+  }, [open, pos, anchorRef]);
 
   if (!open || !pos) return null;
 
@@ -475,7 +502,13 @@ export function Popover({
     <div
       ref={ref}
       className="popover"
-      style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
+      style={{
+        position: "fixed",
+        top: pos.top,
+        left: pos.left,
+        width: pos.width,
+        ...(pos.maxHeight !== undefined && { maxHeight: pos.maxHeight, overflowY: "auto" }),
+      }}
       role="dialog"
     >
       {children}

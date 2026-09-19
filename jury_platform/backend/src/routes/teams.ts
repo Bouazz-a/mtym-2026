@@ -4,6 +4,7 @@ import { Center, type Prisma } from "@prisma/client";
 import { db } from "../db";
 import { adminOnly, authenticate } from "../middleware/auth";
 import { isTeamInPool, juryTeamIds } from "../services/access";
+import { audit, centerName } from "../services/audit";
 import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
@@ -63,8 +64,8 @@ router.put("/:id/day", ...adminOnly, async (req, res, next) => {
     const team = await db.team.findUnique({ where: { id: req.params.id } });
     if (!team) throw new NotFoundError("Team not found");
 
+    const day = centerDayId ? await db.centerDay.findUnique({ where: { id: centerDayId } }) : null;
     if (centerDayId) {
-      const day = await db.centerDay.findUnique({ where: { id: centerDayId } });
       if (!day) throw new NotFoundError("Center day not found");
       if (day.center !== team.center) {
         throw new BadRequestError("Ce jour n'appartient pas au centre de l'équipe");
@@ -74,11 +75,18 @@ router.put("/:id/day", ...adminOnly, async (req, res, next) => {
       throw new ConflictError("L'équipe est déjà dans une poule — refaites le tirage de son jour d'abord");
     }
 
-    res.json(await db.team.update({
-      where: { id: team.id },
-      data: { centerDayId },
-      include: teamInclude,
-    }));
+    const updated = await db.$transaction(async (tx) => {
+      const saved = await tx.team.update({ where: { id: team.id }, data: { centerDayId }, include: teamInclude });
+      if (centerDayId !== team.centerDayId) {
+        await audit(tx, req.user!, {
+          category: "Équipes",
+          action: "team.day",
+          summary: day ? `${team.quadrigram} jouera le ${day.date} (${centerName(day.center)})` : `${team.quadrigram} repasse sans jour`,
+        });
+      }
+      return saved;
+    });
+    res.json(updated);
   } catch (err) { next(err); }
 });
 

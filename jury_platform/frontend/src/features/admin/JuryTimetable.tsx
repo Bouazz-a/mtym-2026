@@ -2,13 +2,15 @@ import { Fragment, useState } from "react";
 import { Alert, Badge, Btn, Modal } from "@/features/shared/primitives";
 import { RoleChip } from "@/features/shared/widgets";
 import { setPassageDuo } from "@/lib/repositories/poolRepository";
-import type { JuryDuo, PassageDetails, PoolDetails, Team } from "@/types";
+import type { JuryDuo, PassageDetails, PoolDetails, ScheduleSlot, Team } from "@/types";
 import { duoMembers, repeatedDuos } from "@/utils/duos";
-import { PASSAGE_SLOTS, minutesBetween, passageNumber } from "@/utils/schedule";
+import { breakMinutes, slotEnd } from "@/utils/schedule";
 import { DUO_QUERIES, useAction } from "./useAction";
 
-// A center day as a timetable: one column per pool, one row per time slot
-// (the pools play in parallel). Clicking a passage opens its duo picker.
+// A center day as a timetable: one column per pool, one row per slot of the
+// day's schedule (the pools play in parallel). Clicking a passage opens its
+// duo picker; clicking a time jumps to its line of the schedule editor.
+// Pause bands grow and shrink with the break they stand for.
 // Doublon = the duo judges another passage of the same pool; Même heure =
 // the duo has another passage in the same slot. Both only warn.
 
@@ -21,21 +23,27 @@ interface Slot {
 }
 
 export function DayTimetable({
+  schedule,
   pools,
   duos,
   teamById,
+  activeSlot,
+  onEditSlot,
   onWarnings,
 }: {
+  schedule: ScheduleSlot[];
   pools: PoolDetails[];
   duos: JuryDuo[];
   teamById: Map<string, Team>;
+  activeSlot: number | null; // index of the slot being edited, highlighted
+  onEditSlot: (index: number) => void;
   onWarnings: (w: string[]) => void;
 }) {
   const [picking, setPicking] = useState<Slot | null>(null);
-  const passageAt = (pool: PoolDetails, n: number) => pool.passages.find((p) => passageNumber(p.label) === n);
+  const passageAt = (pool: PoolDetails, n: number) => pool.passages.find((p) => p.slot === n);
   const repeatedByPool = new Map(pools.map((pool) => [pool.id, repeatedDuos(pool)]));
   // Per slot, the duos holding two passages of it
-  const clashes = PASSAGE_SLOTS.map((_, i) => {
+  const clashes = schedule.map((_, i) => {
     const seen = new Set<string>();
     const twice = new Set<string>();
     for (const pool of pools) {
@@ -65,19 +73,23 @@ export function DayTimetable({
             <HeadCell key={pool.id}>Poule {pool.label}</HeadCell>
           ))}
 
-          {PASSAGE_SLOTS.map((slot, i) => (
-            <Fragment key={slot.start}>
-              {i > 0 && <BreakRow minutes={minutesBetween(PASSAGE_SLOTS[i - 1].end, slot.start)} />}
-              <div
-                className="px-3 py-3 flex flex-col justify-center"
-                style={{ position: "sticky", left: 0, zIndex: 1, background: "var(--paper-2)", borderTop: "1px solid var(--border)", borderRight: "2px solid var(--forest)" }}
+          {schedule.map((slot, i) => (
+            <Fragment key={i}>
+              {i > 0 && <BreakRow minutes={breakMinutes(schedule, i)} />}
+              <button
+                type="button"
+                onClick={() => onEditSlot(i)}
+                title="Modifier l'horaire de ce passage"
+                aria-label={`Passage ${i + 1}, de ${slot.start} à ${slotEnd(slot)} : modifier l'horaire`}
+                className={`time-cell px-3 py-3 flex flex-col justify-center text-left${activeSlot === i ? " time-cell--active" : ""}`}
+                style={{ position: "sticky", left: 0, zIndex: 1, borderTop: "1px solid var(--border)", borderRight: "2px solid var(--forest)" }}
               >
-                <span className="font-mont" style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.05rem" }}>{slot.start}</span>
-                <span className="font-mont text-xs" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>{slot.end}</span>
+                <span className="font-mont tabular-nums" style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.05rem" }}>{slot.start}</span>
+                <span className="font-mont text-xs tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>{slotEnd(slot)}</span>
                 <span className="font-mont text-micro uppercase tracking-widest mt-1" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
                   Passage {i + 1}
                 </span>
-              </div>
+              </button>
               {pools.map((pool) => {
                 const passage = passageAt(pool, i + 1);
                 if (!passage) return <NoPassage key={pool.id} />;
@@ -87,6 +99,7 @@ export function DayTimetable({
                     key={pool.id}
                     passage={passage}
                     time={slot.start}
+                    active={activeSlot === i}
                     teamById={teamById}
                     repeated={Boolean(duoId && repeatedByPool.get(pool.id)?.has(duoId))}
                     clash={Boolean(duoId && clashes[i].has(duoId))}
@@ -100,13 +113,13 @@ export function DayTimetable({
       </div>
       <p className="font-open text-xs mt-3" style={{ color: "var(--ink-faint)" }}>
         Cliquez sur un passage pour lui attribuer un duo ou le changer. <strong>Doublon</strong> : le duo juge un autre
-        passage de la même poule. <strong>Même heure</strong> : il a déjà un passage à ce créneau. Ce sont des
-        avertissements, pas des blocages.
+        passage de la même poule. <strong>Même heure</strong> : il a déjà un passage à ce créneau.
       </p>
 
       {picking && (
         <DuoPicker
           {...picking}
+          schedule={schedule}
           pools={pools}
           duos={duos}
           teamById={teamById}
@@ -135,20 +148,24 @@ function HeadCell({ children, sticky = false }: { children: React.ReactNode; sti
   );
 }
 
+// Its height follows the break's length (animated in index.css), so moving
+// a passage visibly stretches or shrinks the pauses around it.
 function BreakRow({ minutes }: { minutes: number }) {
   return (
     <div
+      className="break-row flex items-center"
       style={{
         gridColumn: "1 / -1",
+        height: 24 + Math.min(minutes, 90) * 0.6,
         borderTop: "1px solid var(--border)",
         background: "repeating-linear-gradient(135deg, var(--paper) 0 6px, var(--paper-2) 6px 12px)",
       }}
     >
       <span
-        className="inline-block px-3 py-1 font-mont text-micro uppercase tracking-widest"
+        className="inline-block px-3 font-mont text-micro uppercase tracking-widest tabular-nums"
         style={{ position: "sticky", left: 0, color: "var(--ink-soft)", fontWeight: 800 }}
       >
-        Pause · {minutes} min
+        {minutes > 0 ? `Pause · ${minutes} min` : "Sans pause"}
       </span>
     </div>
   );
@@ -169,6 +186,7 @@ function NoPassage() {
 function PassageCell({
   passage,
   time,
+  active,
   teamById,
   repeated,
   clash,
@@ -176,6 +194,7 @@ function PassageCell({
 }: {
   passage: PassageDetails;
   time: string;
+  active: boolean; // its slot is being edited
   teamById: Map<string, Team>;
   repeated: boolean;
   clash: boolean;
@@ -187,7 +206,7 @@ function PassageCell({
     <button
       type="button"
       onClick={onOpen}
-      className="slot-cell text-left p-3 flex flex-col gap-2.5"
+      className={`slot-cell text-left p-3 flex flex-col gap-2.5${active ? " slot-cell--active" : ""}`}
       style={{ borderTop: "1px solid var(--border)", borderLeft: "1px solid var(--border)" }}
       aria-label={`Passage ${passage.label}, ${time}, ${duo ? `duo ${duo.number}` : "sans duo"} : choisir le duo`}
     >
@@ -210,7 +229,7 @@ function PassageCell({
           </div>
         ) : (
           <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
-            + Attribuer un duo
+            Attribuer un duo
           </span>
         )}
         {(repeated || clash) && (
@@ -229,12 +248,14 @@ function PassageCell({
 function DuoPicker({
   pool,
   passage,
+  schedule,
   pools,
   duos,
   teamById,
   onClose,
   onWarnings,
 }: Slot & {
+  schedule: ScheduleSlot[];
   pools: PoolDetails[];
   duos: JuryDuo[];
   teamById: Map<string, Team>;
@@ -242,8 +263,8 @@ function DuoPicker({
   onWarnings: (w: string[]) => void;
 }) {
   const { run, busy, error } = useAction(DUO_QUERIES);
-  const n = passageNumber(passage.label);
-  const slot = PASSAGE_SLOTS[n - 1];
+  const n = passage.slot;
+  const slot = schedule[n - 1];
   const quad = (id: string) => teamById.get(id)?.quadrigram ?? "—";
   const dayPassages = pools.flatMap((p) => p.passages);
   const labelsOf = (duoId: string, ps: (PassageDetails | undefined)[]) =>
@@ -263,7 +284,7 @@ function DuoPicker({
       <div className="space-y-5">
         <div>
           <div className="font-mont text-micro uppercase tracking-widest mb-2" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-            Poule {pool.label}{slot ? ` · ${slot.start} – ${slot.end}` : ""} · Problème {passage.problemNumber}
+            Poule {pool.label}{slot ? ` · ${slot.start} – ${slotEnd(slot)}` : ""} · Problème {passage.problemNumber}
           </div>
           <div className="flex gap-1 flex-wrap">
             <RoleChip role="defender" quad={quad(passage.defenderTeamId)} />
@@ -283,7 +304,7 @@ function DuoPicker({
           <div role="radiogroup" aria-label="Duo du passage" className="space-y-2">
             {duos.map((duo) => {
               const inPool = labelsOf(duo.id, pool.passages);
-              const sameTime = labelsOf(duo.id, pools.map((p) => p.passages.find((x) => passageNumber(x.label) === n)));
+              const sameTime = labelsOf(duo.id, pools.map((p) => p.passages.find((x) => x.slot === n)));
               const count = dayPassages.filter((p) => p.duo?.id === duo.id).length;
               return (
                 <DuoOption

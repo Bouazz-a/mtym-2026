@@ -3,6 +3,8 @@ import { z } from "zod";
 import { Center } from "@prisma/client";
 import { db } from "../db";
 import { adminOnly, authenticate } from "../middleware/auth";
+import { audit, centerName, dayName } from "../services/audit";
+import { describeScheduleChange, ScheduleSchema, scheduleRecord, type ScheduleSlot } from "../services/schedule";
 import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
@@ -41,7 +43,12 @@ router.post("/", ...adminOnly, async (req, res, next) => {
   try {
     const data = CenterDaySchema.parse(req.body);
     await assertDayIsFree(data.center, data.date);
-    res.status(201).json(await db.centerDay.create({ data, include: withCounts }));
+    const day = await db.$transaction(async (tx) => {
+      const created = await tx.centerDay.create({ data, include: withCounts });
+      await audit(tx, req.user!, { category: "Jours", action: "day.create", summary: `Jour ajouté : ${dayName(created)}` });
+      return created;
+    });
+    res.status(201).json(day);
   } catch (err) { next(err); }
 });
 
@@ -72,11 +79,17 @@ router.post("/distribute", ...adminOnly, async (req, res, next) => {
       target.count++;
     }
 
-    await db.$transaction(
-      load
-        .filter((d) => d.teamIds.length)
-        .map((d) => db.team.updateMany({ where: { id: { in: d.teamIds } }, data: { centerDayId: d.id } })),
-    );
+    await db.$transaction(async (tx) => {
+      for (const d of load.filter((d) => d.teamIds.length)) {
+        await tx.team.updateMany({ where: { id: { in: d.teamIds } }, data: { centerDayId: d.id } });
+      }
+      await audit(tx, req.user!, {
+        category: "Équipes",
+        action: "teams.distribute",
+        summary: `${unassigned.length} équipe(s) sans jour réparties sur les jours de ${centerName(center)}`,
+        details: days.map((d) => ({ day: d.date, added: load.find((l) => l.id === d.id)!.teamIds.length })),
+      });
+    });
 
     res.json({
       assigned: unassigned.length,
@@ -92,7 +105,44 @@ router.put("/:id", ...adminOnly, async (req, res, next) => {
     const day = await db.centerDay.findUnique({ where: { id: req.params.id } });
     if (!day) throw new NotFoundError("Center day not found");
     await assertDayIsFree(day.center, date, day.id);
-    res.json(await db.centerDay.update({ where: { id: day.id }, data: { date }, include: withCounts }));
+    const updated = await db.$transaction(async (tx) => {
+      const saved = await tx.centerDay.update({ where: { id: day.id }, data: { date }, include: withCounts });
+      if (date !== day.date) {
+        await audit(tx, req.user!, {
+          category: "Jours",
+          action: "day.update",
+          summary: `Jour ${dayName(day)} déplacé au ${date}`,
+          details: { before: { date: day.date }, after: { date } },
+        });
+      }
+      return saved;
+    });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// PUT /api/center-days/:id/schedule — { slots: [{ start, minutes }] × 4 }:
+// the day's passage times, shared by all its pools.
+router.put("/:id/schedule", ...adminOnly, async (req, res, next) => {
+  try {
+    const { slots } = z.object({ slots: ScheduleSchema }).parse(req.body);
+    const day = await db.centerDay.findUnique({ where: { id: req.params.id } });
+    if (!day) throw new NotFoundError("Center day not found");
+    const before = day.schedule as unknown as ScheduleSlot[];
+    const changed = slots.some((s, i) => before[i]?.start !== s.start || before[i]?.minutes !== s.minutes);
+    const updated = await db.$transaction(async (tx) => {
+      const saved = await tx.centerDay.update({ where: { id: day.id }, data: { schedule: slots }, include: withCounts });
+      if (changed) {
+        await audit(tx, req.user!, {
+          category: "Horaires",
+          action: "day.schedule",
+          summary: `Horaires ${dayName(day)} : ${describeScheduleChange(before, slots)}`,
+          details: { before: scheduleRecord(before), after: scheduleRecord(slots) },
+        });
+      }
+      return saved;
+    });
+    res.json(updated);
   } catch (err) { next(err); }
 });
 
@@ -104,7 +154,14 @@ router.delete("/:id", ...adminOnly, async (req, res, next) => {
     if (day._count.pools > 0) {
       throw new ConflictError("Ce jour a déjà un tirage — supprimez d'abord ses poules");
     }
-    await db.centerDay.delete({ where: { id: day.id } });
+    await db.$transaction(async (tx) => {
+      await tx.centerDay.delete({ where: { id: day.id } });
+      await audit(tx, req.user!, {
+        category: "Jours",
+        action: "day.delete",
+        summary: `Jour supprimé : ${dayName(day)} (${day._count.teams} équipe(s) repassent sans jour)`,
+      });
+    });
     res.status(204).send();
   } catch (err) { next(err); }
 });

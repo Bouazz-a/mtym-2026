@@ -138,7 +138,7 @@ function DaysSection({ center, days, withoutDay }: { center: Center; days: Cente
             </div>
             <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} style={{ width: 180 }} />
           </label>
-          <Btn variant="ghost" size="sm" onClick={add} disabled={!newDate || busy}>+ Ajouter</Btn>
+          <Btn variant="ghost" size="sm" onClick={add} disabled={!newDate || busy}>Ajouter</Btn>
         </div>
       </BrutalCard>
     </section>
@@ -254,7 +254,7 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
                         title={locked ? "Déjà dans une poule — annulez le tirage de son jour pour la déplacer" : undefined}
                         onChange={(e) => run(() => setTeamDay(team.id, e.target.value || null))}
                       >
-                        <option value="">— Sans jour —</option>
+                        <option value="">Sans jour</option>
                         {days.map((d, i) => (
                           <option key={d.id} value={d.id}>J{i + 1} · {formatDay(d.date)}</option>
                         ))}

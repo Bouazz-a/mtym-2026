@@ -4,6 +4,7 @@ import { useSession } from "@/features/shared/SessionContext";
 import { MtymLogo } from "@/features/shared/widgets";
 import { Popover } from "@/features/shared/primitives";
 import { ChangePasswordModal } from "@/features/shared/ChangePasswordModal";
+import { ChevronDownIcon } from "@/features/shared/icons";
 import { NAV, ROLE_LABEL, type NavItem } from "./navigation";
 
 // TopNav — fixed dark top bar. Brand on the left, nav links in the middle,
@@ -31,9 +32,9 @@ export function TopNav() {
       <div className="h-full max-w-[1600px] mx-auto px-6 lg:px-12 flex items-center justify-between">
         <button onClick={() => navigate("/")} className="flex items-center gap-3 group" aria-label="Accueil">
           <MtymLogo size={22} />
-          {/* Hidden between xl and 1400px, where the inline links need its room */}
+          {/* Hidden between xl and 1600px, where the inline links need its room */}
           <div
-            className="hidden sm:block xl:hidden min-[1400px]:block font-mont text-micro uppercase tracking-[0.22em] pl-3"
+            className="hidden sm:block xl:hidden min-[1600px]:block font-mont text-micro uppercase tracking-[0.22em] pl-3"
             style={{
               color: "rgba(244,236,216,0.55)",
               fontWeight: 500,
@@ -65,7 +66,9 @@ export function TopNav() {
               aria-haspopup="dialog"
               aria-expanded={menuOpen}
             >
-              <div className="hidden md:block text-right">
+              {/* The name leaves room for the inline links between xl and 2xl;
+                  it's still in the menu */}
+              <div className="hidden md:block xl:hidden 2xl:block text-right">
                 <div
                   className="font-mont text-tiny uppercase tracking-wider truncate"
                   style={{ color: "var(--paper)", fontWeight: 700, maxWidth: 160 }}
@@ -89,7 +92,10 @@ export function TopNav() {
               >
                 {initials}
               </div>
-              <ChevronIcon open={menuOpen} />
+              <ChevronDownIcon
+                size={12}
+                style={{ color: "rgba(244,236,216,0.55)", transition: "transform 180ms", transform: menuOpen ? "rotate(180deg)" : "none" }}
+              />
             </button>
 
             <Popover open={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={chipRef} width={280}>
@@ -148,22 +154,5 @@ function MenuButton({ children, onClick, danger = false }: { children: React.Rea
     >
       {children}
     </button>
-  );
-}
-
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="12" height="12" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-      style={{
-        color: "rgba(244,236,216,0.55)",
-        transition: "transform 180ms",
-        transform: open ? "rotate(180deg)" : "none",
-      }}
-      aria-hidden
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
   );
 }

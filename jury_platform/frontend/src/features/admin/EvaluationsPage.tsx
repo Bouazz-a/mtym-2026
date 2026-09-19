@@ -4,6 +4,7 @@ import {
   Alert, Badge, Btn, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented,
 } from "@/features/shared/primitives";
 import { ColumnFilterMenu } from "@/features/shared/ColumnFilterMenu";
+import { DownloadIcon } from "@/features/shared/icons";
 import { EmptyState, ROLE_PALETTE } from "@/features/shared/widgets";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
@@ -17,6 +18,7 @@ import { errorMessage } from "@/lib/services/errors";
 import { fmtNote } from "@/lib/services/gradingService";
 import { GRADED_ROLES, passageResults, type NoteSet, type PassageResult } from "@/lib/services/results";
 import { CENTERS, centerLabel, formatDay } from "@/utils/labels";
+import { slotTime } from "@/utils/schedule";
 
 // EvaluationsPage — the jury's notes, by center, day and pool: for each
 // passage the duo's average per graded role and for the defender's report,
@@ -71,7 +73,11 @@ export function EvaluationsPage() {
         eyebrow="Administration"
         title="Notes du jury"
         sub={`Moyenne du duo pour chaque rôle et pour le rapport du défenseur. ${done}/${expected} évaluations saisies.`}
-        right={<Btn onClick={exportXlsx} disabled={exporting}>{exporting ? "Export…" : "↓ Exporter (xlsx)"}</Btn>}
+        right={
+          <Btn onClick={exportXlsx} disabled={exporting}>
+            <DownloadIcon size={15} /> {exporting ? "Export…" : "Exporter (xlsx)"}
+          </Btn>
+        }
       />
       {exportError && <Alert>{exportError}</Alert>}
 
@@ -227,7 +233,7 @@ function ResultRow({
         <td>
           <div className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900 }}>{passage.label}</div>
           <div className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-            P{passage.problemNumber}{passage.timeSlot ? ` · ${passage.timeSlot}` : ""}
+            P{passage.problemNumber} · {slotTime(result.pool.centerDay, passage.slot)?.start}
           </div>
         </td>
         <td>{passage.duo ? <Badge tone="dark">Duo {passage.duo.number}</Badge> : <Badge tone="saffron">Sans duo</Badge>}</td>

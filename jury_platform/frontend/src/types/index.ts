@@ -59,10 +59,17 @@ export interface Team {
   reports: { id: string; problemNumber: number }[]; // FINAL reports submitted
 }
 
+// Slot n of a day holds passage n of every pool (the pools play in parallel)
+export interface ScheduleSlot {
+  start: string; // "HH:MM"
+  minutes: number;
+}
+
 export interface CenterDay {
   id: string;
   center: Center;
   date: string; // "YYYY-MM-DD"
+  schedule: ScheduleSlot[]; // 4 slots
   _count: { teams: number; pools: number };
 }
 
@@ -84,7 +91,7 @@ export interface Passage {
   opponentTeamId: string;
   reporterTeamId: string;
   extraTeamId?: string | null; // observer — pools of 4 only
-  timeSlot?: string | null; // "HH:MM"
+  slot: number; // 1..4 — its time is the day's schedule[slot - 1]
   room?: string | null;
 }
 
@@ -139,4 +146,26 @@ export interface ReportEvaluation {
   problemNumber: number;
   globalRemark: string | null;
   grades: Grade[];
+}
+
+// A team's final grade = Σ weight × note (each note as % of its grid) / Σ weights
+export interface FinalWeights {
+  defender: number;
+  opponent: number;
+  reporter: number;
+  report: number;
+}
+
+// ================== Journal ==================
+
+export interface AuditEntry {
+  id: string;
+  at: string; // ISO date
+  actorId: string | null; // null once the account is deleted
+  actorName: string;
+  actorEmail: string;
+  category: string;
+  action: string;
+  summary: string;
+  details: unknown;
 }

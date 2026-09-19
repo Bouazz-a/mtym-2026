@@ -10,7 +10,7 @@ export interface ColumnFilter {
 export interface FilterColumn<Row> {
   key: string;
   label: string;
-  value: (row: Row) => number | null; // for the range and the sort
+  value: (row: Row) => number | string | null; // for the sort (and the range, when a number)
   text: (row: Row) => string; // as shown in the checklist ("" = empty)
   range?: boolean; // offer the numeric range
 }
@@ -32,7 +32,14 @@ function keeps<Row>(row: Row, column: FilterColumn<Row>, filter: ColumnFilter): 
   const max = bound(filter.max);
   if (min === null && max === null) return true;
   const v = column.value(row);
-  return v !== null && (min === null || v >= min) && (max === null || v <= max);
+  return typeof v === "number" && (min === null || v >= min) && (max === null || v <= max);
+}
+
+// Empty values last; numbers numerically, text alphabetically
+function compare(x: number | string | null, y: number | string | null): number {
+  if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+  if (typeof x === "number" && typeof y === "number") return x - y;
+  return String(x).localeCompare(String(y), "fr", { numeric: true });
 }
 
 // Rows kept by every column's filter, sorted — empty values always last.
@@ -48,8 +55,8 @@ export function filterAndSort<Row>(
   const sign = sort.dir === "asc" ? 1 : -1;
   return [...kept].sort((a, b) => {
     const [x, y] = [column.value(a), column.value(b)];
-    if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
-    return (x - y) * sign;
+    if (x === null || y === null) return compare(x, y); // empty stays last both ways
+    return compare(x, y) * sign;
   });
 }
 
@@ -57,6 +64,6 @@ export function filterAndSort<Row>(
 export function distinctValues<Row>(rows: Row[], column: FilterColumn<Row>): string[] {
   const byText = new Map(rows.map((row) => [column.text(row), column.value(row)]));
   return [...byText]
-    .sort(([, x], [, y]) => (x === null ? -1 : y === null ? 1 : x - y))
+    .sort(([, x], [, y]) => (x === null ? -1 : y === null ? 1 : compare(x, y)))
     .map(([text]) => text);
 }

@@ -1,4 +1,4 @@
-import type { Center, CenterDay, PoolDetails } from "@/types";
+import type { Center, CenterDay, PoolDetails, ScheduleSlot } from "@/types";
 import type { GeneratedRound } from "@/lib/services/tournamentOptimizer";
 import { apiFetch } from "@/lib/api/client";
 
@@ -12,6 +12,11 @@ export function createCenterDay(center: Center, date: string): Promise<CenterDay
 
 export function updateCenterDay(id: string, date: string): Promise<CenterDay> {
   return apiFetch<CenterDay>(`/center-days/${id}`, { method: "PUT", body: { date } });
+}
+
+// The day's passage times — all its pools follow.
+export function updateSchedule(id: string, slots: ScheduleSlot[]): Promise<CenterDay> {
+  return apiFetch<CenterDay>(`/center-days/${id}/schedule`, { method: "PUT", body: { slots } });
 }
 
 export function deleteCenterDay(id: string): Promise<void> {
@@ -37,7 +42,7 @@ export function saveDraw(dayId: string, draw: GeneratedRound): Promise<PoolDetai
         opponentTeamId: p.opponentTeamId,
         reporterTeamId: p.reporterTeamId,
         extraTeamId: p.extraTeamId ?? null,
-        timeSlot: p.timeSlot ?? null,
+        slot: p.slot,
       })),
   }));
   return apiFetch<PoolDetails[]>(`/center-days/${dayId}/draw`, { method: "PUT", body: { pools } });
