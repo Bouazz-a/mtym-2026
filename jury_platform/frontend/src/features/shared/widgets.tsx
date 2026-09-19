@@ -228,7 +228,17 @@ export const ROLE_PALETTE = {
   },
 } as const;
 
-
+// "DEF PIQU" — a team's role in a passage, in the role's colors
+export function RoleChip({ role, quad }: { role: keyof typeof ROLE_PALETTE; quad: string }) {
+  return (
+    <span
+      className="font-mont text-micro uppercase tracking-widest px-1.5 py-0.5 whitespace-nowrap"
+      style={{ background: ROLE_PALETTE[role].bg, color: ROLE_PALETTE[role].fg, fontWeight: 800 }}
+    >
+      {ROLE_PALETTE[role].short} {quad}
+    </span>
+  );
+}
 
 // ─── StatCard — label + big animated number (+ progress when denom) ────
 
@@ -247,7 +257,7 @@ export function StatCard({
 }) {
   const pct = denom ? Math.round((value / denom) * 100) : null;
   return (
-    <BrutalCard hoverable highlight={highlight} className="p-6 h-full">
+    <BrutalCard highlight={highlight} className="p-6 h-full">
       <div
         className="absolute top-0 right-0 clip-triangle-tr pointer-events-none"
         style={{ width: 48, height: 48, background: highlight ? "rgba(246,168,6,0.12)" : "rgba(18,32,25,0.04)" }}

@@ -112,7 +112,7 @@ function CriterionGroup({ criteria, onAdd }: { criteria: Criterion[]; onAdd: () 
           Aucun critère. Ajoutez-en un ci-dessous.
         </p>
       ) : (
-        <ul>
+        <ul className="striped-rows">
           {criteria.map((c, i) => (
             <li key={c.id} style={{ borderTop: i === 0 ? undefined : "1px solid var(--border)" }}>
               <CriterionRowEditor criterion={c} />
@@ -148,7 +148,7 @@ function CriterionRowEditor({ criterion }: { criterion: Criterion }) {
   );
 
   return (
-    <div className="px-4 py-3 hover-row transition-colors">
+    <div className="px-4 py-3">
       <div className="flex items-end gap-3 flex-wrap">
         <label className="flex-1 min-w-[200px]">
           {label("Intitulé")}

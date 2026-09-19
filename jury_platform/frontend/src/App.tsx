@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { SessionProvider, useSession } from "@/features/shared/SessionContext";
 import { LoginPage } from "@/features/shared/LoginPage";
-import { BrutalCard, PageHeader, PageLoading } from "@/features/shared/primitives";
+import { PageLoading } from "@/features/shared/primitives";
 import { AppLayout } from "@/layout/AppLayout";
 import { RoleGuard } from "@/layout/RoleGuard";
 
@@ -14,8 +14,20 @@ const TournamentPage = lazy(() =>
   import("@/features/admin/TournamentPage").then((m) => ({ default: m.TournamentPage })),
 );
 const JuryPage = lazy(() => import("@/features/admin/JuryPage").then((m) => ({ default: m.JuryPage })));
+const AccountsPage = lazy(() =>
+  import("@/features/admin/AccountsPage").then((m) => ({ default: m.AccountsPage })),
+);
 const CriteriaPage = lazy(() =>
   import("@/features/admin/CriteriaPage").then((m) => ({ default: m.CriteriaPage })),
+);
+const EvaluationsPage = lazy(() =>
+  import("@/features/admin/EvaluationsPage").then((m) => ({ default: m.EvaluationsPage })),
+);
+const JuryDashboard = lazy(() =>
+  import("@/features/jury/JuryDashboard").then((m) => ({ default: m.JuryDashboard })),
+);
+const PassagePage = lazy(() =>
+  import("@/features/jury/PassagePage").then((m) => ({ default: m.PassagePage })),
 );
 
 export default function App() {
@@ -31,6 +43,11 @@ export default function App() {
                   <Route path="tournoi" element={<TournamentPage />} />
                   <Route path="jury" element={<JuryPage />} />
                   <Route path="criteres" element={<CriteriaPage />} />
+                  <Route path="notes" element={<EvaluationsPage />} />
+                  <Route path="comptes" element={<AccountsPage />} />
+                </Route>
+                <Route element={<RoleGuard allow={["jury"]} />}>
+                  <Route path="passages/:passageId" element={<PassagePage />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Route>
@@ -52,22 +69,9 @@ function RequireSession() {
 
 function HomeByRole() {
   const { role } = useSession();
-  return role === "admin" ? <AdminDashboard /> : <JuryHome />;
+  return role === "admin" ? <AdminDashboard /> : <JuryDashboard />;
 }
 
-// Jury screens (pools, grading) come with the next iteration.
-function JuryHome() {
-  return (
-    <>
-      <PageHeader eyebrow="Jury" title="Bienvenue" />
-      <BrutalCard className="p-8">
-        <p className="font-open text-sm" style={{ color: "var(--ink-soft)" }}>
-          Vos poules et vos grilles de notation apparaîtront ici.
-        </p>
-      </BrutalCard>
-    </>
-  );
-}
 
 function NotFound() {
   return (

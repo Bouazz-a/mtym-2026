@@ -1,5 +1,6 @@
 import type { Passage, Pool, Team } from "@/types";
 import { buildPassageLabel, buildPoolLabel } from "@/utils/labels";
+import { PASSAGE_SLOTS } from "@/utils/schedule";
 import { ConflictError } from "./errors";
 import type {
   ConstraintCode,
@@ -80,9 +81,10 @@ export const QUALIFS_PROBLEMS = [1, 2, 3, 4];
 
 // Qualifications: draw the pools of one center day. Pools of 4, or 3 when
 // the team count requires it — 1, 2 and 5 teams can't be split that way.
+// Passage n of every pool gets the day's slot n (pools play in parallel).
 export function generateQualifsDay(args: {
   teams: Team[];
-  labelPrefix: string; // e.g. "CAS-J1-" -> pools CAS-J1-A1, CAS-J1-A2…
+  labelPrefix: string; // e.g. "CAS-A" -> pools CAS-A1, CAS-A2…
   problemPool?: number[];
 }): GeneratedRound {
   const n = args.teams.length;
@@ -92,7 +94,14 @@ export function generateQualifsDay(args: {
     );
   }
   const composition = splitIntoPools(shuffle([...args.teams]), 4);
-  return buildRound1(composition, args.problemPool ?? QUALIFS_PROBLEMS, args.labelPrefix);
+  const round = buildRound1(composition, args.problemPool ?? QUALIFS_PROBLEMS, (idx) => `${args.labelPrefix}${idx + 1}`);
+  const slotOf = new Map<string, string>();
+  for (const pool of round.pools) {
+    round.passages
+      .filter((p) => p.poolId === pool.id)
+      .forEach((p, i) => slotOf.set(p.id, PASSAGE_SLOTS[i].start));
+  }
+  return { ...round, passages: round.passages.map((p) => ({ ...p, timeSlot: slotOf.get(p.id) })) };
 }
 
 // Finale: generate both rounds. Round 2 uses the Hungarian solver and never
@@ -143,7 +152,7 @@ interface PoolComposition {
 function buildRound1(
   composition: PoolComposition[],
   problemPool: number[],
-  labelPrefix = "",
+  poolLabel: (idx: number) => string = (idx) => buildPoolLabel(1, idx),
 ): GeneratedRound {
   const pools: Pool[] = [];
   const passages: Passage[] = [];
@@ -152,7 +161,7 @@ function buildRound1(
   composition.forEach((pc, idx) => {
     const pool: Pool = {
       id: crypto.randomUUID(),
-      label: labelPrefix + buildPoolLabel(1, idx),
+      label: poolLabel(idx),
       round: 1,
     };
     pools.push(pool);

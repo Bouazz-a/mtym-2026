@@ -37,6 +37,7 @@ export function saveDraw(dayId: string, draw: GeneratedRound): Promise<PoolDetai
         opponentTeamId: p.opponentTeamId,
         reporterTeamId: p.reporterTeamId,
         extraTeamId: p.extraTeamId ?? null,
+        timeSlot: p.timeSlot ?? null,
       })),
   }));
   return apiFetch<PoolDetails[]>(`/center-days/${dayId}/draw`, { method: "PUT", body: { pools } });

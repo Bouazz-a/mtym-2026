@@ -1,52 +1,64 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Alert, Badge, Btn, BrutalCard, Field, Input, Modal, PageHeader, PageLoading, PageMotion, SectionHeading, Select,
-  Stagger,
-} from "@/features/shared/primitives";
-import { StatCard } from "@/features/shared/widgets";
-import { useSession } from "@/features/shared/SessionContext";
-import {
-  createAccount, deleteAccount, getAccounts, resetPassword, updateAccount, type AccountInput,
-} from "@/lib/repositories/accountRepository";
+import { Link, useSearchParams } from "react-router-dom";
+import { Alert, PageHeader, PageLoading, PageMotion, Segmented, Stagger } from "@/features/shared/primitives";
+import { EmptyState, StatCard } from "@/features/shared/widgets";
+import { getAccounts } from "@/lib/repositories/accountRepository";
 import { getCenterDays } from "@/lib/repositories/centerDayRepository";
 import { getDuos } from "@/lib/repositories/duoRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
-import type { Account, PoolDetails } from "@/types";
-import { DuosByDay } from "./DuoAssignment";
-import { useAction } from "./useAction";
+import type { Center } from "@/types";
+import { CENTERS, formatDay } from "@/utils/labels";
+import { DayJury } from "./DuoAssignment";
 
-// JuryPage — jury and admin accounts, then for each center day its jury
-// duos and the duo judging each passage (from the organizers' jury plan).
-
-const ACCOUNT_QUERIES = [["accounts"], ["pools"], ["duos"]];
+// JuryPage — one center day at a time: form its jury duos, then give each
+// passage of the day's timetable a duo (from the organizers' jury plan).
+// The center and day live in the query string and switch with history
+// *replace*, like the Tournoi page's center picker.
 
 export function JuryPage() {
+  const [params, setParams] = useSearchParams();
   const accountsQ = useQuery({ queryKey: ["accounts"], queryFn: () => getAccounts() });
   const poolsQ = useQuery({ queryKey: ["pools"], queryFn: () => getPools() });
   const teamsQ = useQuery({ queryKey: ["teams"], queryFn: () => getTeams() });
   const daysQ = useQuery({ queryKey: ["center-days"], queryFn: () => getCenterDays() });
   const duosQ = useQuery({ queryKey: ["duos"], queryFn: () => getDuos() });
+  const teamById = useMemo(() => new Map((teamsQ.data ?? []).map((t) => [t.id, t])), [teamsQ.data]);
 
   if (accountsQ.isLoading || poolsQ.isLoading || teamsQ.isLoading || daysQ.isLoading || duosQ.isLoading) {
     return <PageLoading />;
   }
 
-  const accounts = accountsQ.data ?? [];
   const pools = poolsQ.data ?? [];
   const duos = duosQ.data ?? [];
-  const jurors = accounts.filter((a) => a.role === "jury");
+  const days = daysQ.data ?? []; // by center, then date
+  const jurors = (accountsQ.data ?? [])
+    .filter((a) => a.role === "jury")
+    .sort((a, b) => a.lastName.localeCompare(b.lastName));
   const passages = pools.flatMap((p) => p.passages);
   const withDuo = passages.filter((p) => p.duo).length;
   const inDuo = new Set(duos.flatMap((d) => d.members.map((m) => m.id)));
+
+  const centers = CENTERS.filter((c) => days.some((d) => d.center === c.value));
+  const center = centers.find((c) => c.value === params.get("centre"))?.value ?? centers[0]?.value;
+  const centerDays = days.filter((d) => d.center === center);
+  const dayIndex = Math.max(0, centerDays.findIndex((d) => d.id === params.get("jour")));
+  const day = centerDays[dayIndex];
+  const select = (c: Center, dayId?: string) =>
+    setParams(dayId ? { centre: c, jour: dayId } : { centre: c }, { replace: true });
+
+  const dayProgress = (dayId: string) => {
+    const ps = pools.filter((p) => p.centerDayId === dayId).flatMap((p) => p.passages);
+    return ps.length ? ` · ${ps.filter((p) => p.duo).length}/${ps.length}` : "";
+  };
 
   return (
     <PageMotion className="space-y-10">
       <PageHeader
         eyebrow="Administration"
         title="Jury"
-        sub="Créez les comptes des jurés, formez les duos de chaque jour, puis donnez un duo à chaque passage d'après le planning du jury."
+        sub="Choisissez un jour, formez ses duos, puis cliquez sur un passage du planning pour lui donner un duo."
       />
 
       <Stagger className="grid grid-cols-2 lg:grid-cols-4 gap-6">
@@ -61,187 +73,51 @@ export function JuryPage() {
         />
       </Stagger>
 
-      <AccountsSection accounts={accounts} pools={pools} />
-      <DuosByDay days={daysQ.data ?? []} duos={duos} pools={pools} jurors={jurors} teams={teamsQ.data ?? []} />
+      {jurors.length === 0 && (
+        <Alert tone="warning" title="Aucun juré">
+          Créez d'abord les comptes des jurés dans <Link to="/comptes" className="underline font-semibold">Comptes</Link>.
+        </Alert>
+      )}
+
+      {!center || !day ? (
+        <EmptyState title="Aucun jour" sub="Déclarez d'abord les jours des centres depuis la page Tournoi." />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+            <Picker label="Centre">
+              <Segmented options={centers.map((c) => ({ value: c.value, label: c.label }))} value={center} onChange={(c) => select(c)} />
+            </Picker>
+            <Picker label="Jour">
+              <Segmented
+                options={centerDays.map((d, i) => ({ value: d.id, label: `J${i + 1} · ${formatDay(d.date)}${dayProgress(d.id)}` }))}
+                value={day.id}
+                onChange={(id) => select(center, id)}
+              />
+            </Picker>
+          </div>
+
+          <DayJury
+            key={day.id}
+            day={day}
+            dayIndex={dayIndex}
+            duos={duos.filter((d) => d.centerDayId === day.id).sort((a, b) => a.number - b.number)}
+            pools={pools.filter((p) => p.centerDayId === day.id)}
+            jurors={jurors}
+            teamById={teamById}
+          />
+        </>
+      )}
     </PageMotion>
   );
 }
 
-// ─── Accounts ─────────────────────────────────────────────────────────
-
-function AccountsSection({ accounts, pools }: { accounts: Account[]; pools: PoolDetails[] }) {
-  const { user } = useSession();
-  const { run, busy, error } = useAction(ACCOUNT_QUERIES);
-  const [editing, setEditing] = useState<Account | "new" | null>(null);
-  const [revealed, setRevealed] = useState<{ email: string; password: string } | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-
-  const passageCount = (id: string) =>
-    pools.flatMap((p) => p.passages).filter((p) => p.duo?.members.some((m) => m.id === id)).length;
-  const sorted = [...accounts].sort((a, b) => a.role.localeCompare(b.role) || a.lastName.localeCompare(b.lastName));
-
-  const reset = async (account: Account) => {
-    const res = await run(() => resetPassword(account.id));
-    if (res) setRevealed({ email: account.email, password: res.password });
-  };
-
+function Picker({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <section>
-      <SectionHeading title="Comptes" right={<Btn size="sm" onClick={() => setEditing("new")}>+ Nouveau compte</Btn>} />
-      {error && <div className="mb-4"><Alert>{error}</Alert></div>}
-      <BrutalCard className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="brutal-table">
-            <thead>
-              <tr>
-                <th>Nom</th>
-                <th>Email</th>
-                <th>Rôle</th>
-                <th style={{ textAlign: "center" }}>Passages</th>
-                <th style={{ borderRight: "none" }} />
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((a) => (
-                <tr key={a.id}>
-                  <td>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="flex items-center justify-center font-mont shrink-0"
-                        style={{ width: 34, height: 34, background: "var(--paper-2)", color: "var(--forest)", fontWeight: 900, border: "1px solid var(--forest)", fontSize: "0.75rem" }}
-                      >
-                        {`${a.firstName[0] ?? ""}${a.lastName[0] ?? ""}`.toUpperCase()}
-                      </span>
-                      <span className="font-mont" style={{ color: "var(--forest)", fontWeight: 800 }}>
-                        {a.firstName} {a.lastName}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="font-open text-sm" style={{ color: "var(--ink-soft)" }}>{a.email}</td>
-                  <td><Badge tone={a.role === "admin" ? "dark" : "sage"}>{a.role === "admin" ? "Admin" : "Jury"}</Badge></td>
-                  <td style={{ textAlign: "center" }} className="font-mont">{a.role === "jury" ? passageCount(a.id) : "—"}</td>
-                  <td style={{ borderRight: "none" }}>
-                    <div className="flex gap-1.5 justify-end flex-wrap">
-                      <Btn variant="ghost" size="sm" onClick={() => setEditing(a)}>Modifier</Btn>
-                      <Btn variant="ghost" size="sm" disabled={busy} onClick={() => reset(a)}>Nouveau mot de passe</Btn>
-                      {a.id !== user?.id && (confirmDelete === a.id ? (
-                        <>
-                          <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(null); run(() => deleteAccount(a.id)); }}>Confirmer</Btn>
-                          <Btn variant="ghost" size="sm" onClick={() => setConfirmDelete(null)}>Annuler</Btn>
-                        </>
-                      ) : (
-                        <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(a.id)}>Supprimer</Btn>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </BrutalCard>
-
-      {editing && (
-        <AccountModal
-          account={editing === "new" ? null : editing}
-          onClose={() => setEditing(null)}
-          onCreated={(email, password) => { setEditing(null); setRevealed({ email, password }); }}
-        />
-      )}
-      {revealed && <PasswordModal {...revealed} onClose={() => setRevealed(null)} />}
-    </section>
-  );
-}
-
-function AccountModal({
-  account,
-  onClose,
-  onCreated,
-}: {
-  account: Account | null; // null = create
-  onClose: () => void;
-  onCreated: (email: string, password: string) => void;
-}) {
-  const [draft, setDraft] = useState<AccountInput>({
-    firstName: account?.firstName ?? "",
-    lastName: account?.lastName ?? "",
-    email: account?.email ?? "",
-    phone: account?.phone ?? "",
-    role: account?.role ?? "jury",
-  });
-  const { run, busy, error } = useAction(ACCOUNT_QUERIES);
-  const set = (key: keyof AccountInput, value: string) => setDraft((d) => ({ ...d, [key]: value }));
-  const valid = draft.firstName.trim() && draft.lastName.trim() && draft.email.trim();
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const payload = { ...draft, phone: draft.phone?.trim() || undefined };
-    if (account) {
-      if (await run(() => updateAccount(account.id, payload))) onClose();
-    } else {
-      const created = await run(() => createAccount(payload));
-      if (created) onCreated(created.account.email, created.password);
-    }
-  };
-
-  return (
-    <Modal
-      open
-      title={account ? "Modifier le compte" : "Nouveau compte"}
-      onClose={onClose}
-      width={520}
-      footer={
-        <>
-          <Btn variant="ghost" onClick={onClose}>Annuler</Btn>
-          <Btn type="submit" form="account-form" disabled={!valid || busy}>{account ? "Enregistrer" : "Créer"}</Btn>
-        </>
-      }
-    >
-      <form id="account-form" onSubmit={submit} className="space-y-4">
-        {error && <Alert>{error}</Alert>}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Prénom"><Input value={draft.firstName} onChange={(e) => set("firstName", e.target.value)} autoFocus /></Field>
-          <Field label="Nom"><Input value={draft.lastName} onChange={(e) => set("lastName", e.target.value)} /></Field>
-          <Field label="Email"><Input type="email" value={draft.email} onChange={(e) => set("email", e.target.value)} /></Field>
-          <Field label="Téléphone (optionnel)"><Input value={draft.phone ?? ""} onChange={(e) => set("phone", e.target.value)} /></Field>
-          <Field label="Rôle">
-            <Select value={draft.role} onChange={(e) => set("role", e.target.value)}>
-              <option value="jury">Jury</option>
-              <option value="admin">Admin</option>
-            </Select>
-          </Field>
-        </div>
-        {!account && (
-          <p className="font-open text-xs" style={{ color: "var(--ink-faint)" }}>
-            Un mot de passe sera généré et affiché une seule fois.
-          </p>
-        )}
-      </form>
-    </Modal>
-  );
-}
-
-function PasswordModal({ email, password, onClose }: { email: string; password: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    await navigator.clipboard.writeText(password);
-    setCopied(true);
-  };
-  return (
-    <Modal open title="Mot de passe" onClose={onClose} width={460} footer={<Btn onClick={onClose}>J'ai noté le mot de passe</Btn>}>
-      <p className="font-open text-sm mb-4" style={{ color: "var(--ink)" }}>
-        Transmettez ce mot de passe à <strong>{email}</strong>. Il ne sera plus affiché ; la personne pourra le
-        changer après sa première connexion.
-      </p>
-      <div className="flex items-center gap-2">
-        <code
-          className="flex-1 px-3 py-2 font-mont text-lg tracking-wider select-all"
-          style={{ background: "var(--paper-2)", border: "2px solid var(--forest)", color: "var(--forest)", fontWeight: 800 }}
-        >
-          {password}
-        </code>
-        <Btn variant="forest" size="sm" onClick={copy}>{copied ? "Copié" : "Copier"}</Btn>
+    <div>
+      <div className="font-mont text-micro uppercase tracking-widest mb-1.5" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+        {label}
       </div>
-    </Modal>
+      {children}
+    </div>
   );
 }

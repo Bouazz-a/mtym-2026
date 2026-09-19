@@ -4,9 +4,9 @@ function jurorShortName(j: Juror): string {
   return `${j.firstName} ${j.lastName[0] ?? ""}.`;
 }
 
-// "Duo 2 · Ines U. & Omar U."
-export function duoLabel(duo: JuryDuo): string {
-  return `Duo ${duo.number} · ${duo.members.map(jurorShortName).join(" & ")}`;
+// "Ines U. & Omar U."
+export function duoMembers(duo: JuryDuo): string {
+  return duo.members.map(jurorShortName).join(" & ");
 }
 
 // Duos judging more than one passage of the pool — allowed, but a duo

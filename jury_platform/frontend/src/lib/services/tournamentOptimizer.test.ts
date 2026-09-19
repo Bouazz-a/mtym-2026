@@ -1,6 +1,7 @@
 import { generateQualifsDay, QUALIFS_PROBLEMS } from "./tournamentOptimizer";
 import { ConflictError } from "./errors";
 import type { Team } from "@/types";
+import { PASSAGE_SLOTS } from "@/utils/schedule";
 
 function teams(n: number): Team[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -20,7 +21,7 @@ describe("generateQualifsDay", () => {
 
   it.each(drawable)("draws %i teams into valid pools", (n) => {
     const input = teams(n);
-    const { pools, passages } = generateQualifsDay({ teams: input, labelPrefix: "CAS-J1-" });
+    const { pools, passages } = generateQualifsDay({ teams: input, labelPrefix: "CAS-B" });
 
     const placed = new Map<string, string>(); // teamId -> poolId
     for (const pool of pools) {
@@ -41,7 +42,12 @@ describe("generateQualifsDay", () => {
         expect(placed.has(t)).toBe(false); // never in two pools
         placed.set(t, pool.id);
       }
-      expect(pool.label).toMatch(/^CAS-J1-A\d+$/);
+      expect(pool.label).toMatch(/^CAS-B\d+$/);
+      // passage n of every pool plays in slot n
+      ps.forEach((p, i) => {
+        expect(p.label).toBe(`${pool.label}P${i + 1}`);
+        expect(p.timeSlot).toBe(PASSAGE_SLOTS[i].start);
+      });
     }
     expect(placed.size).toBe(n); // every team is placed
   });

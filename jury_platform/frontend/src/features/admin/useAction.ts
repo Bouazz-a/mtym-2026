@@ -30,3 +30,7 @@ export function useAction(invalidate: string[][]) {
 // Everything the tournament pages read — any draw/day/team change can move
 // data between all three.
 export const TOURNAMENT_QUERIES = [["teams"], ["center-days"], ["pools"]];
+
+// What a duo change touches: the duos, the passages carrying them, and the
+// accounts' passage counts.
+export const DUO_QUERIES = [["duos"], ["pools"], ["accounts"]];

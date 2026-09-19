@@ -24,11 +24,12 @@ export function formatDay(date: string): string {
   });
 }
 
-// Pool labels are prefixed with the center code and day number so they stay
-// unique across the whole qualification: "CAS-J2-" + "A1" -> "CAS-J2-A1".
+// Pool labels carry the center code and a letter per day (A = day 1,
+// B = day 2…) so they stay unique across the whole qualification:
+// "CAS-B" + pool 1 -> "CAS-B1".
 export function poolLabelPrefix(center: Center, dayIndex: number): string {
   const code = CENTERS.find((c) => c.value === center)?.code ?? center.slice(0, 3).toUpperCase();
-  return `${code}-J${dayIndex + 1}-`;
+  return `${code}-${String.fromCharCode(65 + dayIndex)}`;
 }
 
 export function buildPoolLabel(round: Round, poolIndexInRound: number): string {

@@ -89,7 +89,13 @@ export function AdminDashboard() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.value} className="hover-row cursor-pointer" onClick={() => navigate(`/tournoi?centre=${r.value}`)}>
+                  <tr
+                    key={r.value}
+                    className="row-clickable"
+                    tabIndex={0}
+                    onClick={() => navigate(`/tournoi?centre=${r.value}`)}
+                    onKeyDown={(e) => { if (e.key === "Enter") navigate(`/tournoi?centre=${r.value}`); }}
+                  >
                     <td className="font-mont" style={{ color: "var(--forest)", fontWeight: 900 }}>{r.label}</td>
                     <td style={{ textAlign: "center" }} className="font-mont">{r.teams}</td>
                     <td style={{ textAlign: "center" }} className="font-mont">{r.days || "—"}</td>
