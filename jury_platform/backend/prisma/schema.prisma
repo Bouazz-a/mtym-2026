@@ -53,14 +53,18 @@ model Account {
   duoSeats          DuoMember[]
   reportEvaluations ReportEvaluation[]
   oralEvaluations   OralEvaluation[]
+  auditEntries      AuditLog[]
 }
 
 // ─── Teams (imported from the main site's dump) ──────────────────────────────
 
 model CenterDay {
-  id     String @id @default(uuid())
-  center Center
-  date   String // "YYYY-MM-DD"
+  id       String @id @default(uuid())
+  center   Center
+  date     String // "YYYY-MM-DD"
+  // The day's passage slots, [{ start: "HH:MM", minutes }]: every pool plays
+  // its passage n in slot n, in parallel.
+  schedule Json   @default("[{\"start\":\"13:15\",\"minutes\":60},{\"start\":\"14:30\",\"minutes\":60},{\"start\":\"16:00\",\"minutes\":60},{\"start\":\"17:15\",\"minutes\":60}]")
 
   teams Team[]
   pools Pool[]
@@ -144,7 +148,7 @@ model Passage {
   opponentTeamId String
   reporterTeamId String
   extraTeamId    String?
-  timeSlot       String? // "HH:MM"
+  slot           Int // 1..4 — position in the pool; its time is the day's schedule[slot - 1]
   room           String?
   duoId          String? // the duo judging this passage
 
@@ -223,4 +227,34 @@ model OralGrade {
   evaluation OralEvaluation @relation(fields: [oralEvaluationId], references: [id], onDelete: Cascade)
 
   @@unique([oralEvaluationId, criterionId])
+}
+
+// A team's final grade: the weighted average of its four notes (each as a
+// percentage of its grid). One row, id 1, created by the migration.
+model FinalWeights {
+  id       Int   @id @default(1)
+  defender Float @default(9)
+  opponent Float @default(3)
+  reporter Float @default(2)
+  report   Float @default(5)
+}
+
+// ─── Journal ─────────────────────────────────────────────────────────────────
+
+// One entry per admin change. The author's name and email are copied so the
+// entry outlives the account.
+model AuditLog {
+  id         String   @id @default(uuid())
+  at         DateTime @default(now())
+  actorId    String?
+  actorName  String
+  actorEmail String
+  category   String // "Tirage", "Duos", "Comptes"…
+  action     String // machine-readable, e.g. "passage.duo"
+  summary    String // what happened, in French
+  details    Json? // before/after, or what was deleted
+
+  actor Account? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([at])
 }

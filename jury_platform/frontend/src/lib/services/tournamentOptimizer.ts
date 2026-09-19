@@ -1,6 +1,5 @@
 import type { Passage, Pool, Team } from "@/types";
 import { buildPassageLabel, buildPoolLabel } from "@/utils/labels";
-import { PASSAGE_SLOTS } from "@/utils/schedule";
 import { ConflictError } from "./errors";
 import type {
   ConstraintCode,
@@ -81,7 +80,7 @@ export const QUALIFS_PROBLEMS = [1, 2, 3, 4];
 
 // Qualifications: draw the pools of one center day. Pools of 4, or 3 when
 // the team count requires it — 1, 2 and 5 teams can't be split that way.
-// Passage n of every pool gets the day's slot n (pools play in parallel).
+// Passage n of every pool plays in the day's slot n (pools in parallel).
 export function generateQualifsDay(args: {
   teams: Team[];
   labelPrefix: string; // e.g. "CAS-A" -> pools CAS-A1, CAS-A2…
@@ -94,14 +93,7 @@ export function generateQualifsDay(args: {
     );
   }
   const composition = splitIntoPools(shuffle([...args.teams]), 4);
-  const round = buildRound1(composition, args.problemPool ?? QUALIFS_PROBLEMS, (idx) => `${args.labelPrefix}${idx + 1}`);
-  const slotOf = new Map<string, string>();
-  for (const pool of round.pools) {
-    round.passages
-      .filter((p) => p.poolId === pool.id)
-      .forEach((p, i) => slotOf.set(p.id, PASSAGE_SLOTS[i].start));
-  }
-  return { ...round, passages: round.passages.map((p) => ({ ...p, timeSlot: slotOf.get(p.id) })) };
+  return buildRound1(composition, args.problemPool ?? QUALIFS_PROBLEMS, (idx) => `${args.labelPrefix}${idx + 1}`);
 }
 
 // Finale: generate both rounds. Round 2 uses the Hungarian solver and never
@@ -177,6 +169,7 @@ function buildRound1(
       passages.push({
         id: crypto.randomUUID(),
         label: buildPassageLabel(pool.label, i),
+        slot: i + 1,
         problemNumber: poolProblems[i],
         poolId: pool.id,
         defenderTeamId: pc.teamsInPool[i].id,
@@ -302,6 +295,7 @@ function generateRound2BestEffort(
       passages.push({
         id: crypto.randomUUID(),
         label: buildPassageLabel(plan.pool.label, i),
+        slot: i + 1,
         problemNumber: entry.problem,
         poolId: plan.pool.id,
         defenderTeamId: entry.defender.id,

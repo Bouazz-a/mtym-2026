@@ -17,6 +17,12 @@ const JuryPage = lazy(() => import("@/features/admin/JuryPage").then((m) => ({ d
 const AccountsPage = lazy(() =>
   import("@/features/admin/AccountsPage").then((m) => ({ default: m.AccountsPage })),
 );
+const ResultsPage = lazy(() =>
+  import("@/features/admin/ResultsPage").then((m) => ({ default: m.ResultsPage })),
+);
+const JournalPage = lazy(() =>
+  import("@/features/admin/JournalPage").then((m) => ({ default: m.JournalPage })),
+);
 const CriteriaPage = lazy(() =>
   import("@/features/admin/CriteriaPage").then((m) => ({ default: m.CriteriaPage })),
 );
@@ -25,6 +31,9 @@ const EvaluationsPage = lazy(() =>
 );
 const JuryDashboard = lazy(() =>
   import("@/features/jury/JuryDashboard").then((m) => ({ default: m.JuryDashboard })),
+);
+const NotFoundPage = lazy(() =>
+  import("@/features/shared/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
 );
 const PassagePage = lazy(() =>
   import("@/features/jury/PassagePage").then((m) => ({ default: m.PassagePage })),
@@ -44,12 +53,14 @@ export default function App() {
                   <Route path="jury" element={<JuryPage />} />
                   <Route path="criteres" element={<CriteriaPage />} />
                   <Route path="notes" element={<EvaluationsPage />} />
+                  <Route path="resultats" element={<ResultsPage />} />
                   <Route path="comptes" element={<AccountsPage />} />
+                  <Route path="journal" element={<JournalPage />} />
                 </Route>
                 <Route element={<RoleGuard allow={["jury"]} />}>
                   <Route path="passages/:passageId" element={<PassagePage />} />
                 </Route>
-                <Route path="*" element={<NotFound />} />
+                <Route path="*" element={<NotFoundPage />} />
               </Route>
             </Route>
           </Routes>
@@ -70,14 +81,4 @@ function RequireSession() {
 function HomeByRole() {
   const { role } = useSession();
   return role === "admin" ? <AdminDashboard /> : <JuryDashboard />;
-}
-
-
-function NotFound() {
-  return (
-    <div className="py-24 text-center">
-      <div className="font-mont text-4xl mb-3" style={{ color: "var(--forest)", fontWeight: 900 }}>404</div>
-      <div className="font-open text-sm" style={{ color: "var(--ink-soft)" }}>Cette page n'existe pas.</div>
-    </div>
-  );
 }

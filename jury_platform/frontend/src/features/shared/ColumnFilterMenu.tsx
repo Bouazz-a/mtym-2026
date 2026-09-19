@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { isFilterActive, NO_FILTER, type ColumnFilter, type SortDir } from "@/lib/services/columnFilters";
+import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, FunnelIcon } from "./icons";
 import { Btn, Input, Popover } from "./primitives";
 
 // The dropdown of a table header, like a spreadsheet's filter button: sort
@@ -16,6 +17,27 @@ const MENU_TEXT: CSSProperties = {
   color: "var(--ink)",
 };
 
+const SORT_LABELS = {
+  number: ["Trier du plus petit au plus grand", "Trier du plus grand au plus petit"],
+  text: ["Trier de A à Z", "Trier de Z à A"],
+  date: ["Du plus ancien au plus récent", "Du plus récent au plus ancien"],
+} as const;
+
+// The header button: plain, sorted (outlined), or filtered (filled)
+const BUTTON_TONES: Record<"dark" | "light", (filtered: boolean, sorted: boolean) => CSSProperties> = {
+  dark: (filtered, sorted) => ({
+    border: `1px solid ${filtered || sorted ? "var(--saffron)" : "rgba(244,236,216,0.35)"}`,
+    background: filtered ? "var(--saffron)" : "transparent",
+    color: filtered ? "var(--forest)" : sorted ? "var(--saffron)" : "var(--paper)",
+  }),
+  light: (filtered, sorted) => ({
+    border: `1px solid ${filtered || sorted ? "var(--forest)" : "rgba(18,32,25,0.35)"}`,
+    background: filtered ? "var(--forest)" : "transparent",
+    color: filtered ? "var(--saffron)" : "var(--forest)",
+    ...(sorted && !filtered && { borderWidth: 2 }),
+  }),
+};
+
 export function ColumnFilterMenu({
   label,
   values,
@@ -26,6 +48,8 @@ export function ColumnFilterMenu({
   range = false,
   emptyLabel = "(Vide)",
   align = "left",
+  tone = "dark",
+  sortKind = "number",
 }: {
   label: string;
   values: string[]; // the checklist — see distinctValues()
@@ -36,6 +60,8 @@ export function ColumnFilterMenu({
   range?: boolean;
   emptyLabel?: string; // how "" reads in the checklist
   align?: "left" | "right";
+  tone?: "dark" | "light"; // the header it sits on: forest (default) or saffron
+  sortKind?: keyof typeof SORT_LABELS;
 }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
@@ -57,24 +83,18 @@ export function ColumnFilterMenu({
         aria-expanded={open}
         title={filtered ? "Filtre actif" : sort ? "Colonne triée" : "Filtrer et trier"}
         className="shrink-0 inline-flex items-center justify-center transition-colors"
-        style={{
-          width: 24,
-          height: 24,
-          border: `1px solid ${filtered || sort ? "var(--saffron)" : "rgba(244,236,216,0.35)"}`,
-          background: filtered ? "var(--saffron)" : "transparent",
-          color: filtered ? "var(--forest)" : sort ? "var(--saffron)" : "var(--paper)",
-        }}
+        style={{ width: 24, height: 24, ...BUTTON_TONES[tone](filtered, sort !== null) }}
       >
-        {filtered ? <FunnelIcon /> : sort ? <ArrowIcon up={sort === "asc"} /> : <ChevronIcon />}
+        {filtered ? <FunnelIcon size={13} /> : sort === "asc" ? <ArrowUpIcon size={13} /> : sort ? <ArrowDownIcon size={13} /> : <ChevronDownIcon size={13} />}
       </button>
 
       <Popover open={open} onClose={() => setOpen(false)} anchorRef={anchor} width={270} align={align}>
         <div className="py-2 font-open" style={MENU_TEXT}>
           <MenuItem active={sort === "asc"} onClick={() => onSort(sort === "asc" ? null : "asc")}>
-            <ArrowIcon up /> Trier du plus petit au plus grand
+            <ArrowUpIcon size={13} /> {SORT_LABELS[sortKind][0]}
           </MenuItem>
           <MenuItem active={sort === "desc"} onClick={() => onSort(sort === "desc" ? null : "desc")}>
-            <ArrowIcon up={false} /> Trier du plus grand au plus petit
+            <ArrowDownIcon size={13} /> {SORT_LABELS[sortKind][1]}
           </MenuItem>
 
           {range && (
@@ -178,23 +198,5 @@ function CheckRow({
       />
       <span className="font-mont" style={{ fontWeight: 600 }}>{children}</span>
     </label>
-  );
-}
-
-const ICON = { width: 13, height: 13, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.5, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
-
-function ChevronIcon() {
-  return <svg {...ICON}><polyline points="6 9 12 15 18 9" /></svg>;
-}
-
-function FunnelIcon() {
-  return <svg {...ICON}><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5 3 4" /></svg>;
-}
-
-function ArrowIcon({ up }: { up: boolean }) {
-  return (
-    <svg {...ICON}>
-      {up ? <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="6 11 12 5 18 11" /></> : <><line x1="12" y1="5" x2="12" y2="19" /><polyline points="6 13 12 19 18 13" /></>}
-    </svg>
   );
 }

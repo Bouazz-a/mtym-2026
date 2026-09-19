@@ -1,12 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Badge, BrutalCard, PageHeader, PageLoading, PageMotion, Segmented } from "@/features/shared/primitives";
+import { ChevronLeftIcon } from "@/features/shared/icons";
 import { EmptyState } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getPassage } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { centerLabel, formatDay } from "@/utils/labels";
+import { slotTime } from "@/utils/schedule";
 import { OralGrading } from "./OralGrading";
 import { ReportGrading } from "./ReportGrading";
 import type { PassageData } from "./passageContext";
@@ -17,7 +19,7 @@ import type { PassageData } from "./passageContext";
 // The tab lives in the query string (?onglet=rapport) and is switched with
 // history *replace*, like the center picker of the Tournoi page: switching
 // neither reloads the page nor stacks history entries, so Back returns to
-// "Mes passages". Both tabs stay mounted (the other one hidden) so grades
+// "Mon planning". Both tabs stay mounted (the other one hidden) so grades
 // typed but not saved yet survive a switch.
 
 type Tab = "oral" | "rapport";
@@ -43,6 +45,7 @@ export function PassagePage() {
   const teamById = new Map((teamsQ.data ?? []).map((t) => [t.id, t]));
   const coJurors = passage.duo?.members.filter((m) => m.id !== user?.id) ?? [];
   const day = passage.pool.centerDay;
+  const time = slotTime(day, passage.slot);
   const data: PassageData = {
     passage,
     teamById,
@@ -65,7 +68,7 @@ export function PassagePage() {
 
       <BrutalCard className="overflow-hidden">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: "var(--border)" }}>
-          <InfoCell label="Horaire" value={passage.timeSlot ?? "—"} />
+          <InfoCell label="Horaire" value={time ? `${time.start} – ${time.end}` : "—"} />
           <InfoCell label="Salle" value={passage.room ?? "—"} />
           <InfoCell label="Avec" value={coJurors.map((j) => `${j.firstName} ${j.lastName}`).join(", ") || "—"} />
           <InfoCell label="Observateur" value={passage.extraTeamId ? teamById.get(passage.extraTeamId)?.quadrigram ?? "—" : "—"} />
@@ -90,7 +93,7 @@ export function PassagePage() {
 function BackLink() {
   return (
     <Link to="/" className="font-mont text-tiny uppercase tracking-widest inline-flex items-center gap-1.5" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-      ← Mes passages
+      <ChevronLeftIcon size={13} /> Mon planning
     </Link>
   );
 }

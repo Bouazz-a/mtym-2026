@@ -2,24 +2,29 @@ import * as XLSX from "xlsx";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getOralEvaluations, getReportEvaluations } from "@/lib/repositories/evaluationRepository";
+import { getFinalWeights } from "@/lib/repositories/finalWeightsRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
+import type { AuditEntry } from "@/types";
 import { centerLabel } from "@/utils/labels";
-import { GRADED_ROLES, passageResults, type NoteSet } from "./results";
+import { slotTime } from "@/utils/schedule";
+import { passageResults, percent, teamResults, type NoteSet } from "./results";
 
 // exportService — the grades workbook (admin). Every sheet carries readable
 // keys (center, day, pool and passage labels, quadrigrams, juror names) so
 // sheets can be joined without ids.
 //   Passages       one row per passage: duo, the three oral notes, the report note
 //   Équipes        one row per team: its notes as defender/opponent/reporter + report
+//                  (raw and in %) and its final grade
 //   Notes orales   one row per juror × team × criterion
 //   Notes rapports one row per juror × report × criterion
+// and the journal of admin changes (exportJournalXlsx).
 
 const ROLE_LABEL = { defender: "Défenseur", opponent: "Opposant", reporter: "Rapporteur", extra: "Observateur" } as const;
 
 export async function exportGradesXlsx(): Promise<void> {
-  const [pools, teams, criteria, oral, report, accounts] = await Promise.all([
-    getPools(), getTeams(), getCriteria(), getOralEvaluations(), getReportEvaluations(), getAccounts(),
+  const [pools, teams, criteria, oral, report, accounts, weights] = await Promise.all([
+    getPools(), getTeams(), getCriteria(), getOralEvaluations(), getReportEvaluations(), getAccounts(), getFinalWeights(),
   ]);
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const nameById = new Map(accounts.map((a) => [a.id, `${a.firstName} ${a.lastName}`]));
@@ -27,7 +32,11 @@ export async function exportGradesXlsx(): Promise<void> {
   const passageById = new Map(pools.flatMap((pool) => pool.passages.map((p) => [p.id, { pool, passage: p }])));
   const results = passageResults(pools, criteria, oral, report);
   const quad = (id: string | null | undefined) => (id ? teamById.get(id)?.quadrigram ?? "" : "");
-  const avg = (set: NoteSet) => (set.average === null ? "" : round2(set.average));
+  const avg = (set: NoteSet | null) => (set?.average == null ? "" : round2(set.average));
+  const pct = (set: NoteSet | null) => {
+    const p = percent(set);
+    return p === null ? "" : round2(p);
+  };
   const where = (pool: (typeof pools)[number]) => ({
     centre: pool.centerDay ? centerLabel(pool.centerDay.center) : "",
     jour: pool.centerDay?.date ?? "",
@@ -40,7 +49,7 @@ export async function exportGradesXlsx(): Promise<void> {
     ...where(pool),
     passage: passage.label,
     probleme: passage.problemNumber,
-    horaire: passage.timeSlot ?? "",
+    horaire: slotTime(pool.centerDay, passage.slot)?.start ?? "",
     salle: passage.room ?? "",
     duo: passage.duo ? passage.duo.members.map((m) => `${m.firstName} ${m.lastName}`).join(" & ") : "",
     defenseur: quad(passage.defenderTeamId),
@@ -54,20 +63,22 @@ export async function exportGradesXlsx(): Promise<void> {
     notes_saisies: `${done}/${expected}`,
   })));
 
-  append(wb, "Équipes", teams.filter((t) => t.centerDayId).map((t) => {
-    const asRole = (role: (typeof GRADED_ROLES)[number]) =>
-      results.find((x) => x.oral[role].teamId === t.id);
-    const [defended, opposed, reported] = GRADED_ROLES.map(asRole);
-    const pool = defended?.pool ?? results.find((x) => x.passage.extraTeamId === t.id)?.pool;
+  append(wb, "Équipes", teamResults(results, weights).map(({ teamId, pool, notes, final }) => {
+    const defended = results.find((x) => x.passage.defenderTeamId === teamId);
     return {
-      ...(pool ? where(pool) : { centre: centerLabel(t.center), jour: "", poule: "" }),
-      equipe: t.quadrigram,
-      nom: t.name,
-      note_defense: defended ? avg(defended.oral.defender) : "",
-      note_opposition: opposed ? avg(opposed.oral.opponent) : "",
-      note_rapporteur: reported ? avg(reported.oral.reporter) : "",
+      ...where(pool),
+      equipe: quad(teamId),
+      nom: teamById.get(teamId)?.name ?? "",
+      note_defense: avg(notes.defender),
+      defense_pct: pct(notes.defender),
+      note_opposition: avg(notes.opponent),
+      opposition_pct: pct(notes.opponent),
+      note_rapporteur: avg(notes.reporter),
+      rapporteur_pct: pct(notes.reporter),
       probleme_defendu: defended?.passage.problemNumber ?? "",
-      note_rapport_ecrit: defended ? avg(defended.report) : "",
+      note_rapport_ecrit: avg(notes.report),
+      rapport_ecrit_pct: pct(notes.report),
+      note_finale_pct: final === null ? "" : round2(final),
     };
   }));
 
@@ -118,4 +129,23 @@ function append(wb: XLSX.WorkBook, name: string, rows: Record<string, unknown>[]
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// The journal of admin changes, as filtered on the Journal page
+export function exportJournalXlsx(entries: AuditEntry[]): void {
+  const wb = XLSX.utils.book_new();
+  append(wb, "Journal", entries.map((e) => {
+    const at = new Date(e.at);
+    return {
+      date: at.toLocaleDateString("fr-FR"),
+      heure: at.toLocaleTimeString("fr-FR"),
+      auteur: e.actorName,
+      email: e.actorEmail,
+      categorie: e.category,
+      action: e.action,
+      detail: e.summary,
+      donnees: e.details == null ? "" : JSON.stringify(e.details),
+    };
+  }));
+  XLSX.writeFile(wb, `mtym-2026-journal-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }

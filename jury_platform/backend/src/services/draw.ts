@@ -4,6 +4,7 @@ import { teamsOf, type Lineup } from "./passages";
 export interface DrawPassage extends Lineup {
   label: string;
   problemNumber: number;
+  slot: number; // 1..n — the day's time slot
 }
 
 export interface DrawPool {
@@ -18,6 +19,7 @@ export interface DrawPool {
 //   - each team defends exactly once in its pool, on a different problem
 //   - a team never holds two roles in the same passage
 //   - the observer ("extra") role exists only in pools of 4
+//   - a pool's passages take slots 1..n, one each
 export function validateDraw(pools: DrawPool[], dayTeamIds: string[]): void {
   const dayTeams = new Set(dayTeamIds);
   const placed = new Set<string>();
@@ -45,6 +47,10 @@ export function validateDraw(pools: DrawPool[], dayTeamIds: string[]): void {
     }
     if (new Set(pool.passages.map((p) => p.problemNumber)).size !== size) {
       fail(`Poule ${pool.label} : un problème est défendu deux fois`);
+    }
+    const slots = new Set(pool.passages.map((p) => p.slot));
+    if (slots.size !== size || [...slots].some((n) => n < 1 || n > size)) {
+      fail(`Poule ${pool.label} : les passages doivent occuper les créneaux 1 à ${size}`);
     }
 
     for (const teamId of members) {

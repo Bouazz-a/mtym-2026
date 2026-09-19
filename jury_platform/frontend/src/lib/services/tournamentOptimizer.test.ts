@@ -1,7 +1,6 @@
 import { generateQualifsDay, QUALIFS_PROBLEMS } from "./tournamentOptimizer";
 import { ConflictError } from "./errors";
 import type { Team } from "@/types";
-import { PASSAGE_SLOTS } from "@/utils/schedule";
 
 function teams(n: number): Team[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -46,7 +45,7 @@ describe("generateQualifsDay", () => {
       // passage n of every pool plays in slot n
       ps.forEach((p, i) => {
         expect(p.label).toBe(`${pool.label}P${i + 1}`);
-        expect(p.timeSlot).toBe(PASSAGE_SLOTS[i].start);
+        expect(p.slot).toBe(i + 1);
       });
     }
     expect(placed.size).toBe(n); // every team is placed

@@ -6,13 +6,15 @@ import {
 import {
   createCriterion, deleteCriterion, getCriteria, updateCriterion,
 } from "@/lib/repositories/criteriaRepository";
+import { getFinalWeights, updateFinalWeights } from "@/lib/repositories/finalWeightsRepository";
 import { QUALIFS_PROBLEMS } from "@/lib/services/tournamentOptimizer";
-import type { Criterion, PassageRole } from "@/types";
+import type { Criterion, FinalWeights, PassageRole } from "@/types";
 import { useAction } from "./useAction";
 
-// CriteriaPage — the grading grids. Criteria (label, coefficient, theme)
-// drive every jury grading screen, so editing them here re-shapes the
-// jury's grids live. Nothing about the grids is hardcoded in the UI.
+// CriteriaPage — the final grade's weights, then the grading grids.
+// Criteria (label, coefficient, theme) drive every jury grading screen, so
+// editing them here re-shapes the jury's grids live. Nothing about the
+// grids is hardcoded in the UI.
 
 const ORAL_ROLES: { value: PassageRole; label: string }[] = [
   { value: "defender", label: "Défenseur" },
@@ -43,15 +45,13 @@ export function CriteriaPage() {
 
   return (
     <PageMotion className="space-y-12">
-      <PageHeader
-        eyebrow="Administration"
-        title="Critères de notation"
-        sub="Chaque note vaut taux de réussite (0–100 %) × coefficient ; un coefficient négatif est un malus."
-      />
+      <PageHeader eyebrow="Administration" title="Critères de notation" />
       {error && <Alert>{error}</Alert>}
 
+      <FinalWeightsSection />
+
       <section>
-        <SectionHeading title="Rapports finaux" right={<Hint>Une grille par problème</Hint>} />
+        <SectionHeading title="Rapports finaux" />
         <Segmented
           options={QUALIFS_PROBLEMS.map((n) => ({ value: n, label: `Problème ${n}` }))}
           value={problem}
@@ -68,7 +68,7 @@ export function CriteriaPage() {
       </section>
 
       <section>
-        <SectionHeading title="Passages oraux" right={<Hint>Une grille par rôle · groupée par thème</Hint>} />
+        <SectionHeading title="Passages oraux" />
         <Segmented options={ORAL_ROLES} value={role} onChange={setRole} />
         <div className="mt-5">
           <CriterionGroup
@@ -83,11 +83,73 @@ export function CriteriaPage() {
   );
 }
 
-function Hint({ children }: { children: React.ReactNode }) {
+// ─── Final grade weights ──────────────────────────────────────────────
+
+const WEIGHT_PARTS: { key: keyof FinalWeights; label: string }[] = [
+  { key: "defender", label: "Défense" },
+  { key: "opponent", label: "Opposition" },
+  { key: "reporter", label: "Rapporteur" },
+  { key: "report", label: "Rapport écrit" },
+];
+
+function FinalWeightsSection() {
+  const weightsQ = useQuery({ queryKey: ["final-weights"], queryFn: getFinalWeights });
   return (
-    <span className="font-mont text-tiny uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 700 }}>
-      {children}
-    </span>
+    <section>
+      <SectionHeading title="Note finale" />
+      {weightsQ.data ? (
+        // Remounted when the saved weights change, so the draft starts from them
+        <WeightsEditor key={JSON.stringify(weightsQ.data)} saved={weightsQ.data} />
+      ) : (
+        <PageLoading />
+      )}
+    </section>
+  );
+}
+
+function WeightsEditor({ saved }: { saved: FinalWeights }) {
+  const [draft, setDraft] = useState<Record<keyof FinalWeights, string>>(
+    () => Object.fromEntries(WEIGHT_PARTS.map(({ key }) => [key, String(saved[key])])) as Record<keyof FinalWeights, string>,
+  );
+  const { run, busy, error } = useAction([["final-weights"]]);
+  const values: FinalWeights = {
+    defender: Number(draft.defender),
+    opponent: Number(draft.opponent),
+    reporter: Number(draft.reporter),
+    report: Number(draft.report),
+  };
+  const total = WEIGHT_PARTS.reduce((s, { key }) => s + values[key], 0);
+  const valid = WEIGHT_PARTS.every(({ key }) => draft[key].trim() !== "" && values[key] >= 0) && total > 0;
+  const dirty = WEIGHT_PARTS.some(({ key }) => values[key] !== saved[key]);
+
+  return (
+    <BrutalCard className="p-5">
+      <div className="flex items-end gap-4 flex-wrap">
+        {WEIGHT_PARTS.map(({ key, label }) => (
+          <label key={key} style={{ width: 130 }}>
+            <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+              {label}
+            </div>
+            <Input
+              type="number"
+              min={0}
+              step={0.5}
+              value={draft[key]}
+              onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+            />
+          </label>
+        ))}
+        <Btn size="sm" disabled={!dirty || !valid || busy} onClick={() => run(() => updateFinalWeights(values))}>
+          Enregistrer
+        </Btn>
+      </div>
+      <p className="font-open text-sm mt-4" style={{ color: "var(--ink-soft)" }}>
+        La note finale d'une équipe est la moyenne de ses quatre notes, chacune en % de sa grille, pondérées par ces
+        coefficients{valid ? ` (total ${total})` : ""}.
+      </p>
+      {!valid && <div className="mt-3"><Alert>Les coefficients doivent être positifs, et au moins un non nul.</Alert></div>}
+      {error && <div className="mt-3"><Alert>{error}</Alert></div>}
+    </BrutalCard>
   );
 }
 
@@ -104,7 +166,7 @@ function CriterionGroup({ criteria, onAdd }: { criteria: Criterion[]; onAdd: () 
         <span className="font-mont text-tiny uppercase tracking-widest" style={{ color: "var(--forest)", fontWeight: 900 }}>
           {criteria.length} critère{criteria.length > 1 ? "s" : ""}
         </span>
-        <Badge tone="neutral">Σ coefficients positifs · {totalCoef}</Badge>
+        <Badge tone="neutral">Total des coefficients · {totalCoef}</Badge>
       </div>
 
       {criteria.length === 0 ? (
@@ -122,7 +184,7 @@ function CriterionGroup({ criteria, onAdd }: { criteria: Criterion[]; onAdd: () 
       )}
 
       <div className="px-4 py-3" style={{ borderTop: "1px solid var(--border)", background: "var(--paper-2)" }}>
-        <Btn variant="ghost" size="sm" onClick={onAdd}>+ Ajouter un critère</Btn>
+        <Btn variant="ghost" size="sm" onClick={onAdd}>Ajouter un critère</Btn>
       </div>
     </BrutalCard>
   );

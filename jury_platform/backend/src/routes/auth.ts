@@ -3,6 +3,7 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { db } from "../db";
 import { authenticate, signToken } from "../middleware/auth";
+import { audit } from "../services/audit";
 import { accountToUser } from "../types";
 import { generatePassword, hashPassword, verifyPassword } from "../utils/passwords";
 import { BadRequestError, UnauthorizedError } from "../utils/errors";
@@ -59,9 +60,13 @@ router.put("/password", authenticate, async (req, res, next) => {
       throw new BadRequestError("Mot de passe actuel incorrect");
     }
 
-    await db.account.update({
-      where: { id: account.id },
-      data: { passwordHash: await hashPassword(newPassword) },
+    const passwordHash = await hashPassword(newPassword);
+    await db.$transaction(async (tx) => {
+      await tx.account.update({ where: { id: account.id }, data: { passwordHash } });
+      // The journal covers admin actions only
+      if (account.role === "admin") {
+        await audit(tx, req.user!, { category: "Comptes", action: "account.password", summary: "A changé son mot de passe" });
+      }
     });
     res.status(204).send();
   } catch (err) { next(err); }

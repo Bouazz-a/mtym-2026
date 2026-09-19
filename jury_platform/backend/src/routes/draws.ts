@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { adminOnly } from "../middleware/auth";
 import { isDayGraded } from "../services/access";
+import { audit, dayName } from "../services/audit";
 import { validateDraw } from "../services/draw";
 import { findPools } from "../services/pools";
 import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
@@ -21,7 +22,7 @@ const DrawSchema = z.object({
       opponentTeamId: z.string().uuid(),
       reporterTeamId: z.string().uuid(),
       extraTeamId: z.string().uuid().nullable().optional(),
-      timeSlot: z.string().regex(/^\d{2}:\d{2}$/, "Heure au format HH:MM").nullable().optional(),
+      slot: z.number().int().min(1).max(4),
     })),
   })).min(1),
 });
@@ -51,6 +52,7 @@ router.put("/:id/draw", async (req, res, next) => {
     await assertNotGraded(day.id);
     validateDraw(pools, day.teams.map((t) => t.id));
 
+    const replaced = await db.pool.count({ where: { centerDayId: day.id } });
     await db.$transaction(async (tx) => {
       await tx.pool.deleteMany({ where: { centerDayId: day.id } });
       for (const pool of pools) {
@@ -64,6 +66,12 @@ router.put("/:id/draw", async (req, res, next) => {
           },
         });
       }
+      await audit(tx, req.user!, {
+        category: "Tirage",
+        action: replaced ? "draw.redo" : "draw.create",
+        summary: `${replaced ? "Nouveau tirage" : "Tirage"} de ${dayName(day)} : ${pools.length} poule(s) (${pools.map((p) => p.label).join(", ")})`,
+        details: pools.map((p) => ({ pool: p.label, passages: p.passages.map((x) => x.label) })),
+      });
     });
 
     res.json(await findPools({ centerDayId: day.id }));
@@ -75,7 +83,14 @@ router.delete("/:id/pools", async (req, res, next) => {
   try {
     const day = await findDayOrThrow(req.params.id);
     await assertNotGraded(day.id);
-    await db.pool.deleteMany({ where: { centerDayId: day.id } });
+    await db.$transaction(async (tx) => {
+      const { count } = await tx.pool.deleteMany({ where: { centerDayId: day.id } });
+      await audit(tx, req.user!, {
+        category: "Tirage",
+        action: "draw.cancel",
+        summary: `Tirage annulé pour ${dayName(day)} (${count} poule(s) supprimée(s))`,
+      });
+    });
     res.status(204).send();
   } catch (err) { next(err); }
 });
@@ -99,17 +114,26 @@ router.post("/:id/swap-teams", async (req, res, next) => {
 
     const swap = (id: string) => (id === teamA ? teamB : id === teamB ? teamA : id);
     const passages = await db.passage.findMany({ where: { pool: { centerDayId: day.id } } });
-    await db.$transaction(
-      passages.map((p) => db.passage.update({
-        where: { id: p.id },
-        data: {
-          defenderTeamId: swap(p.defenderTeamId),
-          opponentTeamId: swap(p.opponentTeamId),
-          reporterTeamId: swap(p.reporterTeamId),
-          extraTeamId: p.extraTeamId && swap(p.extraTeamId),
-        },
-      })),
-    );
+    const teams = await db.team.findMany({ where: { id: { in: [teamA, teamB] } }, select: { id: true, quadrigram: true } });
+    const quad = (id: string) => teams.find((t) => t.id === id)?.quadrigram ?? "?";
+    await db.$transaction(async (tx) => {
+      for (const p of passages) {
+        await tx.passage.update({
+          where: { id: p.id },
+          data: {
+            defenderTeamId: swap(p.defenderTeamId),
+            opponentTeamId: swap(p.opponentTeamId),
+            reporterTeamId: swap(p.reporterTeamId),
+            extraTeamId: p.extraTeamId && swap(p.extraTeamId),
+          },
+        });
+      }
+      await audit(tx, req.user!, {
+        category: "Tirage",
+        action: "draw.swap",
+        summary: `${quad(teamA)} et ${quad(teamB)} échangées dans les passages de ${dayName(day)}`,
+      });
+    });
 
     res.json(await findPools({ centerDayId: day.id }));
   } catch (err) { next(err); }

@@ -3,6 +3,7 @@ import { Alert, Badge, Btn, BrutalCard, Modal, SectionHeading, Select } from "@/
 import { deleteDraw, saveDraw, swapTeams } from "@/lib/repositories/centerDayRepository";
 import { generateQualifsDay } from "@/lib/services/tournamentOptimizer";
 import type { CenterDay, PoolDetails, Team } from "@/types";
+import { SwapIcon } from "@/features/shared/icons";
 import { formatDay, poolLabelPrefix } from "@/utils/labels";
 import { hasFinalReport } from "@/utils/teams";
 import { PoolCard } from "./PoolsEditor";
@@ -146,7 +147,7 @@ function SwapTeams({ dayId, teams }: { dayId: string; teams: Team[] }) {
 
   const select = (value: string, onChange: (v: string) => void) => (
     <Select value={value} onChange={(e) => onChange(e.target.value)} style={{ width: 220 }}>
-      <option value="">— Choisir —</option>
+      <option value="">Choisir une équipe</option>
       {sorted.map((t) => <option key={t.id} value={t.id}>{t.quadrigram} · {t.name}</option>)}
     </Select>
   );
@@ -160,7 +161,7 @@ function SwapTeams({ dayId, teams }: { dayId: string; teams: Team[] }) {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {select(a, setA)}
-            <span className="font-mont" style={{ color: "var(--ink-faint)", fontWeight: 900 }}>⇄</span>
+            <span style={{ color: "var(--ink-faint)" }}><SwapIcon size={16} /></span>
             {select(b, setB)}
           </div>
         </div>
