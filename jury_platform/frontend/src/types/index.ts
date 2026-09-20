@@ -70,6 +70,11 @@ export interface CenterDay {
   center: Center;
   date: string; // "YYYY-MM-DD"
   schedule: ScheduleSlot[]; // 4 slots
+  // The day's composition is settled. Teams may be left without a pool (a
+  // team that doesn't come: its pool mates move to the online tournament,
+  // by hand). Any change to the pools clears it.
+  drawValidatedAt?: string | null;
+  drawValidatedBy?: string | null; // the admin's name at that moment
   _count: { teams: number; pools: number };
 }
 
@@ -80,6 +85,27 @@ export interface Pool {
   label: string;
   round: Round;
   centerDayId?: string | null; // null only for future finale pools
+  // Set while the pool is being composed by hand and still has holes; its
+  // passages only exist once the grid is complete (and `draft` goes back to
+  // null). Admins only — a juror never sees a pool without passages.
+  draft?: PoolGrid | null;
+}
+
+// A pool's grid as the admin fills it: one row per passage, a team (or not
+// yet) per role.
+export interface PoolGrid {
+  size: 3 | 4;
+  passages: GridPassage[];
+}
+
+export interface GridPassage {
+  slot: number; // 1..size
+  problemNumber: number; // 1..4
+  defenderTeamId: string | null;
+  opponentTeamId: string | null;
+  reporterTeamId: string | null;
+  extraTeamId: string | null; // pools of 4 only
+  room: string | null;
 }
 
 export interface Passage {

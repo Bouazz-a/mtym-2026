@@ -4,7 +4,7 @@
   "private": true,
   "description": "MTYM jury platform backend (mtym-jury.mathmaroc.org)",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "prisma migrate deploy && tsx watch src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",

@@ -6,7 +6,7 @@ import { isPassageJuror } from "../services/access";
 import { audit } from "../services/audit";
 import { duoInclude, duoPassageWarnings, toDuoResponse } from "../services/duos";
 import { teamsOf } from "../services/passages";
-import { toPoolResponse, poolInclude } from "../services/pools";
+import { clearDrawValidation, poolInclude, toPoolResponse } from "../services/pools";
 import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
@@ -101,6 +101,7 @@ router.put("/:id", ...adminOnly, async (req, res, next) => {
           summary: `Passage ${passage.label} : ${changed.join(", ")}`,
           details: { before, after },
         });
+        if (lineupChanged) await clearDrawValidation(tx, passage.pool.centerDayId);
       }
       return saved;
     });

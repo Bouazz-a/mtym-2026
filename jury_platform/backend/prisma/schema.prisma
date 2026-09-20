@@ -65,6 +65,11 @@ model CenterDay {
   // The day's passage slots, [{ start: "HH:MM", minutes }]: every pool plays
   // its passage n in slot n, in parallel.
   schedule Json   @default("[{\"start\":\"13:15\",\"minutes\":60},{\"start\":\"14:30\",\"minutes\":60},{\"start\":\"16:00\",\"minutes\":60},{\"start\":\"17:15\",\"minutes\":60}]")
+  // The day's composition is settled: pools won't move any more. Teams may
+  // legitimately be left without a pool (a team that doesn't come: its pool
+  // mates are moved to the online tournament by hand).
+  drawValidatedAt DateTime?
+  drawValidatedBy String? // the admin's name at that moment, like AuditLog
 
   teams Team[]
   pools Pool[]
@@ -110,6 +115,10 @@ model Pool {
   label       String
   round       Int     @default(1) // qualifs are single-round; kept for the finale
   centerDayId String? // null only for future finale pools
+  // A pool being composed by hand: the grid as it stands, with holes. Its
+  // passages are only created once the grid is complete, so the rest of the
+  // platform never meets a passage missing a team. Null = ordinary pool.
+  draft       Json?
 
   centerDay CenterDay? @relation(fields: [centerDayId], references: [id], onDelete: Cascade)
   passages  Passage[]

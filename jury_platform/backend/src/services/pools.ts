@@ -20,6 +20,16 @@ export function toPoolResponse({ passages, ...pool }: PoolRow) {
   };
 }
 
+// Any change to a day's composition (pools, lineups) unsettles it: the day
+// has to be validated again, so "Tirage validé" never lies.
+export async function clearDrawValidation(tx: Prisma.TransactionClient, centerDayId: string | null) {
+  if (!centerDayId) return;
+  await tx.centerDay.updateMany({
+    where: { id: centerDayId, NOT: { drawValidatedAt: null } },
+    data: { drawValidatedAt: null, drawValidatedBy: null },
+  });
+}
+
 export async function findPools(where: Prisma.PoolWhereInput) {
   const pools = await db.pool.findMany({ where, include: poolInclude, orderBy: { label: "asc" } });
   return pools.map(toPoolResponse);

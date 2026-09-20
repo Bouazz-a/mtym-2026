@@ -85,15 +85,38 @@ export function generateQualifsDay(args: {
   teams: Team[];
   labelPrefix: string; // e.g. "CAS-A" -> pools CAS-A1, CAS-A2…
   problemPool?: number[];
-}): GeneratedRound {
+  labelStart?: number; // first pool number, to continue an existing series
+  allowLeftovers?: boolean; // place what can be placed instead of refusing
+}): GeneratedRound & { leftover: Team[] } {
   const n = args.teams.length;
-  if (n < 3 || n === 5) {
+  if (!args.allowLeftovers && (n < 3 || n === 5)) {
     throw new ConflictError(
       `Impossible de former des poules de 3 ou 4 avec ${n} équipe${n > 1 ? "s" : ""} — déplacez des équipes vers un autre jour.`,
     );
   }
-  const composition = splitIntoPools(shuffle([...args.teams]), 4);
-  return buildRound1(composition, args.problemPool ?? QUALIFS_PROBLEMS, (idx) => `${args.labelPrefix}${idx + 1}`);
+  const { groups, leftover } = splitForQualifs(shuffle([...args.teams]));
+  const start = args.labelStart ?? 1;
+  const round = buildRound1(
+    groups.map((teamsInPool) => ({ teamsInPool })),
+    args.problemPool ?? QUALIFS_PROBLEMS,
+    (idx) => `${args.labelPrefix}${idx + start}`,
+  );
+  return { ...round, leftover };
+}
+
+// Pools of 4, then of 3, and what's left aside. A team that can't make a
+// clean pool isn't a failure: it may simply not come, and its pool mates
+// are then moved to the online tournament by hand. Out of 5 teams only 4
+// can play — 3 + 2 would leave a pool of two.
+export function splitForQualifs(teams: Team[]): { groups: Team[][]; leftover: Team[] } {
+  const playable = teams.length < 3 ? 0 : teams.length === 5 ? 4 : teams.length;
+  const groups: Team[][] = [];
+  let taken = 0;
+  for (const size of playable === 0 ? [] : computePoolBuckets(playable, 4)) {
+    groups.push(teams.slice(taken, taken + size));
+    taken += size;
+  }
+  return { groups, leftover: teams.slice(taken) };
 }
 
 // Finale: generate both rounds. Round 2 uses the Hungarian solver and never
