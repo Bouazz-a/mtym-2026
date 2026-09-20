@@ -14,8 +14,10 @@ import { DUO_QUERIES, useAction } from "./useAction";
 // Doublon = the duo judges another passage of the same pool; Même heure =
 // the duo has another passage in the same slot. Both only warn.
 
-const TIME_COL = 92;
-const POOL_COL = 210;
+// Column widths in rem (CSS lengths, so they follow the page scale): the
+// hours column is fixed, the pools share what's left down to their minimum.
+const TIME_COL = "5.75rem";
+const POOL_COL = "13.125rem";
 
 interface Slot {
   pool: PoolDetails;
@@ -64,8 +66,8 @@ export function DayTimetable({
         <div
           className="grid"
           style={{
-            gridTemplateColumns: `${TIME_COL}px repeat(${pools.length}, minmax(${POOL_COL}px, 1fr))`,
-            minWidth: TIME_COL + pools.length * POOL_COL,
+            gridTemplateColumns: `${TIME_COL} repeat(${pools.length}, minmax(${POOL_COL}, 1fr))`,
+            minWidth: `calc(${TIME_COL} + ${pools.length} * ${POOL_COL})`,
           }}
         >
           <HeadCell sticky>Horaire</HeadCell>
@@ -156,9 +158,10 @@ function BreakRow({ minutes }: { minutes: number }) {
       className="break-row flex items-center"
       style={{
         gridColumn: "1 / -1",
-        height: 24 + Math.min(minutes, 90) * 0.6,
+        // A band as long as the break it stands for (capped at 90 min)
+        height: `calc(1.5rem + ${(Math.min(minutes, 90) * 0.0375).toFixed(3)}rem)`,
         borderTop: "1px solid var(--border)",
-        background: "repeating-linear-gradient(135deg, var(--paper) 0 6px, var(--paper-2) 6px 12px)",
+        background: "repeating-linear-gradient(135deg, var(--paper) 0 0.375rem, var(--paper-2) 0.375rem 0.75rem)",
       }}
     >
       <span
@@ -359,9 +362,9 @@ function DuoOption({
       <span
         aria-hidden
         className="shrink-0 flex items-center justify-center"
-        style={{ width: 18, height: 18, border: "2px solid var(--forest)", borderRadius: "50%" }}
+        style={{ width: "1.125rem", height: "1.125rem", border: "2px solid var(--forest)", borderRadius: "50%" }}
       >
-        {selected && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--forest)" }} />}
+        {selected && <span style={{ width: "0.5rem", height: "0.5rem", borderRadius: "50%", background: "var(--forest)" }} />}
       </span>
       <span className="min-w-0 flex-1">
         <span className="font-mont text-sm block" style={{ color: "var(--forest)", fontWeight: 900 }}>

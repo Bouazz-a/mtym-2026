@@ -177,13 +177,13 @@ function CornerMarkers({ color = "var(--forest)" }: { color?: string }) {
           aria-hidden
           className="absolute"
           style={{
-            width: 6,
-            height: 6,
+            width: "0.375rem",
+            height: "0.375rem",
             background: color,
-            top: c.startsWith("t") ? -3 : "auto",
-            bottom: c.startsWith("b") ? -3 : "auto",
-            left: c.endsWith("l") ? -3 : "auto",
-            right: c.endsWith("r") ? -3 : "auto",
+            top: c.startsWith("t") ? "-0.1875rem" : "auto",
+            bottom: c.startsWith("b") ? "-0.1875rem" : "auto",
+            left: c.endsWith("l") ? "-0.1875rem" : "auto",
+            right: c.endsWith("r") ? "-0.1875rem" : "auto",
           }}
         />
       ))}
@@ -378,7 +378,7 @@ export function Modal({
             className="p-2 -mr-2"
             style={{ color: "var(--ink-faint)" }}
           >
-            <CloseIcon size={16} />
+            <CloseIcon size="1rem" />
           </button>
         </header>
         <div className="p-6">{children}</div>
@@ -397,19 +397,25 @@ export function Modal({
 
 // ─── Popover (anchored to a trigger by the consumer's positioning) ────
 
+// Placing a fixed element is pixel maths, but the page scales with the
+// window: sizes given in rem are turned into pixels through the root font
+// size, so the popover grows with everything else.
+const rootFontSize = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+
 export function Popover({
   open,
   onClose,
   anchorRef,
   children,
   align = "right",
-  width = 320,
+  width = 20,
 }: {
   open: boolean;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLElement | null>;
   children: ReactNode;
   align?: "left" | "right";
+  /** Width in rem: the popover follows the page scale like everything else */
   width?: number;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -437,12 +443,6 @@ export function Popover({
   // do NOT add scrollX/scrollY or the popover drifts off-screen once the page
   // is scrolled (the anchor lives in a fixed navbar that never moves).
   //
-  // The popover renders inside <body>, which carries `zoom`. Chromium
-  // interprets a fixed element's px in that zoomed space (rendered at
-  // value × zoom) while getBoundingClientRect() already returns the
-  // post-zoom visual position — so divide the rect coords by the zoom
-  // factor to cancel the double-scale. zoom = 1 leaves behaviour unchanged.
-  //
   // Measured in a layout effect (refs can't be read during render); the
   // popover paints on the frame after `open` flips, before the browser
   // shows anything in between.
@@ -450,22 +450,21 @@ export function Popover({
   // the popover while closed, and the effect re-measures (before paint)
   // when it reopens.
   //
-  // On narrow screens the popover is clamped inside the viewport (8px
-  // margin) rather than anchored off its left edge.
+  // On narrow screens the popover is clamped inside the viewport (half a
+  // line of margin) rather than anchored off its left edge.
   const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight?: number; placed: boolean } | null>(null);
   useLayoutEffect(() => {
     if (!open) return;
     const anchor = anchorRef.current;
     if (!anchor) return;
-    const zoom =
-      parseFloat(getComputedStyle(document.body).getPropertyValue("zoom")) || 1;
     const rect = anchor.getBoundingClientRect();
-    const viewport = window.innerWidth / zoom;
-    const w = Math.min(width, viewport - 16);
-    const left = align === "right" ? rect.right / zoom - w : rect.left / zoom;
+    const viewport = window.innerWidth;
+    const gap = 0.5 * rootFontSize();
+    const w = Math.min(width * rootFontSize(), viewport - 2 * gap);
+    const left = align === "right" ? rect.right - w : rect.left;
     setPos({
-      top: (rect.bottom + 8) / zoom,
-      left: Math.max(8, Math.min(left, viewport - w - 8)),
+      top: rect.bottom + gap,
+      left: Math.max(gap, Math.min(left, viewport - w - gap)),
       width: w,
       placed: false,
     });
@@ -478,19 +477,18 @@ export function Popover({
   // before paint.
   useLayoutEffect(() => {
     if (!open || !pos || pos.placed || !ref.current || !anchorRef.current) return;
-    const zoom =
-      parseFloat(getComputedStyle(document.body).getPropertyValue("zoom")) || 1;
-    const viewportHeight = window.innerHeight / zoom;
+    const viewportHeight = window.innerHeight;
     const height = ref.current.offsetHeight;
-    const anchorTop = anchorRef.current.getBoundingClientRect().top / zoom;
+    const anchorTop = anchorRef.current.getBoundingClientRect().top;
+    const gap = 0.5 * rootFontSize();
     let { top } = pos;
     let maxHeight: number | undefined;
-    if (top + height > viewportHeight - 8) {
-      const above = anchorTop - 8 - height;
-      if (above >= 8) top = above;
+    if (top + height > viewportHeight - gap) {
+      const above = anchorTop - gap - height;
+      if (above >= gap) top = above;
       else {
-        top = 8;
-        maxHeight = viewportHeight - 16;
+        top = gap;
+        maxHeight = viewportHeight - 2 * gap;
       }
     }
     setPos({ ...pos, top, maxHeight, placed: true });

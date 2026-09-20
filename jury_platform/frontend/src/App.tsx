@@ -35,6 +35,9 @@ const JuryDashboard = lazy(() =>
 const NotFoundPage = lazy(() =>
   import("@/features/shared/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
 );
+const PracticePage = lazy(() =>
+  import("@/features/jury/PracticePage").then((m) => ({ default: m.PracticePage })),
+);
 const PassagePage = lazy(() =>
   import("@/features/jury/PassagePage").then((m) => ({ default: m.PassagePage })),
 );
@@ -59,6 +62,7 @@ export default function App() {
                 </Route>
                 <Route element={<RoleGuard allow={["jury"]} />}>
                   <Route path="passages/:passageId" element={<PassagePage />} />
+                  <Route path="entrainement" element={<PracticePage />} />
                 </Route>
                 <Route path="*" element={<NotFoundPage />} />
               </Route>

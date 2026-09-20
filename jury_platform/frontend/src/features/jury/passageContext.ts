@@ -6,4 +6,7 @@ export interface PassageData {
   teamById: Map<string, Team>;
   criteria: Criterion[];
   refresh: () => Promise<unknown>; // refetch evaluations after a save
+  // The practice passage of the guide: fictional teams, real grids, and
+  // nothing is loaded from or sent to the API.
+  practice?: boolean;
 }

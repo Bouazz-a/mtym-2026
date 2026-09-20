@@ -20,6 +20,8 @@ export function GradingCard({
   saved,
   disabled = false,
   disabledHint,
+  practice = false,
+  tourAnchors = false,
   onSave,
   children,
 }: {
@@ -28,6 +30,8 @@ export function GradingCard({
   saved: { globalRemark: string | null; grades: Grade[] } | undefined;
   disabled?: boolean;
   disabledHint?: string;
+  practice?: boolean; // the guide's practice passage: saving sends nothing
+  tourAnchors?: boolean; // the card the guide's steps point at
   onSave: (input: GradingInput) => Promise<unknown>;
   children?: ReactNode; // extra content above the grid (e.g. the report viewer)
 }) {
@@ -75,10 +79,12 @@ export function GradingCard({
   };
 
   return (
-    <BrutalCard className="flex flex-col overflow-hidden">
+    <BrutalCard className="flex flex-col overflow-hidden" data-tour={tourAnchors ? "grading-card" : undefined}>
       <div className="px-5 py-4 flex items-start justify-between gap-3" style={{ borderBottom: "2px solid var(--forest)" }}>
         <div className="min-w-0">{header}</div>
-        <NotePill note={note.total} label={`Note / ${note.maxTotal}`} />
+        <span data-tour={tourAnchors ? "note" : undefined}>
+          <NotePill note={note.total} label={`Note / ${note.maxTotal}`} />
+        </span>
       </div>
 
       <div className="p-5 space-y-4 flex-1">
@@ -91,7 +97,7 @@ export function GradingCard({
           </p>
         ) : (
           <>
-            <CriterionGradingTable criteria={criteria} drafts={drafts} onChange={patch} disabled={disabled} />
+            <CriterionGradingTable criteria={criteria} drafts={drafts} onChange={patch} disabled={disabled} tourAnchors={tourAnchors} />
             <label className="block">
               <span className="font-mont text-tiny uppercase tracking-widest block mb-1.5" style={{ color: "var(--ink-soft)", fontWeight: 800 }}>
                 Remarques globales
@@ -110,9 +116,15 @@ export function GradingCard({
 
       <div className="px-5 py-3 flex items-center justify-between gap-3" style={{ borderTop: "1px solid var(--border)", background: "var(--paper-2)" }}>
         <span className="font-mont text-tiny uppercase tracking-widest" style={{ color: status ? "var(--sage-dark)" : "var(--ink-faint)", fontWeight: 800 }}>
-          {status ? `Enregistré · ${status}` : "Non enregistré"}
+          {status ? `Enregistré · ${status}${practice ? " (entraînement)" : ""}` : "Non enregistré"}
         </span>
-        <Btn onClick={save} disabled={busy || disabled || criteria.length === 0} variant={saved ? "ghost" : "primary"} size="sm">
+        <Btn
+          onClick={save}
+          disabled={busy || disabled || criteria.length === 0}
+          variant={saved ? "ghost" : "primary"}
+          size="sm"
+          data-tour={tourAnchors ? "save" : undefined}
+        >
           {busy ? "Enregistrement…" : saved ? "Mettre à jour" : "Enregistrer"}
         </Btn>
       </div>

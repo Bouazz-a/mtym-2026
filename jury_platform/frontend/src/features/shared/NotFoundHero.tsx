@@ -38,7 +38,7 @@ export function NotFoundHero() {
   return (
     <div
       ref={panelRef}
-      className="graph-paper relative overflow-hidden h-[240px] sm:h-[340px]"
+      className="graph-paper relative overflow-hidden h-[15rem] sm:h-[21rem]"
       style={{ border: "2px solid var(--forest)", boxShadow: "2px 2px 0 0 var(--forest)" }}
     >
       <DotCanvas />
@@ -104,14 +104,13 @@ function DotCanvas() {
       }
     };
 
-    // Sizes the canvas (sharp under the page zoom: its rect is the zoomed
-    // size) and re-targets the dots on the new digits.
+    // Sizes the canvas (sharp on high-density screens) and re-targets the
+    // dots on the new digits.
     const layout = () => {
       width = canvas.clientWidth;
       height = canvas.clientHeight;
       if (!width || !height) return;
-      const zoom = canvas.getBoundingClientRect().width / width || 1;
-      const scale = (window.devicePixelRatio || 1) * zoom;
+      const scale = window.devicePixelRatio || 1;
       canvas.width = Math.round(width * scale);
       canvas.height = Math.round(height * scale);
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
@@ -169,8 +168,8 @@ function DotCanvas() {
       raf = 0;
     };
 
-    // Pointer in canvas coordinates — proportional to the rect, so the
-    // page zoom needs no special case.
+    // Pointer in canvas coordinates, proportional to the rect (so browser
+    // zoom needs no special case).
     const onMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * width;

@@ -29,12 +29,12 @@ export function TopNav() {
         borderBottom: "1px solid rgba(255,255,255,0.08)",
       }}
     >
-      <div className="h-full max-w-[1600px] mx-auto px-6 lg:px-12 flex items-center justify-between">
+      <div className="h-full shell flex items-center justify-between">
         <button onClick={() => navigate("/")} className="flex items-center gap-3 group" aria-label="Accueil">
-          <MtymLogo size={22} />
-          {/* Hidden between xl and 1600px, where the inline links need its room */}
+          <MtymLogo size="1.375rem" />
+          {/* Hidden between lg and xl, where the inline links need its room */}
           <div
-            className="hidden sm:block xl:hidden min-[1600px]:block font-mont text-micro uppercase tracking-[0.22em] pl-3"
+            className="hidden sm:block lg:hidden xl:block font-mont text-micro uppercase tracking-[0.22em] pl-3"
             style={{
               color: "rgba(244,236,216,0.55)",
               fontWeight: 500,
@@ -45,9 +45,8 @@ export function TopNav() {
           </div>
         </button>
 
-        {/* Inline from xl: below, the zoomed page is too narrow and the links
-            live in the account menu */}
-        <div className="hidden xl:flex items-center gap-6">
+        {/* Inline from lg; below that the links live in the account menu */}
+        <div className="hidden lg:flex items-center gap-6">
           {items.map((item) => (
             <NavItemLink key={item.to} item={item} />
           ))}
@@ -57,6 +56,7 @@ export function TopNav() {
           <div className="flex items-center gap-3">
             <button
               ref={chipRef}
+              data-tour="account-menu"
               onClick={() => setMenuOpen((o) => !o)}
               className="flex items-center gap-3 pl-3 pr-2 py-1.5 transition-colors"
               style={{
@@ -66,12 +66,12 @@ export function TopNav() {
               aria-haspopup="dialog"
               aria-expanded={menuOpen}
             >
-              {/* The name leaves room for the inline links between xl and 2xl;
+              {/* The name leaves the inline links room between lg and xl;
                   it's still in the menu */}
-              <div className="hidden md:block xl:hidden 2xl:block text-right">
+              <div className="hidden md:block lg:hidden xl:block text-right">
                 <div
                   className="font-mont text-tiny uppercase tracking-wider truncate"
-                  style={{ color: "var(--paper)", fontWeight: 700, maxWidth: 160 }}
+                  style={{ color: "var(--paper)", fontWeight: 700, maxWidth: "10rem" }}
                 >
                   {user.firstName} {user.lastName}
                 </div>
@@ -85,7 +85,7 @@ export function TopNav() {
               <div
                 className="flex items-center justify-center font-mont"
                 style={{
-                  width: 32, height: 32,
+                  width: "2rem", height: "2rem",
                   background: "var(--saffron)", color: "var(--forest)",
                   fontSize: "0.78rem", fontWeight: 900,
                 }}
@@ -93,19 +93,19 @@ export function TopNav() {
                 {initials}
               </div>
               <ChevronDownIcon
-                size={12}
+                size="0.75rem"
                 style={{ color: "rgba(244,236,216,0.55)", transition: "transform 180ms", transform: menuOpen ? "rotate(180deg)" : "none" }}
               />
             </button>
 
-            <Popover open={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={chipRef} width={280}>
+            <Popover open={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={chipRef} width={17.5}>
               <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
                 <div className="font-mont text-sm truncate" style={{ color: "var(--forest)", fontWeight: 800 }}>
                   {user.firstName} {user.lastName}
                 </div>
                 <div className="font-open text-xs truncate" style={{ color: "var(--ink-soft)" }}>{user.email}</div>
               </div>
-              <ul className="xl:hidden py-1" style={{ borderBottom: "1px solid var(--border)" }}>
+              <ul className="lg:hidden py-1" style={{ borderBottom: "1px solid var(--border)" }}>
                 {items.map((item) => (
                   <li key={item.to}>
                     <MenuButton onClick={() => { setMenuOpen(false); navigate(item.to); }}>{item.label}</MenuButton>
@@ -113,6 +113,11 @@ export function TopNav() {
                 ))}
               </ul>
               <div className="py-1">
+                {user.role === "jury" && (
+                  <MenuButton onClick={() => { setMenuOpen(false); navigate("/?guide=1"); }}>
+                    Guide du juré
+                  </MenuButton>
+                )}
                 <MenuButton onClick={() => { setMenuOpen(false); setPasswordOpen(true); }}>
                   Changer le mot de passe
                 </MenuButton>

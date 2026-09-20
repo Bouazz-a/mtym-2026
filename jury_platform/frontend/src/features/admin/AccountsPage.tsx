@@ -65,21 +65,21 @@ export function AccountsPage() {
           <table className="brutal-table">
             <thead>
               <tr>
-                <th>Nom</th>
+                <th className="col-tight">Nom</th>
                 <th>Email</th>
-                <th>Rôle</th>
-                <th style={{ textAlign: "center" }}>Passages</th>
-                <th style={{ borderRight: "none" }} />
+                <th className="col-tight">Rôle</th>
+                <th className="col-tight" style={{ textAlign: "center" }}>Passages</th>
+                <th className="col-tight" style={{ borderRight: "none" }} />
               </tr>
             </thead>
             <tbody>
               {sorted.map((a) => (
                 <tr key={a.id}>
-                  <td>
+                  <td className="col-tight">
                     <div className="flex items-center gap-3">
                       <span
                         className="flex items-center justify-center font-mont shrink-0"
-                        style={{ width: 34, height: 34, background: "var(--paper-2)", color: "var(--forest)", fontWeight: 900, border: "1px solid var(--forest)", fontSize: "0.75rem" }}
+                        style={{ width: "2.125rem", height: "2.125rem", background: "var(--paper-2)", color: "var(--forest)", fontWeight: 900, border: "1px solid var(--forest)", fontSize: "0.75rem" }}
                       >
                         {`${a.firstName[0] ?? ""}${a.lastName[0] ?? ""}`.toUpperCase()}
                       </span>
@@ -89,10 +89,12 @@ export function AccountsPage() {
                     </div>
                   </td>
                   <td className="font-open text-sm" style={{ color: "var(--ink-soft)" }}>{a.email}</td>
-                  <td><Badge tone={a.role === "admin" ? "dark" : "sage"}>{a.role === "admin" ? "Admin" : "Jury"}</Badge></td>
-                  <td style={{ textAlign: "center" }} className="font-mont">{a.role === "jury" ? passageCount(a.id) : "—"}</td>
-                  <td style={{ borderRight: "none" }}>
-                    <div className="flex gap-1.5 justify-end flex-wrap">
+                  <td className="col-tight"><Badge tone={a.role === "admin" ? "dark" : "sage"}>{a.role === "admin" ? "Admin" : "Jury"}</Badge></td>
+                  <td style={{ textAlign: "center" }} className="font-mont col-tight">{a.role === "jury" ? passageCount(a.id) : "—"}</td>
+                  <td className="col-tight" style={{ borderRight: "none" }}>
+                    {/* No wrapping: the column hugs the buttons instead of
+                        stacking them, and the table scrolls if too narrow */}
+                    <div className="flex gap-1.5 justify-end flex-nowrap">
                       <Btn variant="ghost" size="sm" onClick={() => setEditing(a)}>Modifier</Btn>
                       <Btn variant="ghost" size="sm" disabled={busy} onClick={() => reset(a)}>Nouveau mot de passe</Btn>
                       {a.id !== user?.id && (confirmDelete === a.id ? (

@@ -53,7 +53,7 @@ function ScoreInput({
           if (Number.isNaN(v)) v = 0;
           onChange(Math.max(0, Math.min(1, v)));
         }}
-        className="w-[68px] px-2 py-1 text-sm font-mont focus-ring"
+        className="w-[4.5rem] px-2 py-1 text-sm font-mont focus-ring"
         style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",
@@ -77,15 +77,19 @@ export function CriterionGradingTable({
   drafts,
   onChange,
   disabled = false,
+  tourAnchors = false,
 }: {
   criteria: Criterion[];
   drafts: GradeDrafts;
   onChange: (criterionId: string, patch: Partial<GradeDraft>) => void;
   disabled?: boolean;
+  tourAnchors?: boolean; // mark the first criterion for the guide's steps
 }) {
   if (criteria.length === 0) return null;
 
   const groups = groupByTheme(criteria);
+  const firstId = groups[0]?.[1][0]?.id;
+  const anchor = (id: string, name: string) => (tourAnchors && id === firstId ? name : undefined);
 
   return (
     <div className="space-y-4">
@@ -122,6 +126,7 @@ export function CriterionGradingTable({
                         {c.label}
                       </span>
                       <span
+                        data-tour={anchor(c.id, "coef")}
                         className="font-mont text-micro uppercase tracking-widest px-1.5 py-0.5"
                         style={{
                           background:
@@ -139,7 +144,7 @@ export function CriterionGradingTable({
                         coef {c.coefficient}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-3 shrink-0" data-tour={anchor(c.id, "score")}>
                       <ScoreInput
                         value={d.score}
                         disabled={disabled}
@@ -151,7 +156,7 @@ export function CriterionGradingTable({
                           color:
                             note < 0 ? "var(--clay)" : "var(--saffron-dark)",
                           fontWeight: 900,
-                          minWidth: 52,
+                          minWidth: "3.25rem",
                         }}
                         title="Note = taux × coefficient"
                       >
@@ -160,6 +165,7 @@ export function CriterionGradingTable({
                     </div>
                   </div>
                   <input
+                    data-tour={anchor(c.id, "comment")}
                     value={d.remark}
                     disabled={disabled}
                     onChange={(e) => onChange(c.id, { remark: e.target.value })}

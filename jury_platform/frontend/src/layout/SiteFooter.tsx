@@ -41,7 +41,7 @@ export function SiteFooter() {
         className="site-footer-band relative overflow-hidden"
       >
         <motion.div
-          className="relative max-w-[1400px] mx-auto px-6 lg:px-12 pt-14 pb-10"
+          className="relative shell pt-14 pb-10"
           style={{ zIndex: 1 }}
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -51,7 +51,7 @@ export function SiteFooter() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-y-8">
             <div className="md:col-span-4 md:pr-10 md:border-r md:border-[rgba(244,236,216,0.10)]">
               <div className="flex items-center gap-4 mb-5">
-                <MtymLogo size={30} />
+                <MtymLogo size="1.875rem" />
                 <span
                   className="font-mont uppercase tracking-[0.22em] pl-4"
                   style={{
@@ -161,15 +161,15 @@ export function SiteFooter() {
           color: rgba(244,236,216,0.65);
           font-weight: 500;
           transition: color 160ms, transform 160ms;
-          padding: 2px 0;
+          padding: 0.125rem 0;
         }
         .footer-link:hover { color: var(--saffron); transform: translateX(2px); }
         .footer-social {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 32px;
-          height: 32px;
+          width: 2rem;
+          height: 2rem;
           color: rgba(244,236,216,0.65);
           border: 1px solid rgba(244,236,216,0.18);
           transition: color 160ms, border-color 160ms, background 160ms, transform 160ms;
@@ -206,7 +206,7 @@ function SocialIcon({ href, label, path }: { href: string; label: string; path: 
       aria-label={label}
       className="footer-social"
     >
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+      <svg viewBox="0 0 24 24" style={{ width: "1rem", height: "1rem" }} fill="currentColor" aria-hidden="true">
         <path d={path} />
       </svg>
     </a>

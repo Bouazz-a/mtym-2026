@@ -12,7 +12,7 @@ const MENU_TEXT: CSSProperties = {
   textTransform: "none",
   letterSpacing: "normal",
   fontWeight: 400,
-  fontSize: 13,
+  fontSize: "0.82rem",
   textAlign: "left",
   color: "var(--ink)",
 };
@@ -83,18 +83,18 @@ export function ColumnFilterMenu({
         aria-expanded={open}
         title={filtered ? "Filtre actif" : sort ? "Colonne triée" : "Filtrer et trier"}
         className="shrink-0 inline-flex items-center justify-center transition-colors"
-        style={{ width: 24, height: 24, ...BUTTON_TONES[tone](filtered, sort !== null) }}
+        style={{ width: "1.5rem", height: "1.5rem", ...BUTTON_TONES[tone](filtered, sort !== null) }}
       >
-        {filtered ? <FunnelIcon size={13} /> : sort === "asc" ? <ArrowUpIcon size={13} /> : sort ? <ArrowDownIcon size={13} /> : <ChevronDownIcon size={13} />}
+        {filtered ? <FunnelIcon size="0.8rem" /> : sort === "asc" ? <ArrowUpIcon size="0.8rem" /> : sort ? <ArrowDownIcon size="0.8rem" /> : <ChevronDownIcon size="0.8rem" />}
       </button>
 
-      <Popover open={open} onClose={() => setOpen(false)} anchorRef={anchor} width={270} align={align}>
+      <Popover open={open} onClose={() => setOpen(false)} anchorRef={anchor} width={17} align={align}>
         <div className="py-2 font-open" style={MENU_TEXT}>
           <MenuItem active={sort === "asc"} onClick={() => onSort(sort === "asc" ? null : "asc")}>
-            <ArrowUpIcon size={13} /> {SORT_LABELS[sortKind][0]}
+            <ArrowUpIcon size="0.8rem" /> {SORT_LABELS[sortKind][0]}
           </MenuItem>
           <MenuItem active={sort === "desc"} onClick={() => onSort(sort === "desc" ? null : "desc")}>
-            <ArrowDownIcon size={13} /> {SORT_LABELS[sortKind][1]}
+            <ArrowDownIcon size="0.8rem" /> {SORT_LABELS[sortKind][1]}
           </MenuItem>
 
           {range && (
@@ -126,7 +126,7 @@ export function ColumnFilterMenu({
 
           <div className="px-3 pt-3 pb-1" style={{ borderTop: range ? undefined : "1px solid var(--border)", marginTop: range ? 0 : 6 }}>
             <SubLabel>Valeurs</SubLabel>
-            <div style={{ maxHeight: 190, overflowY: "auto", border: "1px solid var(--border)" }}>
+            <div style={{ maxHeight: "12rem", overflowY: "auto", border: "1px solid var(--border)" }}>
               <CheckRow
                 checked={shown === values.length}
                 indeterminate={shown > 0 && shown < values.length}
@@ -194,7 +194,7 @@ function CheckRow({
         checked={checked}
         ref={(el) => { if (el) el.indeterminate = indeterminate; }}
         onChange={onChange}
-        style={{ accentColor: "var(--forest)", width: 15, height: 15 }}
+        style={{ accentColor: "var(--forest)", width: "0.95rem", height: "0.95rem" }}
       />
       <span className="font-mont" style={{ fontWeight: 600 }}>{children}</span>
     </label>

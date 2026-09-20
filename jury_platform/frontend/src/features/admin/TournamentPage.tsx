@@ -218,10 +218,10 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
           <table className="brutal-table">
             <thead>
               <tr>
-                <th>Équipe</th>
+                <th className="col-tight">Équipe</th>
                 <th>Membres</th>
-                <th>Rapports finaux</th>
-                <th style={{ borderRight: "none", width: 220 }}>Jour</th>
+                <th className="col-tight">Rapports finaux</th>
+                <th className="col-tight" style={{ borderRight: "none" }}>Jour</th>
               </tr>
             </thead>
             <tbody>

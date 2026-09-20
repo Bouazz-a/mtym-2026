@@ -75,7 +75,7 @@ export function EvaluationsPage() {
         sub={`Moyenne du duo pour chaque rôle et pour le rapport du défenseur. ${done}/${expected} évaluations saisies.`}
         right={
           <Btn onClick={exportXlsx} disabled={exporting}>
-            <DownloadIcon size={15} /> {exporting ? "Export…" : "Exporter (xlsx)"}
+            <DownloadIcon size="0.95rem" /> {exporting ? "Export…" : "Exporter (xlsx)"}
           </Btn>
         }
       />

@@ -91,7 +91,7 @@ export function ResultsPage() {
         sub={`Notes en % de leur grille. Note finale : moyenne pondérée (Défense ${weights.defender}, Opposition ${weights.opponent}, Rapporteur ${weights.reporter}, Rapport écrit ${weights.report}, coefficients réglables dans Critères), calculée quand les quatre notes sont saisies.`}
         right={
           <Btn onClick={exportXlsx} disabled={exporting}>
-            <DownloadIcon size={15} /> {exporting ? "Export…" : "Exporter (xlsx)"}
+            <DownloadIcon size="0.95rem" /> {exporting ? "Export…" : "Exporter (xlsx)"}
           </Btn>
         }
       />
