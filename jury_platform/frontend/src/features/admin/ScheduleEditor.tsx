@@ -81,7 +81,7 @@ export function ScheduleEditor({
       <ul className="striped-rows">
         {schedule.map((slot, i) => (
           <li key={i} className="px-4 py-3 flex items-center gap-x-4 gap-y-2 flex-wrap">
-            <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 900, width: 72 }}>
+            <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 900, width: "4.5rem" }}>
               Passage {i + 1}
             </span>
             <TimeField
@@ -101,7 +101,7 @@ export function ScheduleEditor({
               aria-label={`Début du passage ${i + 1} (curseur)`}
               aria-valuetext={slot.start}
               className="schedule-slider flex-1"
-              style={{ minWidth: 160 }}
+              style={{ minWidth: "10rem" }}
               onChange={(e) => edit(moveSlot(latest.current, i, Number(e.target.value)))}
               onFocus={() => onActive(i)}
               onBlur={() => { onActive(null); saveSoon(); }}
@@ -116,7 +116,7 @@ export function ScheduleEditor({
               onFocus={() => onActive(i)}
               onDone={() => { onActive(null); saveSoon(); }}
             />
-            <span className="font-mont text-xs tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700, width: 64 }}>
+            <span className="font-mont text-xs tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700, width: "4rem" }}>
               fin {slotEnd(slot)}
             </span>
           </li>
@@ -164,7 +164,7 @@ function TimeField({
       aria-label={label}
       value={typed ?? value}
       className="px-2 py-1.5 text-sm font-mont tabular-nums focus-ring"
-      style={{ ...FIELD_STYLE, width: 72 }}
+      style={{ ...FIELD_STYLE, width: "4.5rem" }}
       onFocus={(e) => { onFocus(); e.currentTarget.select(); }}
       onChange={(e) => {
         const raw = e.target.value.replace(/[^\d:]/g, "");
@@ -202,7 +202,7 @@ function DurationField({
         aria-label={label}
         value={typed ?? value}
         className="px-2 py-1.5 text-sm font-mont tabular-nums focus-ring"
-        style={{ ...FIELD_STYLE, width: 72 }}
+        style={{ ...FIELD_STYLE, width: "4.5rem" }}
         onFocus={onFocus}
         onChange={(e) => {
           setTyped(e.target.value);

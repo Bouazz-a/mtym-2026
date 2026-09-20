@@ -146,7 +146,7 @@ function SwapTeams({ dayId, teams }: { dayId: string; teams: Team[] }) {
   };
 
   const select = (value: string, onChange: (v: string) => void) => (
-    <Select value={value} onChange={(e) => onChange(e.target.value)} style={{ width: 220 }}>
+    <Select value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "13.75rem" }}>
       <option value="">Choisir une équipe</option>
       {sorted.map((t) => <option key={t.id} value={t.id}>{t.quadrigram} · {t.name}</option>)}
     </Select>

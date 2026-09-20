@@ -22,3 +22,16 @@ export function updateDuo(id: string, accountIds: [string, string]): Promise<Duo
 export function deleteDuo(id: string): Promise<void> {
   return apiFetch<void>(`/duos/${id}`, { method: "DELETE" });
 }
+
+// Several passages at once (the automatic assignment): the duos are those
+// already formed by hand, only their passages change. Refused for a passage
+// that is already graded.
+export function assignDuos(
+  centerDayId: string,
+  assignments: { passageId: string; duoId: string | null }[],
+): Promise<{ changed: number; warnings: string[] }> {
+  return apiFetch<{ changed: number; warnings: string[] }>("/duos/assignments", {
+    method: "PUT",
+    body: { centerDayId, assignments },
+  });
+}

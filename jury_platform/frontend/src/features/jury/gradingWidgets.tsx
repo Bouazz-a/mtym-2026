@@ -62,7 +62,7 @@ function ScoreInput({
       />
       <span
         className="font-mont text-micro tabular-nums"
-        style={{ color: "var(--ink-faint)", fontWeight: 800, minWidth: 34 }}
+        style={{ color: "var(--ink-faint)", fontWeight: 800, minWidth: "2.125rem" }}
       >
         {Math.round(value * 100)}%
       </span>
