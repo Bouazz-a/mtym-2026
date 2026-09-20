@@ -31,7 +31,7 @@ export function TopNav() {
     >
       <div className="h-full shell flex items-center justify-between">
         <button onClick={() => navigate("/")} className="flex items-center gap-3 group" aria-label="Accueil">
-          <MtymLogo size="1.375rem" />
+          <MtymLogo size="1.75rem" />
           {/* Hidden between lg and xl, where the inline links need its room */}
           <div
             className="hidden sm:block lg:hidden xl:block font-mont text-micro uppercase tracking-[0.22em] pl-3"

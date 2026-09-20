@@ -29,7 +29,7 @@ export function LoginPage() {
     <PageMotion className="min-h-[60vh] flex items-center justify-center py-10">
       <BrutalCard className="w-full max-w-md p-8">
         <div className="flex items-center gap-3 mb-6">
-          <MtymLogo size="1.75rem" />
+          <MtymLogo size="2rem" />
           <span
             className="font-mont text-tiny uppercase tracking-widest pl-3"
             style={{ color: "var(--saffron-dark)", fontWeight: 800, borderLeft: "1px solid var(--border)" }}
