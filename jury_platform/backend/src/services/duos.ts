@@ -24,6 +24,29 @@ export function passagesJudgedBy(accountId: string): Prisma.PassageWhereInput {
   return { duo: { members: { some: { accountId } } } };
 }
 
+// Which of these passages already carry a grade — the oral of the passage
+// itself, or the written report of the team defending in it. Their duo is
+// then frozen (same rule as a single assignment, in one query pair).
+export async function gradedPassageIds(passageIds: string[]): Promise<Set<string>> {
+  if (passageIds.length === 0) return new Set();
+  const passages = await db.passage.findMany({
+    where: { id: { in: passageIds } },
+    select: { id: true, defenderTeamId: true, problemNumber: true },
+  });
+  const [orals, reports] = await Promise.all([
+    db.oralEvaluation.findMany({ where: { passageId: { in: passageIds } }, select: { passageId: true } }),
+    db.reportEvaluation.findMany({
+      where: { teamId: { in: passages.map((p) => p.defenderTeamId) } },
+      select: { teamId: true, problemNumber: true },
+    }),
+  ]);
+  const reported = new Set(reports.map((r) => `${r.teamId}:${r.problemNumber}`));
+  return new Set([
+    ...orals.map((o) => o.passageId),
+    ...passages.filter((p) => reported.has(`${p.defenderTeamId}:${p.problemNumber}`)).map((p) => p.id),
+  ]);
+}
+
 // A duo is frozen once one of its members has graded one of its passages.
 export async function isDuoGraded(duoId: string): Promise<boolean> {
   const [oral, report] = await Promise.all([

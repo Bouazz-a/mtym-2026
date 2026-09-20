@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Alert, Badge, Btn, BrutalCard, SectionHeading, Select } from "@/features/shared/primitives";
-import { createDuo, deleteDuo, updateDuo } from "@/lib/repositories/duoRepository";
+import { Alert, Badge, Btn, BrutalCard, Modal, SectionHeading, Select } from "@/features/shared/primitives";
+import { assignDuos, createDuo, deleteDuo, updateDuo } from "@/lib/repositories/duoRepository";
+import { planDuoAssignment, type AssignMode } from "@/lib/services/duoAssignment";
 import type { Account, CenterDay, JuryDuo, PoolDetails, ScheduleSlot, Team } from "@/types";
 import { formatDay } from "@/utils/labels";
 import { DayTimetable } from "./JuryTimetable";
@@ -65,9 +66,12 @@ export function DayJury({
           title={`Planning · ${formatDay(day.date)}`}
           right={
             passages.length > 0 && (
-              <Badge tone={withDuo === passages.length ? "sage" : "saffron"}>
-                {withDuo}/{passages.length} passages avec un duo
-              </Badge>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Badge tone={withDuo === passages.length ? "sage" : "saffron"}>
+                  {withDuo}/{passages.length} passages avec un duo
+                </Badge>
+                <AutoAssign day={day} pools={pools} duos={duos} onWarnings={setWarnings} />
+              </div>
             )
           }
         />
@@ -107,6 +111,98 @@ export function DayJury({
   );
 }
 
+// ─── Automatic assignment ─────────────────────────────────────────────
+
+// Spreads the day's passages between the duos already formed by hand (the
+// duos themselves are never generated). Assignment by hand keeps working:
+// this only fills the timetable in one click, and leaves a summary of the
+// compromises it had to make. The plan itself is in
+// lib/services/duoAssignment.ts.
+function AutoAssign({
+  day,
+  pools,
+  duos,
+  onWarnings,
+}: {
+  day: CenterDay;
+  pools: PoolDetails[];
+  duos: JuryDuo[];
+  onWarnings: (w: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const { run, busy, error } = useAction(DUO_QUERIES);
+
+  const passages = pools.flatMap((p) => p.passages);
+  const empty = passages.filter((p) => !p.duo).length;
+  const asPools = pools.map((pool) => ({
+    id: pool.id,
+    label: pool.label,
+    passages: pool.passages.map((p) => ({ id: p.id, slot: p.slot, duoId: p.duo?.id ?? null, locked: false })),
+  }));
+
+  const apply = async (mode: AssignMode) => {
+    const plan = planDuoAssignment(asPools, duos, mode);
+    setOpen(false);
+    const res = await run(() => assignDuos(day.id, plan.changes));
+    if (!res) return;
+    const parts = [`${res.changed} passage${res.changed > 1 ? "s" : ""} attribué${res.changed > 1 ? "s" : ""}`];
+    if (plan.withoutDuo > 0) parts.push(`${plan.withoutDuo} sans duo (pas assez de duos)`);
+    if (plan.samePool > 0) parts.push(`${plan.samePool} fois la même poule deux fois`);
+    setSummary(parts.join(" · "));
+    onWarnings(res.warnings);
+  };
+
+  return (
+    <>
+      <Btn
+        size="sm"
+        disabled={busy || duos.length === 0}
+        title={duos.length === 0 ? "Formez d'abord au moins un duo" : "Répartit les passages entre les duos du jour"}
+        onClick={() => setOpen(true)}
+      >
+        {busy ? "Attribution…" : "Attribuer automatiquement"}
+      </Btn>
+      {summary && (
+        <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800 }}>
+          {summary}
+        </span>
+      )}
+      {error && <Alert>{error}</Alert>}
+
+      <Modal
+        open={open}
+        title="Attribution automatique des duos"
+        onClose={() => setOpen(false)}
+        footer={<Btn variant="ghost" onClick={() => setOpen(false)}>Annuler</Btn>}
+      >
+        <div className="px-5 py-4 space-y-4">
+          <p className="font-open text-sm" style={{ color: "var(--ink)" }}>
+            {duos.length} duo{duos.length > 1 ? "s" : ""} pour {passages.length} passage{passages.length > 1 ? "s" : ""}
+            {empty === 0
+              ? ", tous déjà attribués"
+              : empty === passages.length
+                ? ", aucun attribué pour l'instant"
+                : `, dont ${empty} sans duo`}
+            . Un duo n'est jamais placé sur deux passages à la même heure, et évite autant que possible de juger deux
+            fois la même poule.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Btn disabled={empty === 0} onClick={() => apply("fill")}>
+              Compléter {empty > 0 ? `(${empty})` : ""}
+            </Btn>
+            <Btn variant="ghost" onClick={() => apply("replace")}>Tout refaire</Btn>
+          </div>
+          <p className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>
+            « Compléter » ne touche pas aux duos déjà placés à la main. « Tout refaire » recalcule le jour entier ;
+            les passages déjà notés gardent leur duo. Tout reste modifiable à la main ensuite.
+          </p>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
 // ─── Duos ─────────────────────────────────────────────────────────────
 
 function JurorSelect({
@@ -125,7 +221,7 @@ function JurorSelect({
   disabled?: boolean;
 }) {
   return (
-    <Select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} style={{ width: 220 }}>
+    <Select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} style={{ width: "13.75rem" }}>
       <option value="">{placeholder}</option>
       {jurors.map((j) => (
         <option key={j.id} value={j.id} disabled={j.id !== value && unavailable.has(j.id)}>
@@ -166,7 +262,7 @@ function DuoRow({
         <Badge tone="dark">Duo {duo.number}</Badge>
         <JurorSelect value={a} jurors={jurors} unavailable={busyJurors} placeholder="Juré 1" disabled={busy} onChange={(id) => change(0, id)} />
         <JurorSelect value={b} jurors={jurors} unavailable={busyJurors} placeholder="Juré 2" disabled={busy} onChange={(id) => change(1, id)} />
-        <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800, minWidth: 90 }}>
+        <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800, minWidth: "5.5rem" }}>
           {passages} passage{passages > 1 ? "s" : ""}
         </span>
         {confirmDelete ? (

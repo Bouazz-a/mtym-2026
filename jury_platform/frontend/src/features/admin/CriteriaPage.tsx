@@ -126,7 +126,7 @@ function WeightsEditor({ saved }: { saved: FinalWeights }) {
     <BrutalCard className="p-5">
       <div className="flex items-end gap-4 flex-wrap">
         {WEIGHT_PARTS.map(({ key, label }) => (
-          <label key={key} style={{ width: 130 }}>
+          <label key={key} style={{ width: "8.125rem" }}>
             <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
               {label}
             </div>
@@ -216,7 +216,7 @@ function CriterionRowEditor({ criterion }: { criterion: Criterion }) {
           {label("Intitulé")}
           <Input value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
         </label>
-        <label style={{ width: 110 }}>
+        <label style={{ width: "6.875rem" }}>
           {label("Coefficient")}
           <Input
             type="number"
@@ -225,7 +225,7 @@ function CriterionRowEditor({ criterion }: { criterion: Criterion }) {
             onChange={(e) => setDraft({ ...draft, coefficient: Number(e.target.value) || 0 })}
           />
         </label>
-        <label style={{ width: 170 }}>
+        <label style={{ width: "10.625rem" }}>
           {label("Thème (optionnel)")}
           <Input value={draft.theme ?? ""} placeholder="Débat, Malus…" onChange={(e) => setDraft({ ...draft, theme: e.target.value })} />
         </label>

@@ -136,7 +136,7 @@ function DaysSection({ center, days, withoutDay }: { center: Center; days: Cente
             <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
               Nouveau jour
             </div>
-            <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} style={{ width: 180 }} />
+            <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} style={{ width: "11.25rem" }} />
           </label>
           <Btn variant="ghost" size="sm" onClick={add} disabled={!newDate || busy}>Ajouter</Btn>
         </div>
@@ -155,14 +155,14 @@ function DayRow({ day, index }: { day: CenterDay; index: number }) {
     <li className="px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
       <div className="flex items-center gap-4 flex-wrap">
         <Badge tone="dark">J{index + 1}</Badge>
-        <span className="font-mont" style={{ color: "var(--forest)", fontWeight: 900, minWidth: 120 }}>
+        <span className="font-mont" style={{ color: "var(--forest)", fontWeight: 900, minWidth: "7.5rem" }}>
           {formatDay(day.date)}
         </span>
         <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>
           {day._count.teams} équipe{day._count.teams > 1 ? "s" : ""} · {day._count.pools} poule{day._count.pools > 1 ? "s" : ""}
         </span>
         <div className="flex items-center gap-2 ml-auto">
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: 170 }} />
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "10.625rem" }} />
           <Btn variant="ghost" size="sm" disabled={busy || date === day.date || !date} onClick={() => run(() => updateCenterDay(day.id, date))}>
             Modifier
           </Btn>
@@ -235,7 +235,7 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
                       </div>
                       <div className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>{team.name}</div>
                     </td>
-                    <td className="font-open text-xs" style={{ color: "var(--ink-soft)", maxWidth: 320 }}>
+                    <td className="font-open text-xs" style={{ color: "var(--ink-soft)", maxWidth: "20rem" }}>
                       {team.members.map((m) => `${m.firstName} ${m.lastName}`).join(", ") || "—"}
                     </td>
                     <td>

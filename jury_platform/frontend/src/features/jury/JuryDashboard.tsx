@@ -184,7 +184,7 @@ function PassageSlot({
   const anchor = (name: string) => (tourAnchors ? name : undefined);
   return (
     <div className="flex items-center gap-4 flex-wrap" data-tour={anchor("passage-card")}>
-      <div style={{ minWidth: 150 }}>
+      <div style={{ minWidth: "9.375rem" }}>
         <div className="font-mont" style={{ color: "var(--forest)", fontWeight: 900 }}>Poule {passage.pool.label}</div>
         <div className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
           {passage.label}{passage.room ? ` · Salle ${passage.room}` : ""}
