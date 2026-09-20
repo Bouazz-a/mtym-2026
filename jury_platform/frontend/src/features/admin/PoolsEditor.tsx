@@ -27,7 +27,7 @@ export function PoolCard({ pool, teamById }: { pool: PoolDetails; teamById: Map<
         style={{ borderBottom: "2px solid var(--forest)", background: "rgba(98,159,115,0.10)" }}
       >
         <div className="flex items-center gap-3">
-          <span style={{ width: 8, height: 28, background: "var(--forest)" }} />
+          <span style={{ width: "0.5rem", height: "1.75rem", background: "var(--forest)" }} />
           <h3 className="font-mont" style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.2rem", letterSpacing: "-0.01em" }}>
             Poule {pool.label}
           </h3>

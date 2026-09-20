@@ -60,7 +60,6 @@ export function BackgroundFX() {
     }
 
     let dpr = 1;
-    let zoom = 1;
     let raf = 0;
     const mouse = { x: 0, y: 0, active: false };
 
@@ -102,7 +101,6 @@ export function BackgroundFX() {
       particleState.width = window.innerWidth;
       particleState.height = window.innerHeight;
       dpr = window.devicePixelRatio || 1;
-      zoom = parseFloat(getComputedStyle(document.body).getPropertyValue("zoom")) || 1;
       canvas.width = Math.floor(particleState.width * dpr);
       canvas.height = Math.floor(particleState.height * dpr);
       canvas.style.width = `${particleState.width}px`;
@@ -114,8 +112,8 @@ export function BackgroundFX() {
     const onMouseMove = (e: MouseEvent) => {
       // Map the pointer into the canvas drawing space. Using the live
       // bounding rect (instead of raw clientX/Y) keeps tracking correct
-      // under CSS `zoom`/scaling, where the canvas box no longer equals
-      // the unscaled width/height the particles are drawn in.
+      // when the canvas box doesn't equal the width/height the particles
+      // are drawn in (browser zoom, high-density screens).
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * particleState.width;
       mouse.y = ((e.clientY - rect.top) / rect.height) * particleState.height;
@@ -146,8 +144,8 @@ export function BackgroundFX() {
       const dark = darkRegion ? darkRegion.getBoundingClientRect() : null;
 
       if (dark) {
-        backdrop.style.top = `${dark.top / zoom}px`;
-        backdrop.style.height = `${dark.height / zoom}px`;
+        backdrop.style.top = `${dark.top}px`;
+        backdrop.style.height = `${dark.height}px`;
         backdrop.style.display = "block";
       } else {
         backdrop.style.display = "none";

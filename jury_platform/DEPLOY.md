@@ -75,7 +75,7 @@ elle ne peut ni les modifier ni les supprimer). Aucun secret n'est affiché.
 ```bash
 cd /root/mtym-jury/jury_platform
 PGPASS=$(openssl rand -hex 24)
-S3_SECRET=$(openssl rand -hex 20)
+export S3_SECRET=$(openssl rand -hex 20)   # exporté : le conteneur mc le lit
 
 # Utilisateur MinIO en lecture seule (identifiants admin lus dans le conteneur MinIO lui-même)
 export MINIO_ROOT_USER=$(docker exec mtym-s3 printenv MINIO_ROOT_USER)
@@ -112,6 +112,24 @@ unset PGPASS S3_SECRET
 
 Attendu : `Added user mtym-jury-reader successfully.` puis
 `Attached Policies: [readonly] To User: mtym-jury-reader`.
+
+*Si la création d'utilisateur est refusée* (`Access Denied` : les identifiants
+lus dans le conteneur ne donnent pas les droits d'administration MinIO), on
+peut reprendre tels quels les identifiants du site principal — la plateforme
+ne fait que lire (`GetObject` signé, jamais d'écriture ni de suppression) :
+
+```bash
+export U=$(docker exec mtym-s3 printenv MINIO_ROOT_USER)
+export P=$(docker exec mtym-s3 printenv MINIO_ROOT_PASSWORD)
+grep -v '^S3_ACCESS_KEY_ID=\|^S3_SECRET_ACCESS_KEY=' backend/.env > backend/.env.new
+{ echo "S3_ACCESS_KEY_ID=$U"; echo "S3_SECRET_ACCESS_KEY=$P"; } >> backend/.env.new
+mv backend/.env.new backend/.env
+chmod 600 backend/.env
+unset U P
+```
+
+(Contrepartie : un `backend/.env` qui fuite donne les clés maîtresses de MinIO,
+alors que `mtym-jury-reader` se révoque seul avec `mc admin user remove`.)
 
 ## 5. Premier démarrage
 
@@ -165,6 +183,7 @@ cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%F)
 cat >> /etc/caddy/Caddyfile <<'EOF'
 
 mtym-jury.mathmaroc.org {
+	tls internal
 	encode gzip
 	handle /api/* {
 		reverse_proxy localhost:3011
@@ -184,9 +203,29 @@ caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl re
 signale une erreur, rien n'est rechargé : remettre la copie
 (`cp /etc/caddy/Caddyfile.bak-<date> /etc/caddy/Caddyfile`).
 
-Au premier accès, Caddy obtient le certificat HTTPS tout seul (comme pour
-`mtym-admin`). Une erreur Cloudflare 52x pendant une ou deux minutes est
-normale ; sinon : `journalctl -u caddy -n 50`.
+**Pourquoi `tls internal`.** Le nom est proxifié par Cloudflare, dont le mode
+SSL est *Full* : Cloudflare parle en HTTPS au serveur. Pour un **nouveau**
+nom, Let's Encrypt ne peut donc pas valider — son appel passe par Cloudflare,
+qui se connecte au serveur en HTTPS… ce qui échoue justement parce que le
+certificat n'existe pas encore. `tls internal` coupe court : Caddy signe
+lui-même le certificat avec son autorité locale (renouvelé tout seul), et
+Cloudflare l'accepte en mode Full. La liaison navigateur ↔ Cloudflare ↔
+serveur reste chiffrée de bout en bout.
+
+Deux alternatives si la zone passe un jour en *Full (strict)*, qui refuse les
+certificats non publics : demander au propriétaire du compte Cloudflare de
+basculer l'enregistrement en **A vers l'IP du serveur, proxy désactivé**
+quelques minutes (le temps que Caddy obtienne un certificat Let's Encrypt —
+un CNAME proxifié ne suffit pas, il continuerait à résoudre vers Cloudflare),
+ou installer un **certificat d'origine Cloudflare** et remplacer la ligne par
+`tls /etc/caddy/certs/origine.pem /etc/caddy/certs/origine.key`.
+
+Vérifier :
+
+```bash
+curl -skI --resolve mtym-jury.mathmaroc.org:443:127.0.0.1 https://mtym-jury.mathmaroc.org/ | head -1
+journalctl -u caddy -n 30 --no-pager | grep -i certificate
+```
 
 ## 8. Vérifier
 
@@ -194,6 +233,17 @@ normale ; sinon : `journalctl -u caddy -n 50`.
 - connexion admin, puis la page **Tournoi** avec les équipes importées ;
 - connexion d'un juré depuis un téléphone ;
 - ouvrir un rapport (lien signé vers `s3.mathmaroc.org`).
+
+## 9. Dépannage
+
+| Ce qu'on voit | Cause la plus probable | Quoi faire |
+| --- | --- | --- |
+| **525** SSL handshake failed | Caddy n'a pas de certificat pour ce nom | le bloc de l'étape 7 manque, ou la ligne `tls internal` a été oubliée |
+| **526** Invalid SSL certificate | la zone est en *Full (strict)* | voir les deux alternatives de l'étape 7 |
+| **502** Bad gateway | Caddy répond, l'API est tombée | `pm2 ls`, `pm2 logs mtym_jury_api --lines 50` |
+| **404** sur toutes les pages | `/srv/mtym-jury` est vide | rejouer `scripts/deploy.sh` |
+| appels `/api/*` en 404 | le bloc `handle /api/*` est mal collé | `grep -A10 mtym-jury /etc/caddy/Caddyfile` |
+| `Access Denied` de `mc` | identifiants MinIO vides ou non administrateurs | refaire les `export` de l'étape 4 (un `unset` les efface) |
 
 ---
 

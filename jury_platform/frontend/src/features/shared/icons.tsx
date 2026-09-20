@@ -5,15 +5,14 @@ import type { CSSProperties, ReactNode } from "react";
 // the accessible name.
 
 interface IconProps {
-  size?: number;
+  /** CSS length, in rem so the icon follows the page scale */
+  size?: string;
   style?: CSSProperties;
 }
 
-function Icon({ size = 14, style, children }: IconProps & { children: ReactNode }) {
+function Icon({ size = "0.875rem", style, children }: IconProps & { children: ReactNode }) {
   return (
     <svg
-      width={size}
-      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -21,7 +20,7 @@ function Icon({ size = 14, style, children }: IconProps & { children: ReactNode 
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
-      style={{ flexShrink: 0, ...style }}
+      style={{ width: size, height: size, flexShrink: 0, ...style }}
     >
       {children}
     </svg>

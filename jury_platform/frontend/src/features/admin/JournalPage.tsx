@@ -63,7 +63,7 @@ export function JournalPage() {
         sub="Chaque modification faite par un administrateur : quand, par qui, et ce qui a changé."
         right={
           <Btn onClick={exportXlsx} disabled={shown.length === 0}>
-            <DownloadIcon size={15} /> Exporter (xlsx)
+            <DownloadIcon size="0.95rem" /> Exporter (xlsx)
           </Btn>
         }
       />
@@ -75,7 +75,7 @@ export function JournalPage() {
       ) : (
         <>
           <div className="flex items-center gap-3 flex-wrap">
-            <div style={{ width: 320, maxWidth: "100%" }}>
+            <div style={{ width: "20rem", maxWidth: "100%" }}>
               <Input
                 type="search"
                 value={search}

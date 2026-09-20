@@ -10,13 +10,17 @@ import type { PassageData } from "./passageContext";
 
 const GRADED_ROLES = ["defender", "opponent", "reporter"] as const;
 
-export function OralGrading({ passage, teamById, criteria, refresh }: PassageData) {
-  const oralQ = useQuery({ queryKey: ["oral-evaluations", passage.id], queryFn: () => getOralEvaluations(passage.id) });
+export function OralGrading({ passage, teamById, criteria, refresh, practice = false }: PassageData) {
+  const oralQ = useQuery({
+    queryKey: ["oral-evaluations", passage.id],
+    queryFn: () => getOralEvaluations(passage.id),
+    enabled: !practice,
+  });
   if (oralQ.isLoading) return <PageLoading />;
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-      {GRADED_ROLES.map((role) => {
+      {GRADED_ROLES.map((role, i) => {
         const team = teamById.get(passage[`${role}TeamId`]);
         return (
           <GradingCard
@@ -24,7 +28,10 @@ export function OralGrading({ passage, teamById, criteria, refresh }: PassageDat
             header={<TeamHeader role={role} team={team} />}
             criteria={oralCriteria(criteria, role)}
             saved={(oralQ.data ?? []).find((e) => e.teamId === team?.id)}
+            practice={practice}
+            tourAnchors={i === 0}
             onSave={async (input) => {
+              if (practice) return;
               await saveOralEvaluation({ passageId: passage.id, teamId: team!.id, ...input });
               await refresh();
             }}

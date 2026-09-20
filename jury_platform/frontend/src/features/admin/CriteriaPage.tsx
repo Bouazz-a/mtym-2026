@@ -212,7 +212,7 @@ function CriterionRowEditor({ criterion }: { criterion: Criterion }) {
   return (
     <div className="px-4 py-3">
       <div className="flex items-end gap-3 flex-wrap">
-        <label className="flex-1 min-w-[200px]">
+        <label className="flex-1 min-w-[13rem]">
           {label("Intitulé")}
           <Input value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
         </label>

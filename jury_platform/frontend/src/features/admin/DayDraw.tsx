@@ -161,7 +161,7 @@ function SwapTeams({ dayId, teams }: { dayId: string; teams: Team[] }) {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {select(a, setA)}
-            <span style={{ color: "var(--ink-faint)" }}><SwapIcon size={16} /></span>
+            <span style={{ color: "var(--ink-faint)" }}><SwapIcon size="1rem" /></span>
             {select(b, setB)}
           </div>
         </div>

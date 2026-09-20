@@ -100,14 +100,14 @@ export function EmptyState({
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: 4,
-        padding: "60px 40px",
+        padding: "3.75rem 2.5rem",
       }}
     >
       <MoroccoWatermark
-        size={220}
+        size="13.75rem"
         opacity={0.06}
-        top={-40}
-        right={-40}
+        top="-2.5rem"
+        right="-2.5rem"
         color="var(--forest)"
       />
       <div className="relative text-center">
@@ -137,8 +137,9 @@ export function EmptyState({
 
 // ─── Morocco silhouette watermark (decorative) ─────────────────────────
 
+// Lengths are CSS values in rem, so the decoration follows the page scale.
 function MoroccoWatermark({
-  size = 280,
+  size = "17.5rem",
   opacity = 0.08,
   top,
   right,
@@ -146,12 +147,12 @@ function MoroccoWatermark({
   bottom,
   color = "var(--saffron)",
 }: {
-  size?: number;
+  size?: string;
   opacity?: number;
-  top?: number;
-  right?: number;
-  left?: number;
-  bottom?: number;
+  top?: string;
+  right?: string;
+  left?: string;
+  bottom?: string;
   color?: string;
 }) {
   return (
@@ -167,8 +168,7 @@ function MoroccoWatermark({
       }}
     >
       <svg
-        width={size}
-        height={size}
+        style={{ width: size, height: size }}
         viewBox="0 0 32 32"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
@@ -184,15 +184,8 @@ function MoroccoWatermark({
 
 // ─── MTYM Logo ─────────────────────────────────────────────────────────
 
-export function MtymLogo({ size = 36 }: { size?: number }) {
-  return (
-    <img
-      src={AppLogo}
-      height={size}
-      alt="MTYM Logo"
-      style={{ height: size, width: "auto" }}
-    />
-  );
+export function MtymLogo({ size = "2.25rem" }: { size?: string }) {
+  return <img src={AppLogo} alt="MTYM Logo" style={{ height: size, width: "auto" }} />;
 }
 
 // ─── Role palette (single source of truth) ─────────────────────────────
@@ -260,7 +253,7 @@ export function StatCard({
     <BrutalCard highlight={highlight} className="p-6 h-full">
       <div
         className="absolute top-0 right-0 clip-triangle-tr pointer-events-none"
-        style={{ width: 48, height: 48, background: highlight ? "rgba(246,168,6,0.12)" : "rgba(18,32,25,0.04)" }}
+        style={{ width: "3rem", height: "3rem", background: highlight ? "rgba(246,168,6,0.12)" : "rgba(18,32,25,0.04)" }}
       />
       <p
         className="font-mont text-tiny uppercase tracking-widest mb-2"
@@ -282,7 +275,7 @@ export function StatCard({
       </div>
       {pct !== null && (
         <>
-          <div className="w-full" style={{ height: 6, background: "var(--paper-2)" }}>
+          <div className="w-full" style={{ height: "0.375rem", background: "var(--paper-2)" }}>
             <div
               style={{
                 height: "100%",

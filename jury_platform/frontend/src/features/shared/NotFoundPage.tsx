@@ -14,7 +14,7 @@ export function NotFoundPage() {
   return (
     <PageMotion className="space-y-10 pt-4 sm:pt-6">
       <NotFoundHero />
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] gap-8 items-start">
         <div>
           <span className="font-mont text-tiny uppercase tracking-[0.2em] block mb-2" style={{ color: "var(--saffron-dark)", fontWeight: 800 }}>
             Erreur 404
@@ -75,7 +75,7 @@ function ProofCard({ path }: { path: string }) {
         </motion.p>
         <motion.p {...line(2)}>
           <Term>Conclusion</Term> <strong style={{ color: "var(--clay)" }}>absurde.</strong>{" "}
-          <span aria-hidden className="inline-block align-middle" style={{ width: 9, height: 9, background: "var(--forest)" }} />
+          <span aria-hidden className="inline-block align-middle" style={{ width: "0.56rem", height: "0.56rem", background: "var(--forest)" }} />
         </motion.p>
       </section>
     </BrutalCard>

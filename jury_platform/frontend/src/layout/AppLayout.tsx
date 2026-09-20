@@ -16,7 +16,7 @@ export function AppLayout() {
     >
       <BackgroundFX />
       <TopNav />
-      <main className="flex-1 pt-16 w-full max-w-[1400px] mx-auto px-6 lg:px-12 py-10 relative">
+      <main className="flex-1 pt-16 shell py-10 relative">
         <AnimatePresence mode="wait" initial={false}>
           {/* The route's pathname keys the outlet so framer-motion can
               animate the page in/out across navigations. */}
