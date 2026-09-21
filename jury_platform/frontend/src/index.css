@@ -255,7 +255,9 @@ body::before {
 }
 /* Columns that only need their content (a name, badges, buttons). On a wide
    screen the leftover width then goes to the text columns instead of
-   stretching a column of buttons. */
+   stretching a column of buttons. Only for content that carries its own
+   width: a full-width field (Select, Input) in such a column would shrink
+   down to nothing with it — give that column a width instead. */
 .brutal-table .col-tight {
   width: 1%;
   white-space: nowrap;

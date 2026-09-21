@@ -241,7 +241,9 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
                 <th className="col-tight">Équipe</th>
                 <th>Membres</th>
                 <th className="col-tight">Rapports finaux</th>
-                <th className="col-tight" style={{ borderRight: "none" }}>Jour</th>
+                {/* Its cells hold a full-width select: it needs a width of
+                    its own, or the menu shrinks to its arrow. */}
+                <th style={{ borderRight: "none", width: "13rem" }}>Jour</th>
               </tr>
             </thead>
             <tbody>
