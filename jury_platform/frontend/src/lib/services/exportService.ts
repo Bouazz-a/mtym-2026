@@ -5,9 +5,10 @@ import { getOralEvaluations, getReportEvaluations } from "@/lib/repositories/eva
 import { getFinalWeights } from "@/lib/repositories/finalWeightsRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
-import type { AuditEntry } from "@/types";
+import type { AuditEntry, Center, CenterDay, PoolDetails, Team } from "@/types";
 import { centerLabel } from "@/utils/labels";
 import { slotTime } from "@/utils/schedule";
+import { buildPoolSheets } from "./poolsExport";
 import { passageResults, percent, teamResults, type NoteSet } from "./results";
 
 // exportService — the grades workbook (admin). Every sheet carries readable
@@ -120,6 +121,20 @@ export async function exportGradesXlsx(): Promise<void> {
   ));
 
   XLSX.writeFile(wb, `mtym-2026-notes-${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+// The pools of one center, one sheet per day, laid out like the cards of the
+// Tournoi page (buildPoolSheets). SheetJS's community build has no styling,
+// so the shape comes from merged titles and column widths.
+export function exportPoolsXlsx(center: Center, days: CenterDay[], pools: PoolDetails[], teams: Team[]): void {
+  const wb = XLSX.utils.book_new();
+  for (const sheet of buildPoolSheets(center, days, pools, teams)) {
+    const ws = XLSX.utils.aoa_to_sheet(sheet.rows);
+    ws["!merges"] = sheet.merges;
+    ws["!cols"] = sheet.cols;
+    XLSX.utils.book_append_sheet(wb, ws, sheet.name);
+  }
+  XLSX.writeFile(wb, `mtym-2026-poules-${center}-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 function append(wb: XLSX.WorkBook, name: string, rows: Record<string, unknown>[]): void {

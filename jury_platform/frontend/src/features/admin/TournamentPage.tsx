@@ -5,12 +5,14 @@ import {
   Alert, Badge, Btn, BrutalCard, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select,
   Stagger,
 } from "@/features/shared/primitives";
+import { DownloadIcon } from "@/features/shared/icons";
 import { EmptyState, StatCard } from "@/features/shared/widgets";
 import { getTeams, setTeamDay } from "@/lib/repositories/teamRepository";
 import {
   createCenterDay, deleteCenterDay, distributeTeams, getCenterDays, updateCenterDay,
 } from "@/lib/repositories/centerDayRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
+import { exportPoolsXlsx } from "@/lib/services/exportService";
 import { QUALIFS_PROBLEMS } from "@/lib/services/tournamentOptimizer";
 import type { Center, CenterDay, PoolDetails, Team } from "@/types";
 import { CENTERS, centerLabel, formatDay } from "@/utils/labels";
@@ -33,6 +35,7 @@ export function TournamentPage() {
 
   const teams = useMemo(() => teamsQ.data ?? [], [teamsQ.data]);
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   if (teamsQ.isLoading || daysQ.isLoading || poolsQ.isLoading) {
     return <PageLoading />;
@@ -50,7 +53,24 @@ export function TournamentPage() {
         eyebrow="Tournoi"
         title="Qualifications"
         sub="Pour chaque centre : déclarez ses jours, répartissez les équipes (une équipe joue un seul jour), puis tirez les poules de chaque jour et ajustez-les à la main."
+        right={
+          <Btn
+            disabled={pools.length === 0}
+            title={pools.length === 0 ? "Aucune poule à exporter pour ce centre" : `Les poules de ${centerLabel(center)}, une feuille par jour`}
+            onClick={() => {
+              setExportError(null);
+              try {
+                exportPoolsXlsx(center, days, pools, centerTeams);
+              } catch (err) {
+                setExportError(err instanceof Error ? err.message : "Export impossible.");
+              }
+            }}
+          >
+            <DownloadIcon size="0.95rem" /> Exporter les poules (xlsx)
+          </Btn>
+        }
       />
+      {exportError && <Alert>{exportError}</Alert>}
 
       <Segmented
         options={CENTERS.map((c) => ({ value: c.value, label: `${c.label} · ${countByCenter(c.value)}` }))}
