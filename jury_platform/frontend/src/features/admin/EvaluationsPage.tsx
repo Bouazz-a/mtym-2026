@@ -182,7 +182,17 @@ function ResultRow({
             P{passage.problemNumber} · {slotTime(result.pool.centerDay, passage.slot)?.start}
           </div>
         </td>
-        <td>{passage.duo ? <Badge tone="dark">Duo {passage.duo.number}</Badge> : <Badge tone="saffron">Sans duo</Badge>}</td>
+        <td>
+          {passage.duo ? (
+            passage.duo.members.map((m) => (
+              <div key={m.id} className="font-open text-xs whitespace-nowrap" style={{ color: "var(--ink)" }}>
+                {m.firstName} {m.lastName}
+              </div>
+            ))
+          ) : (
+            <Badge tone="saffron">Sans duo</Badge>
+          )}
+        </td>
         {GRADED_ROLES.map((role) => (
           <td key={role}><NoteCell quad={quadById.get(oral[role].teamId)} set={oral[role]} /></td>
         ))}
