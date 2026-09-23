@@ -15,11 +15,11 @@ import {
   teamsOf as teamsOfRow,
   type Role,
 } from "@/lib/services/poolDraft";
-import { QUALIFS_PROBLEMS } from "@/lib/services/tournamentOptimizer";
 import type { GridPassage, Passage, PoolDetails, PoolGrid, Team } from "@/types";
 import { slotTime } from "@/utils/schedule";
 import { hasFinalReport } from "@/utils/teams";
 import { repeatedDuos } from "@/utils/duos";
+import { QUALIFS_PROBLEMS } from "@/utils/labels";
 import { useAction, TOURNAMENT_QUERIES } from "./useAction";
 
 // A pool of a center day, drawn or composed by hand: its passages with

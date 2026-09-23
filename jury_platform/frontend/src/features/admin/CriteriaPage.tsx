@@ -7,8 +7,9 @@ import {
   createCriterion, deleteCriterion, getCriteria, updateCriterion,
 } from "@/lib/repositories/criteriaRepository";
 import { getFinalWeights, updateFinalWeights } from "@/lib/repositories/finalWeightsRepository";
-import { QUALIFS_PROBLEMS } from "@/lib/services/tournamentOptimizer";
+import { FINAL_PART_LABELS, FINAL_PARTS } from "@/lib/services/results";
 import type { Criterion, FinalWeights, PassageRole } from "@/types";
+import { QUALIFS_PROBLEMS } from "@/utils/labels";
 import { useAction } from "./useAction";
 
 // CriteriaPage — the final grade's weights, then the grading grids.
@@ -85,12 +86,7 @@ export function CriteriaPage() {
 
 // ─── Final grade weights ──────────────────────────────────────────────
 
-const WEIGHT_PARTS: { key: keyof FinalWeights; label: string }[] = [
-  { key: "defender", label: "Défense" },
-  { key: "opponent", label: "Opposition" },
-  { key: "reporter", label: "Rapporteur" },
-  { key: "report", label: "Rapport écrit" },
-];
+const WEIGHT_PARTS = FINAL_PARTS.map((key) => ({ key, label: FINAL_PART_LABELS[key] }));
 
 function FinalWeightsSection() {
   const weightsQ = useQuery({ queryKey: ["final-weights"], queryFn: getFinalWeights });

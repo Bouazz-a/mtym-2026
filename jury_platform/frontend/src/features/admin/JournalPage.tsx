@@ -3,15 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Alert, Badge, Btn, BrutalCard, Input, PageHeader, PageLoading, PageMotion,
 } from "@/features/shared/primitives";
-import { ColumnFilterMenu } from "@/features/shared/ColumnFilterMenu";
-import { DownloadIcon } from "@/features/shared/icons";
+import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
+import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { EmptyState } from "@/features/shared/widgets";
 import { getAuditLog } from "@/lib/repositories/auditRepository";
-import {
-  distinctValues, filterAndSort, type ColumnFilter, type ColumnSort, type FilterColumn,
-} from "@/lib/services/columnFilters";
+import type { FilterColumn } from "@/lib/services/columnFilters";
 import { errorMessage } from "@/lib/services/errors";
 import type { AuditEntry } from "@/types";
+import { ExportButton } from "./ExportButton";
+import { useExport } from "./useExport";
 
 // JournalPage — every admin change: when, who, what. Filter by day, author
 // or category, search the details, and export what's shown.
@@ -29,31 +29,30 @@ const COLUMNS: (FilterColumn<AuditEntry> & { sortKind: "date" | "text" })[] = [
 
 export function JournalPage() {
   const logQ = useQuery({ queryKey: ["audit-log"], queryFn: getAuditLog, staleTime: 0 });
-  const [filters, setFilters] = useState<Record<string, ColumnFilter>>({});
-  const [sort, setSort] = useState<ColumnSort>(null);
+  const entries = logQ.data ?? [];
+  const columns = useColumnFilters(entries, COLUMNS);
   const [search, setSearch] = useState("");
   const query = useDeferredValue(search.trim().toLowerCase());
   const [limit, setLimit] = useState(PAGE);
-  const [exportError, setExportError] = useState<string | null>(null);
+
+  const shown = columns.shown.filter(
+    (e) => !query || `${e.summary} ${e.actorName} ${e.category}`.toLowerCase().includes(query),
+  );
+  const narrowed = columns.narrowed || shown.length < entries.length;
+  const clear = () => { columns.clear(); setSearch(""); };
+  // Loaded on demand, like the other exports; it takes what's shown.
+  const exporter = useExport(async () => (await import("@/lib/services/exportService")).exportJournalXlsx(shown));
 
   if (logQ.isLoading) return <PageLoading />;
 
-  const entries = logQ.data ?? [];
-  const shown = filterAndSort(entries, COLUMNS, filters, sort).filter(
-    (e) => !query || `${e.summary} ${e.actorName} ${e.category}`.toLowerCase().includes(query),
+  const header = (column: (typeof COLUMNS)[number]) => (
+    <th>
+      <div className="flex items-center justify-between gap-2">
+        <span>{column.label}</span>
+        <ColumnFilterMenu {...columns.menuProps(column)} sortKind={column.sortKind} />
+      </div>
+    </th>
   );
-  const narrowed = shown.length < entries.length || sort !== null;
-  const clear = () => { setFilters({}); setSort(null); setSearch(""); };
-
-  const exportXlsx = async () => {
-    setExportError(null);
-    try {
-      const { exportJournalXlsx } = await import("@/lib/services/exportService");
-      exportJournalXlsx(shown);
-    } catch (err) {
-      setExportError(errorMessage(err, "Export impossible."));
-    }
-  };
 
   return (
     <PageMotion className="space-y-8">
@@ -61,13 +60,9 @@ export function JournalPage() {
         eyebrow="Administration"
         title="Journal"
         sub="Chaque modification faite par un administrateur : quand, par qui, et ce qui a changé."
-        right={
-          <Btn onClick={exportXlsx} disabled={shown.length === 0}>
-            <DownloadIcon size="0.95rem" /> Exporter (xlsx)
-          </Btn>
-        }
+        right={<ExportButton {...exporter} disabled={shown.length === 0} />}
       />
-      {exportError && <Alert>{exportError}</Alert>}
+      {exporter.error && <Alert>{exporter.error}</Alert>}
       {logQ.isError && <Alert>{errorMessage(logQ.error, "Journal indisponible.")}</Alert>}
 
       {entries.length === 0 ? (
@@ -84,12 +79,7 @@ export function JournalPage() {
                 onChange={(e) => { setSearch(e.target.value); setLimit(PAGE); }}
               />
             </div>
-            {narrowed && (
-              <>
-                <Badge tone="saffron">{shown.length}/{entries.length} entrées</Badge>
-                <Btn variant="ghost" size="sm" onClick={clear}>Effacer les filtres</Btn>
-              </>
-            )}
+            {narrowed && <FilterSummary shown={shown.length} total={entries.length} unit="entrées" onClear={clear} />}
           </div>
 
           <BrutalCard className="overflow-hidden">
@@ -97,27 +87,16 @@ export function JournalPage() {
               <table className="brutal-table brutal-table--manual-stripes">
                 <thead>
                   <tr>
-                    <FilterHeader column={COLUMNS[0]} entries={entries} filters={filters} setFilters={setFilters} sort={sort} setSort={setSort} />
+                    {header(COLUMNS[0])}
                     <th>Heure</th>
-                    <FilterHeader column={COLUMNS[1]} entries={entries} filters={filters} setFilters={setFilters} sort={sort} setSort={setSort} />
-                    <FilterHeader column={COLUMNS[2]} entries={entries} filters={filters} setFilters={setFilters} sort={sort} setSort={setSort} />
+                    {header(COLUMNS[1])}
+                    {header(COLUMNS[2])}
                     <th style={{ borderRight: "none" }}>Détail</th>
                   </tr>
                 </thead>
                 <tbody>
                   {shown.slice(0, limit).map((e, i) => <EntryRow key={e.id} entry={e} alt={i % 2 === 1} />)}
-                  {shown.length === 0 && (
-                    <tr>
-                      <td colSpan={5} style={{ borderRight: "none" }}>
-                        <div className="py-4 flex items-center justify-center gap-3 flex-wrap">
-                          <span className="font-open text-sm italic" style={{ color: "var(--ink-faint)" }}>
-                            Aucune entrée ne correspond.
-                          </span>
-                          <Btn variant="ghost" size="sm" onClick={clear}>Effacer les filtres</Btn>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+                  {shown.length === 0 && <NoMatchRow colSpan={5} label="Aucune entrée ne correspond." onClear={clear} />}
                 </tbody>
               </table>
             </div>
@@ -132,39 +111,6 @@ export function JournalPage() {
         </>
       )}
     </PageMotion>
-  );
-}
-
-function FilterHeader({
-  column,
-  entries,
-  filters,
-  setFilters,
-  sort,
-  setSort,
-}: {
-  column: (typeof COLUMNS)[number];
-  entries: AuditEntry[];
-  filters: Record<string, ColumnFilter>;
-  setFilters: React.Dispatch<React.SetStateAction<Record<string, ColumnFilter>>>;
-  sort: ColumnSort;
-  setSort: (sort: ColumnSort) => void;
-}) {
-  return (
-    <th>
-      <div className="flex items-center justify-between gap-2">
-        <span>{column.label}</span>
-        <ColumnFilterMenu
-          label={column.label}
-          values={distinctValues(entries, column)}
-          filter={filters[column.key]}
-          onFilter={(f) => setFilters((all) => ({ ...all, [column.key]: f }))}
-          sort={sort?.key === column.key ? sort.dir : null}
-          onSort={(dir) => setSort(dir ? { key: column.key, dir } : null)}
-          sortKind={column.sortKind}
-        />
-      </div>
-    </th>
   );
 }
 

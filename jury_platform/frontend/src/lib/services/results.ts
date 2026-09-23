@@ -1,4 +1,5 @@
-import type { Criterion, FinalWeights, OralEvaluation, PassageDetails, PoolDetails, ReportEvaluation } from "@/types";
+import type { Center, Criterion, FinalWeights, OralEvaluation, PassageDetails, PoolDetails, ReportEvaluation } from "@/types";
+import { CENTERS } from "@/utils/labels";
 import { oralCriteria, reportCriteria, weightedNote } from "./gradingService";
 
 // Per-passage results: each graded team's note from every juror of the
@@ -77,6 +78,14 @@ export function passageResults(
 export const FINAL_PARTS = ["defender", "opponent", "reporter", "report"] as const;
 export type FinalPart = (typeof FINAL_PARTS)[number];
 
+// How the four notes are named on the Critères, Notes and Résultats pages
+export const FINAL_PART_LABELS: Record<FinalPart, string> = {
+  defender: "Défense",
+  opponent: "Opposition",
+  reporter: "Rapporteur",
+  report: "Rapport écrit",
+};
+
 export interface TeamResult {
   teamId: string;
   pool: PoolDetails;
@@ -117,4 +126,22 @@ export function teamResults(results: PassageResult[], weights: FinalWeights): Te
   }
   for (const team of byTeam.values()) team.final = finalGrade(team.notes, weights);
   return [...byTeam.values()];
+}
+
+// ─── Notes and Résultats pages: one center, then one table per day ────
+
+// The centers that have pools, in the usual order
+export function centersWithPools(pools: PoolDetails[]) {
+  return CENTERS.filter((c) => pools.some((p) => p.centerDay?.center === c.value));
+}
+
+// A center's rows grouped by day, in date order
+export function daysOfCenter<Row extends { pool: PoolDetails }>(rows: Row[], center: Center | null): [string, Row[]][] {
+  const byDay = new Map<string, Row[]>();
+  for (const row of rows) {
+    const day = row.pool.centerDay;
+    if (!day || day.center !== center) continue;
+    byDay.set(day.date, [...(byDay.get(day.date) ?? []), row]);
+  }
+  return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b));
 }

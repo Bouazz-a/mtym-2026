@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Alert, Badge, Btn, BrutalCard, Modal, SectionHeading, Select } from "@/features/shared/primitives";
-import { assignDuos, createDuo, deleteDuo, updateDuo } from "@/lib/repositories/duoRepository";
-import { planDuoAssignment, type AssignMode } from "@/lib/services/duoAssignment";
+import { autoAssignDuos, createDuo, deleteDuo, updateDuo, type AutoAssignMode } from "@/lib/repositories/duoRepository";
 import type { Account, CenterDay, JuryDuo, PoolDetails, ScheduleSlot, Team } from "@/types";
 import { formatDay } from "@/utils/labels";
 import { DayTimetable } from "./JuryTimetable";
@@ -116,8 +115,8 @@ export function DayJury({
 // Spreads the day's passages between the duos already formed by hand (the
 // duos themselves are never generated). Assignment by hand keeps working:
 // this only fills the timetable in one click, and leaves a summary of the
-// compromises it had to make. The plan itself is in
-// lib/services/duoAssignment.ts.
+// compromises it had to make. The plan is computed by the server
+// (backend/src/algorithms/duoAssignment.ts).
 function AutoAssign({
   day,
   pools,
@@ -135,20 +134,14 @@ function AutoAssign({
 
   const passages = pools.flatMap((p) => p.passages);
   const empty = passages.filter((p) => !p.duo).length;
-  const asPools = pools.map((pool) => ({
-    id: pool.id,
-    label: pool.label,
-    passages: pool.passages.map((p) => ({ id: p.id, slot: p.slot, duoId: p.duo?.id ?? null, locked: false })),
-  }));
 
-  const apply = async (mode: AssignMode) => {
-    const plan = planDuoAssignment(asPools, duos, mode);
+  const apply = async (mode: AutoAssignMode) => {
     setOpen(false);
-    const res = await run(() => assignDuos(day.id, plan.changes));
+    const res = await run(() => autoAssignDuos(day.id, mode));
     if (!res) return;
     const parts = [`${res.changed} passage${res.changed > 1 ? "s" : ""} attribué${res.changed > 1 ? "s" : ""}`];
-    if (plan.withoutDuo > 0) parts.push(`${plan.withoutDuo} sans duo (pas assez de duos)`);
-    if (plan.samePool > 0) parts.push(`${plan.samePool} fois la même poule deux fois`);
+    if (res.withoutDuo > 0) parts.push(`${res.withoutDuo} sans duo (pas assez de duos)`);
+    if (res.samePool > 0) parts.push(`${res.samePool} fois la même poule deux fois`);
     setSummary(parts.join(" · "));
     onWarnings(res.warnings);
   };

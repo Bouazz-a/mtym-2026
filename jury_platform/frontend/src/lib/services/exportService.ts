@@ -5,7 +5,7 @@ import { getOralEvaluations, getReportEvaluations } from "@/lib/repositories/eva
 import { getFinalWeights } from "@/lib/repositories/finalWeightsRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
-import type { AuditEntry, Center, CenterDay, PoolDetails, Team } from "@/types";
+import type { AuditEntry, Center, CenterDay, Grade, PoolDetails, Team } from "@/types";
 import { centerLabel } from "@/utils/labels";
 import { slotTime } from "@/utils/schedule";
 import { buildPoolSheets } from "./poolsExport";
@@ -83,41 +83,38 @@ export async function exportGradesXlsx(): Promise<void> {
     };
   }));
 
+  // The columns every grade row ends with, oral or report
+  const gradeColumns = (g: Grade, globalRemark: string | null) => {
+    const c = criterionById.get(g.criterionId);
+    return {
+      critere: c?.label ?? "",
+      taux: g.score,
+      coefficient: c?.coefficient ?? "",
+      note: c ? round2(g.score * c.coefficient) : "",
+      remarque: g.remark ?? "",
+      remarque_globale: globalRemark ?? "",
+    };
+  };
+
   append(wb, "Notes orales", oral.flatMap((e) => {
     const ctx = passageById.get(e.passageId);
-    return e.grades.map((g) => {
-      const c = criterionById.get(g.criterionId);
-      return {
-        ...(ctx ? where(ctx.pool) : {}),
-        passage: ctx?.passage.label ?? "",
-        jure: nameById.get(e.juryId) ?? "",
-        equipe: quad(e.teamId),
-        role: ROLE_LABEL[e.role],
-        critere: c?.label ?? "",
-        taux: g.score,
-        coefficient: c?.coefficient ?? "",
-        note: c ? round2(g.score * c.coefficient) : "",
-        remarque: g.remark ?? "",
-        remarque_globale: e.globalRemark ?? "",
-      };
-    });
+    return e.grades.map((g) => ({
+      ...(ctx ? where(ctx.pool) : {}),
+      passage: ctx?.passage.label ?? "",
+      jure: nameById.get(e.juryId) ?? "",
+      equipe: quad(e.teamId),
+      role: ROLE_LABEL[e.role],
+      ...gradeColumns(g, e.globalRemark),
+    }));
   }));
 
   append(wb, "Notes rapports", report.flatMap((e) =>
-    e.grades.map((g) => {
-      const c = criterionById.get(g.criterionId);
-      return {
-        equipe: quad(e.teamId),
-        probleme: e.problemNumber,
-        jure: nameById.get(e.juryId) ?? "",
-        critere: c?.label ?? "",
-        taux: g.score,
-        coefficient: c?.coefficient ?? "",
-        note: c ? round2(g.score * c.coefficient) : "",
-        remarque: g.remark ?? "",
-        remarque_globale: e.globalRemark ?? "",
-      };
-    }),
+    e.grades.map((g) => ({
+      equipe: quad(e.teamId),
+      probleme: e.problemNumber,
+      jure: nameById.get(e.juryId) ?? "",
+      ...gradeColumns(g, e.globalRemark),
+    })),
   ));
 
   XLSX.writeFile(wb, `mtym-2026-notes-${new Date().toISOString().slice(0, 10)}.xlsx`);

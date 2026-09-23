@@ -3,10 +3,9 @@ import { Alert, Badge, Btn, BrutalCard, Modal, SectionHeading, Select } from "@/
 import { completeDraw, deleteDraw, saveDraw, setDrawValidation, swapTeams } from "@/lib/repositories/centerDayRepository";
 import { createPool } from "@/lib/repositories/poolRepository";
 import { teamsInGrid } from "@/lib/services/poolDraft";
-import { generateQualifsDay } from "@/lib/services/tournamentOptimizer";
 import type { CenterDay, PoolDetails, Team } from "@/types";
 import { SwapIcon } from "@/features/shared/icons";
-import { formatDay, poolLabelPrefix } from "@/utils/labels";
+import { formatDay } from "@/utils/labels";
 import { hasFinalReport } from "@/utils/teams";
 import { PoolCard } from "./PoolsEditor";
 import { useAction, TOURNAMENT_QUERIES } from "./useAction";
@@ -51,29 +50,15 @@ export function DayDraw({
     ),
   );
   const freeTeams = teams.filter((t) => !placed.has(t.id));
-  const nextPoolNumber = pools.reduce((max, p) => Math.max(max, Number(p.label.match(/(\d+)$/)?.[1] ?? 0)), 0) + 1;
 
+  // The server draws (backend/src/algorithms/poolDraw.ts): all the day's
+  // teams, or only those still without a pool when completing.
   const draw = async () => {
     setConfirm(null);
-    await run(async () => {
-      const result = generateQualifsDay({ teams, labelPrefix: poolLabelPrefix(day.center, dayIndex), allowLeftovers: true });
-      return saveDraw(day.id, result);
-    });
+    await run(() => saveDraw(day.id));
   };
 
-  // Draws only the teams that have no pool yet, keeping the pools already
-  // there (drawn or composed by hand).
-  const complete = async () => {
-    await run(async () => {
-      const result = generateQualifsDay({
-        teams: freeTeams,
-        labelPrefix: poolLabelPrefix(day.center, dayIndex),
-        labelStart: nextPoolNumber,
-        allowLeftovers: true,
-      });
-      return completeDraw(day.id, result);
-    });
-  };
+  const complete = () => run(() => completeDraw(day.id));
 
   const validate = async (validated: boolean) => run(() => setDrawValidation(day.id, validated));
 

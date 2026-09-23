@@ -23,15 +23,18 @@ export function deleteDuo(id: string): Promise<void> {
   return apiFetch<void>(`/duos/${id}`, { method: "DELETE" });
 }
 
-// Several passages at once (the automatic assignment): the duos are those
-// already formed by hand, only their passages change. Refused for a passage
-// that is already graded.
-export function assignDuos(
-  centerDayId: string,
-  assignments: { passageId: string; duoId: string | null }[],
-): Promise<{ changed: number; warnings: string[] }> {
-  return apiFetch<{ changed: number; warnings: string[] }>("/duos/assignments", {
-    method: "PUT",
-    body: { centerDayId, assignments },
-  });
+// Automatic assignment, computed on the server: the day's passages are
+// spread between the duos already formed by hand. "fill" keeps the duos
+// already placed, "replace" recomputes the day; graded passages never move.
+export type AutoAssignMode = "fill" | "replace";
+
+export interface AutoAssignResult {
+  changed: number;
+  withoutDuo: number; // passages left without a duo (not enough duos)
+  samePool: number; // times a duo judges the same pool twice
+  warnings: string[];
+}
+
+export function autoAssignDuos(centerDayId: string, mode: AutoAssignMode): Promise<AutoAssignResult> {
+  return apiFetch<AutoAssignResult>("/duos/auto-assign", { method: "POST", body: { centerDayId, mode } });
 }

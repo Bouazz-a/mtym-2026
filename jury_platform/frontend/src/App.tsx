@@ -41,7 +41,6 @@ const PracticePage = lazy(() =>
 const PassagePage = lazy(() =>
   import("@/features/jury/PassagePage").then((m) => ({ default: m.PassagePage })),
 );
-
 export default function App() {
   return (
     <SessionProvider>

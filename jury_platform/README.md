@@ -30,8 +30,12 @@ listens on another port, start Vite with
 `API_PROXY_TARGET=http://127.0.0.1:<port> npm run dev`. The backend listens
 on 127.0.0.1 unless `HOST` says otherwise.
 
-Checks: `npm run lint`, `npx tsc -b` and `npm test` (pool draw rules) in
-`frontend/`; `npm run typecheck` in `backend/`.
+Checks: `npm run lint`, `npx tsc -b` and `npm test` in `frontend/`;
+`npm run typecheck` and `npm test` in `backend/`.
+
+Pool draws and the automatic assignment of jury duos are computed by the
+backend, in `backend/src/algorithms/` (pure modules, tested next to them);
+the admin UI only asks for them.
 
 ## Importing teams from the main site
 
@@ -58,9 +62,10 @@ intermediate report) or `--reports intermediate`.
 
 It imports the teams that are `APPROVED`, whose intermediate report is `PASS`
 and that have a qualification center, with their members' names and their
-FINAL reports. Re-run it with a newer dump at any time: teams are matched on
-their main-site id, and a team that is already in a pool is never deleted or
-moved to another center — the script lists it instead.
+reports (which one is graded: see above). Re-run it with a newer dump at any
+time: teams are matched on their main-site id, and a team that is already in
+a pool is never deleted or moved to another center — the script lists it
+instead.
 
 Dumps contain personal data: keep them out of git (`*.sql` / `*.dump` are
 ignored here) and delete them once imported.

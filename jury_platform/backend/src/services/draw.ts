@@ -12,8 +12,10 @@ export interface DrawPool {
   passages: DrawPassage[];
 }
 
-// Checks a pool draw computed by the admin UI against the qualifs rules
-// before it replaces the day's pools. Throws on the first broken rule.
+// Checks a pool draw (from algorithms/poolDraw.ts) against the qualifs
+// rules before it is saved — a guard against a bug in the draw, since the
+// same rules also apply to a pool composed by hand. Throws on the first
+// broken rule.
 //   - a team belongs to at most one pool, and is a team of that day
 //   - a pool has 3 or 4 teams and one passage per team
 //   - each team defends exactly once in its pool, on a different problem

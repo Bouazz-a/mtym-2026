@@ -22,7 +22,7 @@ export function toMinutes(hhmm: string): number {
   return Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 }
 
-export function fromMinutes(total: number): string {
+function fromMinutes(total: number): string {
   const m = Math.max(0, Math.min(DAY_END - 1, Math.round(total)));
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }

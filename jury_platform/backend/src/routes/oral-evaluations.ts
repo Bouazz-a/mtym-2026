@@ -5,7 +5,7 @@ import { authenticate, requireRole } from "../middleware/auth";
 import { isPassageJuror } from "../services/access";
 import { GradesSchema, assertCriteriaApply } from "../services/grading";
 import { roleOf } from "../services/passages";
-import { BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors";
+import { asyncRoute, BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors";
 
 const router = Router();
 
@@ -18,59 +18,55 @@ const EvalSchema = z.object({
 });
 
 // GET /api/oral-evaluations?passageId= — jury: their own; admin: all
-router.get("/", authenticate, async (req, res, next) => {
-  try {
-    const user = req.user!;
-    const passageId = z.string().uuid().optional().parse(req.query.passageId);
-    res.json(await db.oralEvaluation.findMany({
-      where: {
-        ...(passageId ? { passageId } : {}),
-        ...(user.role === "jury" ? { juryId: user.id } : {}),
-      },
-      include: { grades: true },
-    }));
-  } catch (err) { next(err); }
-});
+router.get("/", authenticate, asyncRoute(async (req, res) => {
+  const user = req.user!;
+  const passageId = z.string().uuid().optional().parse(req.query.passageId);
+  res.json(await db.oralEvaluation.findMany({
+    where: {
+      ...(passageId ? { passageId } : {}),
+      ...(user.role === "jury" ? { juryId: user.id } : {}),
+    },
+    include: { grades: true },
+  }));
+}));
 
 // POST /api/oral-evaluations — upsert the juror's evaluation of one team
 // in one passage, with its grades
-router.post("/", authenticate, requireRole("jury"), async (req, res, next) => {
-  try {
-    const user = req.user!;
-    const { grades = [], ...evalData } = EvalSchema.parse(req.body);
+router.post("/", authenticate, requireRole("jury"), asyncRoute(async (req, res) => {
+  const user = req.user!;
+  const { grades = [], ...evalData } = EvalSchema.parse(req.body);
 
-    const passage = await db.passage.findUnique({ where: { id: evalData.passageId } });
-    if (!passage) throw new NotFoundError("Passage not found");
-    if (!(await isPassageJuror(user.id, passage.id))) {
-      throw new ForbiddenError("Votre duo ne juge pas ce passage");
-    }
+  const passage = await db.passage.findUnique({ where: { id: evalData.passageId } });
+  if (!passage) throw new NotFoundError("Passage not found");
+  if (!(await isPassageJuror(user.id, passage.id))) {
+    throw new ForbiddenError("Votre duo ne juge pas ce passage");
+  }
 
-    const role = roleOf(passage, evalData.teamId);
-    if (!role) throw new BadRequestError("Cette équipe ne joue pas dans ce passage");
-    if (role === "extra") throw new BadRequestError("L'observateur n'est pas noté");
+  const role = roleOf(passage, evalData.teamId);
+  if (!role) throw new BadRequestError("Cette équipe ne joue pas dans ce passage");
+  if (role === "extra") throw new BadRequestError("L'observateur n'est pas noté");
 
-    const evaluation = await db.$transaction(async (tx) => {
-      await assertCriteriaApply(tx, grades.map((g) => g.criterionId), { type: "oral", role });
+  const evaluation = await db.$transaction(async (tx) => {
+    await assertCriteriaApply(tx, grades.map((g) => g.criterionId), { type: "oral", role });
 
-      const saved = await tx.oralEvaluation.upsert({
-        where: {
-          juryId_passageId_teamId: { juryId: user.id, passageId: passage.id, teamId: evalData.teamId },
-        },
-        create: { ...evalData, role, juryId: user.id },
-        update: { globalRemark: evalData.globalRemark, role },
-      });
-      for (const g of grades) {
-        await tx.oralGrade.upsert({
-          where: { oralEvaluationId_criterionId: { oralEvaluationId: saved.id, criterionId: g.criterionId } },
-          create: { oralEvaluationId: saved.id, ...g },
-          update: { score: g.score, remark: g.remark },
-        });
-      }
-      return tx.oralEvaluation.findUniqueOrThrow({ where: { id: saved.id }, include: { grades: true } });
+    const saved = await tx.oralEvaluation.upsert({
+      where: {
+        juryId_passageId_teamId: { juryId: user.id, passageId: passage.id, teamId: evalData.teamId },
+      },
+      create: { ...evalData, role, juryId: user.id },
+      update: { globalRemark: evalData.globalRemark, role },
     });
+    for (const g of grades) {
+      await tx.oralGrade.upsert({
+        where: { oralEvaluationId_criterionId: { oralEvaluationId: saved.id, criterionId: g.criterionId } },
+        create: { oralEvaluationId: saved.id, ...g },
+        update: { score: g.score, remark: g.remark },
+      });
+    }
+    return tx.oralEvaluation.findUniqueOrThrow({ where: { id: saved.id }, include: { grades: true } });
+  });
 
-    res.json(evaluation);
-  } catch (err) { next(err); }
-});
+  res.json(evaluation);
+}));
 
 export default router;

@@ -1,6 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "../db";
+import type { DrawPool } from "./draw";
 import { duoInclude, toDuoResponse } from "./duos";
+import { teamsOf, type Lineup } from "./passages";
+import { teamsInGrid, type PoolGrid } from "./poolGrid";
 
 export const poolInclude = {
   centerDay: true,
@@ -28,6 +31,31 @@ export async function clearDrawValidation(tx: Prisma.TransactionClient, centerDa
     where: { id: centerDayId, NOT: { drawValidatedAt: null } },
     data: { drawValidatedAt: null, drawValidatedBy: null },
   });
+}
+
+// Teams already placed in these pools: in their passages, or in the grid of
+// a pool still being composed by hand.
+export function teamsInPools(pools: { passages: Lineup[]; draft: Prisma.JsonValue }[]): Set<string> {
+  const taken = new Set<string>();
+  for (const pool of pools) {
+    for (const p of pool.passages) for (const id of teamsOf(p)) taken.add(id);
+    const draft = pool.draft as unknown as PoolGrid | null;
+    if (draft) for (const id of teamsInGrid(draft)) taken.add(id);
+  }
+  return taken;
+}
+
+// A draw's pools, saved with their passages (no duo yet).
+export async function createPools(tx: Prisma.TransactionClient, centerDayId: string, pools: DrawPool[]) {
+  for (const pool of pools) {
+    await tx.pool.create({
+      data: {
+        label: pool.label,
+        centerDayId,
+        passages: { create: pool.passages.map((p) => ({ ...p, extraTeamId: p.extraTeamId ?? null })) },
+      },
+    });
+  }
 }
 
 export async function findPools(where: Prisma.PoolWhereInput) {

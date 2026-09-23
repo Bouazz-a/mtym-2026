@@ -1,5 +1,6 @@
 import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
 import { motion, useReducedMotion, type Transition } from "framer-motion";
+import { FIELD_STYLE } from "./fieldStyle";
 import { CloseIcon } from "./icons";
 
 // Primitives — visual building blocks aligned with the MTYM aesthetic:
@@ -55,13 +56,6 @@ export function Btn({
 
 // ─── Form fields ───────────────────────────────────────────────────────
 
-const INPUT_STYLE: React.CSSProperties = {
-  background: "var(--surface)",
-  border: "1px solid var(--border)",
-  color: "var(--ink)",
-  borderRadius: 2,
-};
-
 export function Field({
   label,
   hint,
@@ -101,7 +95,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={`w-full px-3 py-2 text-sm font-open focus-ring ${props.className || ""}`}
-      style={{ ...INPUT_STYLE, ...props.style }}
+      style={{ ...FIELD_STYLE, ...props.style }}
     />
   );
 }
@@ -112,7 +106,7 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
       {...props}
       rows={props.rows ?? 3}
       className={`w-full px-3 py-2 text-sm font-open resize-y focus-ring ${props.className || ""}`}
-      style={{ ...INPUT_STYLE, ...props.style }}
+      style={{ ...FIELD_STYLE, ...props.style }}
     />
   );
 }
@@ -594,7 +588,7 @@ export function Select({ className, style, ...props }: React.SelectHTMLAttribute
     <select
       {...props}
       className={`w-full px-3 py-2 text-sm font-mont focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${className || ""}`}
-      style={{ ...INPUT_STYLE, ...style }}
+      style={{ ...FIELD_STYLE, ...style }}
     />
   );
 }

@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { isFilterActive, NO_FILTER, type ColumnFilter, type SortDir } from "@/lib/services/columnFilters";
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, FunnelIcon } from "./icons";
-import { Btn, Input, Popover } from "./primitives";
+import { Badge, Btn, Input, Popover } from "./primitives";
 
 // The dropdown of a table header, like a spreadsheet's filter button: sort
 // the column, keep a numeric range, tick the values to show. Changes apply
@@ -151,6 +151,30 @@ export function ColumnFilterMenu({
         </div>
       </Popover>
     </>
+  );
+}
+
+// "3/11 passages" + "Effacer les filtres", shown while a table is narrowed
+export function FilterSummary({ shown, total, unit, onClear }: { shown: number; total: number; unit: string; onClear: () => void }) {
+  return (
+    <>
+      <Badge tone="saffron">{shown}/{total} {unit}</Badge>
+      <Btn variant="ghost" size="sm" onClick={onClear}>Effacer les filtres</Btn>
+    </>
+  );
+}
+
+// The row a filtered table shows when nothing is left
+export function NoMatchRow({ colSpan, label, onClear }: { colSpan: number; label: string; onClear: () => void }) {
+  return (
+    <tr>
+      <td colSpan={colSpan} style={{ borderRight: "none" }}>
+        <div className="py-4 flex items-center justify-center gap-3 flex-wrap">
+          <span className="font-open text-sm italic" style={{ color: "var(--ink-faint)" }}>{label}</span>
+          <Btn variant="ghost" size="sm" onClick={onClear}>Effacer les filtres</Btn>
+        </div>
+      </td>
+    </tr>
   );
 }
 

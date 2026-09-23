@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { FIELD_STYLE } from "@/features/shared/fieldStyle";
 import { Alert, Btn, BrutalCard } from "@/features/shared/primitives";
 import { updateSchedule } from "@/lib/repositories/centerDayRepository";
 import type { CenterDay, ScheduleSlot } from "@/types";
@@ -126,13 +127,6 @@ export function ScheduleEditor({
     </BrutalCard>
   );
 }
-
-const FIELD_STYLE: React.CSSProperties = {
-  background: "var(--surface)",
-  border: "1px solid var(--border)",
-  color: "var(--ink)",
-  borderRadius: 2,
-};
 
 // A typed start time, always 24h "HH:MM" (a native time input follows the
 // browser's language and can show "01:15 PM"). While it's being typed the

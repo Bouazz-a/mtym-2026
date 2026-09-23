@@ -1,3 +1,4 @@
+import { FIELD_STYLE } from "@/features/shared/fieldStyle";
 import type { Criterion } from "@/types";
 import { fmtNote } from "@/lib/services/gradingService";
 
@@ -54,11 +55,7 @@ function ScoreInput({
           onChange(Math.max(0, Math.min(1, v)));
         }}
         className="w-[4.5rem] px-2 py-1 text-sm font-mont focus-ring"
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          color: "var(--ink)",
-        }}
+        style={FIELD_STYLE}
       />
       <span
         className="font-mont text-micro tabular-nums"
@@ -171,11 +168,7 @@ export function CriterionGradingTable({
                     onChange={(e) => onChange(c.id, { remark: e.target.value })}
                     placeholder="Commentaire (optionnel)…"
                     className="w-full mt-2 px-2 py-1 text-xs font-open focus-ring"
-                    style={{
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      color: "var(--ink)",
-                    }}
+                    style={FIELD_STYLE}
                   />
                 </div>
               );

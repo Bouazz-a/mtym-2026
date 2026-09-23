@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
+import { planDuoAssignment } from "../algorithms/duoAssignment";
 import { adminOnly } from "../middleware/auth";
 import { audit, dayName } from "../services/audit";
 import { duoInclude, duoPassageWarnings, gradedPassageIds, isDuoGraded, jurorDateWarnings, toDuoResponse } from "../services/duos";
-import { BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
+import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 // Jury duos of a center day — two jurors who judge together all day.
 const router = Router();
@@ -45,166 +46,141 @@ async function jurorNames(accountIds: string[]): Promise<string> {
 }
 
 // GET /api/duos?centerDayId=
-router.get("/", async (req, res, next) => {
-  try {
-    const centerDayId = z.string().uuid().optional().parse(req.query.centerDayId);
-    const duos = await db.juryDuo.findMany({
-      where: centerDayId ? { centerDayId } : {},
-      include: duoInclude,
-      orderBy: [{ centerDayId: "asc" }, { number: "asc" }],
-    });
-    res.json(duos.map(toDuoResponse));
-  } catch (err) { next(err); }
-});
+router.get("/", asyncRoute(async (req, res) => {
+  const centerDayId = z.string().uuid().optional().parse(req.query.centerDayId);
+  const duos = await db.juryDuo.findMany({
+    where: centerDayId ? { centerDayId } : {},
+    include: duoInclude,
+    orderBy: [{ centerDayId: "asc" }, { number: "asc" }],
+  });
+  res.json(duos.map(toDuoResponse));
+}));
 
 // POST /api/duos — { centerDayId, accountIds: [a, b] } -> { duo, warnings }
-router.post("/", async (req, res, next) => {
-  try {
-    const { centerDayId, accountIds } = z.object({
-      centerDayId: z.string().uuid(),
-      accountIds: MembersSchema,
-    }).parse(req.body);
+router.post("/", asyncRoute(async (req, res) => {
+  const { centerDayId, accountIds } = z.object({
+    centerDayId: z.string().uuid(),
+    accountIds: MembersSchema,
+  }).parse(req.body);
 
-    const day = await db.centerDay.findUnique({ where: { id: centerDayId }, include: { duos: true } });
-    if (!day) throw new NotFoundError("Center day not found");
-    await assertJurors(accountIds, day.id);
+  const day = await db.centerDay.findUnique({ where: { id: centerDayId }, include: { duos: true } });
+  if (!day) throw new NotFoundError("Center day not found");
+  await assertJurors(accountIds, day.id);
 
-    // Lowest free number, so deleting "Duo 2" lets the next duo take it back.
-    const used = new Set(day.duos.map((d) => d.number));
-    let number = 1;
-    while (used.has(number)) number++;
+  // Lowest free number, so deleting "Duo 2" lets the next duo take it back.
+  const used = new Set(day.duos.map((d) => d.number));
+  let number = 1;
+  while (used.has(number)) number++;
 
-    const names = await jurorNames(accountIds);
-    const duo = await db.$transaction(async (tx) => {
-      const created = await tx.juryDuo.create({
-        data: { centerDayId: day.id, number, members: { create: accountIds.map((accountId) => ({ accountId })) } },
-        include: duoInclude,
+  const names = await jurorNames(accountIds);
+  const duo = await db.$transaction(async (tx) => {
+    const created = await tx.juryDuo.create({
+      data: { centerDayId: day.id, number, members: { create: accountIds.map((accountId) => ({ accountId })) } },
+      include: duoInclude,
+    });
+    await audit(tx, req.user!, { category: "Duos", action: "duo.create", summary: `Duo ${number} formé pour ${dayName(day)} : ${names}` });
+    return created;
+  });
+  res.status(201).json({ duo: toDuoResponse(duo), warnings: await jurorDateWarnings(accountIds, day.id) });
+}));
+
+// POST /api/duos/auto-assign — { centerDayId, mode }: spreads the day's
+// passages between the duos already formed by hand (the plan comes from
+// algorithms/duoAssignment.ts). "fill" keeps the duos already placed,
+// "replace" recomputes the day; a graded passage always keeps its duo.
+router.post("/auto-assign", asyncRoute(async (req, res) => {
+  const { centerDayId, mode } = z.object({
+    centerDayId: z.string().uuid(),
+    mode: z.enum(["fill", "replace"]),
+  }).parse(req.body);
+
+  const day = await db.centerDay.findUnique({ where: { id: centerDayId } });
+  if (!day) throw new NotFoundError("Center day not found");
+  const [pools, duos] = await Promise.all([
+    db.pool.findMany({ where: { centerDayId: day.id }, include: { passages: { include: { duo: true } } } }),
+    db.juryDuo.findMany({ where: { centerDayId: day.id } }),
+  ]);
+  if (duos.length === 0) throw new BadRequestError("Formez d'abord au moins un duo");
+
+  const passages = pools.flatMap((p) => p.passages);
+  const graded = await gradedPassageIds(passages.map((p) => p.id));
+  const plan = planDuoAssignment(
+    pools.map((pool) => ({
+      id: pool.id,
+      label: pool.label,
+      passages: pool.passages.map((p) => ({ id: p.id, slot: p.slot, duoId: p.duoId, locked: graded.has(p.id) })),
+    })),
+    duos.map((d) => ({ id: d.id, number: d.number })),
+    mode,
+  );
+
+  const byId = new Map(passages.map((p) => [p.id, p]));
+  const numberOf = new Map(duos.map((d) => [d.id, d.number]));
+  const { changes } = plan;
+  await db.$transaction(async (tx) => {
+    for (const c of changes) {
+      await tx.passage.update({ where: { id: c.passageId }, data: { duoId: c.duoId } });
+    }
+    if (changes.length > 0) {
+      await audit(tx, req.user!, {
+        category: "Duos",
+        action: "passages.duo.auto",
+        summary: `Attribution automatique des duos · ${dayName(day)} : ${changes.length} passage${changes.length > 1 ? "s" : ""} modifié${changes.length > 1 ? "s" : ""}`,
+        details: {
+          passages: changes.map((c) => ({
+            passage: byId.get(c.passageId)!.label,
+            avant: byId.get(c.passageId)!.duo ? `Duo ${byId.get(c.passageId)!.duo!.number}` : "sans duo",
+            après: c.duoId ? `Duo ${numberOf.get(c.duoId)}` : "sans duo",
+          })),
+        },
       });
-      await audit(tx, req.user!, { category: "Duos", action: "duo.create", summary: `Duo ${number} formé pour ${dayName(day)} : ${names}` });
-      return created;
-    });
-    res.status(201).json({ duo: toDuoResponse(duo), warnings: await jurorDateWarnings(accountIds, day.id) });
-  } catch (err) { next(err); }
-});
-
-// PUT /api/duos/assignments — several passages at once, from the admin UI's
-// automatic assignment (the duos themselves are always formed by hand).
-// Body: { centerDayId, assignments: [{ passageId, duoId | null }] }.
-router.put("/assignments", async (req, res, next) => {
-  try {
-    const { centerDayId, assignments } = z.object({
-      centerDayId: z.string().uuid(),
-      assignments: z.array(z.object({
-        passageId: z.string().uuid(),
-        duoId: z.string().uuid().nullable(),
-      })).max(200),
-    }).parse(req.body);
-
-    const day = await db.centerDay.findUnique({ where: { id: centerDayId } });
-    if (!day) throw new NotFoundError("Center day not found");
-    if (assignments.length === 0) {
-      res.json({ changed: 0, warnings: [] });
-      return;
     }
+  });
 
-    const passages = await db.passage.findMany({
-      where: { id: { in: assignments.map((a) => a.passageId) } },
-      include: { pool: true, duo: true },
-    });
-    if (passages.length !== assignments.length) throw new NotFoundError("Passage not found");
-    const outside = passages.find((p) => p.pool.centerDayId !== day.id);
-    if (outside) throw new BadRequestError(`Le passage ${outside.label} n'est pas de ce jour`);
-
-    const duoIds = [...new Set(assignments.map((a) => a.duoId).filter((id): id is string => id !== null))];
-    const duos = await db.juryDuo.findMany({ where: { id: { in: duoIds } } });
-    if (duos.length !== duoIds.length) throw new NotFoundError("Duo not found");
-    const foreign = duos.find((d) => d.centerDayId !== day.id);
-    if (foreign) throw new BadRequestError(`Le duo ${foreign.number} n'est pas formé pour ce jour`);
-
-    // A graded passage keeps its duo (same rule as a single assignment), but
-    // here it's skipped rather than failing the whole batch.
-    const byId = new Map(passages.map((p) => [p.id, p]));
-    const asked = assignments.filter((a) => byId.get(a.passageId)!.duoId !== a.duoId);
-    const graded = await gradedPassageIds(asked.map((a) => a.passageId));
-    const changing = asked.filter((a) => !graded.has(a.passageId));
-    const skipped = asked
-      .filter((a) => graded.has(a.passageId))
-      .map((a) => byId.get(a.passageId)!.label)
-      .sort();
-
-    const numberOf = new Map(duos.map((d) => [d.id, d.number]));
-    const details = changing.map((a) => ({
-      passage: byId.get(a.passageId)!.label,
-      avant: byId.get(a.passageId)!.duo ? `Duo ${byId.get(a.passageId)!.duo!.number}` : "sans duo",
-      après: a.duoId ? `Duo ${numberOf.get(a.duoId)}` : "sans duo",
-    }));
-
-    await db.$transaction(async (tx) => {
-      for (const a of changing) {
-        await tx.passage.update({ where: { id: a.passageId }, data: { duoId: a.duoId } });
-      }
-      if (changing.length > 0) {
-        await audit(tx, req.user!, {
-          category: "Duos",
-          action: "passages.duo.auto",
-          summary: `Attribution automatique des duos · ${dayName(day)} : ${changing.length} passage${changing.length > 1 ? "s" : ""} modifié${changing.length > 1 ? "s" : ""}`,
-          details: { passages: details },
-        });
-      }
-    });
-
-    const warnings = (await Promise.all(duoIds.map((id) => duoPassageWarnings(id)))).flat();
-    if (skipped.length > 0) {
-      warnings.unshift(`Déjà noté${skipped.length > 1 ? "s" : ""}, donc inchangé${skipped.length > 1 ? "s" : ""} : ${skipped.join(", ")}`);
-    }
-    res.json({ changed: changing.length, skipped: skipped.length, warnings });
-  } catch (err) { next(err); }
-});
+  const warnings = (await Promise.all(duos.map((d) => duoPassageWarnings(d.id)))).flat();
+  res.json({ changed: changes.length, withoutDuo: plan.withoutDuo, samePool: plan.samePool, warnings });
+}));
 
 // PUT /api/duos/:id — { accountIds: [a, b] } -> { duo, warnings }
-router.put("/:id", async (req, res, next) => {
-  try {
-    const { accountIds } = z.object({ accountIds: MembersSchema }).parse(req.body);
-    const duo = await findDuoOrThrow(req.params.id);
+router.put("/:id", asyncRoute(async (req, res) => {
+  const { accountIds } = z.object({ accountIds: MembersSchema }).parse(req.body);
+  const duo = await findDuoOrThrow(req.params.id);
 
-    const current = duo.members.map((m) => m.account.id).sort().join();
-    if (current !== [...accountIds].sort().join()) {
-      if (await isDuoGraded(duo.id)) {
-        throw new ConflictError(`Le Duo ${duo.number} a déjà noté des passages — ses jurés ne peuvent plus changer`);
-      }
-      await assertJurors(accountIds, duo.centerDayId, duo.id);
-      const [before, after] = [await jurorNames(duo.members.map((m) => m.account.id)), await jurorNames(accountIds)];
-      await db.$transaction(async (tx) => {
-        await tx.duoMember.deleteMany({ where: { duoId: duo.id } });
-        await tx.duoMember.createMany({ data: accountIds.map((accountId) => ({ duoId: duo.id, accountId })) });
-        await audit(tx, req.user!, {
-          category: "Duos",
-          action: "duo.update",
-          summary: `Duo ${duo.number} de ${dayName(duo.centerDay)} : ${after} (avant : ${before})`,
-          details: { before: { jurés: before }, after: { jurés: after } },
-        });
-      });
+  const current = duo.members.map((m) => m.account.id).sort().join();
+  if (current !== [...accountIds].sort().join()) {
+    if (await isDuoGraded(duo.id)) {
+      throw new ConflictError(`Le Duo ${duo.number} a déjà noté des passages — ses jurés ne peuvent plus changer`);
     }
+    await assertJurors(accountIds, duo.centerDayId, duo.id);
+    const [before, after] = [await jurorNames(duo.members.map((m) => m.account.id)), await jurorNames(accountIds)];
+    await db.$transaction(async (tx) => {
+      await tx.duoMember.deleteMany({ where: { duoId: duo.id } });
+      await tx.duoMember.createMany({ data: accountIds.map((accountId) => ({ duoId: duo.id, accountId })) });
+      await audit(tx, req.user!, {
+        category: "Duos",
+        action: "duo.update",
+        summary: `Duo ${duo.number} de ${dayName(duo.centerDay)} : ${after} (avant : ${before})`,
+        details: { before: { jurés: before }, after: { jurés: after } },
+      });
+    });
+  }
 
-    const updated = await db.juryDuo.findUniqueOrThrow({ where: { id: duo.id }, include: duoInclude });
-    res.json({ duo: toDuoResponse(updated), warnings: await jurorDateWarnings(accountIds, duo.centerDayId) });
-  } catch (err) { next(err); }
-});
+  const updated = await db.juryDuo.findUniqueOrThrow({ where: { id: duo.id }, include: duoInclude });
+  res.json({ duo: toDuoResponse(updated), warnings: await jurorDateWarnings(accountIds, duo.centerDayId) });
+}));
 
 // DELETE /api/duos/:id — its passages go back to "no duo"
-router.delete("/:id", async (req, res, next) => {
-  try {
-    const duo = await findDuoOrThrow(req.params.id);
-    if (await isDuoGraded(duo.id)) {
-      throw new ConflictError(`Le Duo ${duo.number} a déjà noté des passages — il ne peut plus être supprimé`);
-    }
-    const names = await jurorNames(duo.members.map((m) => m.account.id));
-    await db.$transaction(async (tx) => {
-      await tx.juryDuo.delete({ where: { id: duo.id } });
-      await audit(tx, req.user!, { category: "Duos", action: "duo.delete", summary: `Duo ${duo.number} de ${dayName(duo.centerDay)} supprimé (${names})` });
-    });
-    res.status(204).send();
-  } catch (err) { next(err); }
-});
+router.delete("/:id", asyncRoute(async (req, res) => {
+  const duo = await findDuoOrThrow(req.params.id);
+  if (await isDuoGraded(duo.id)) {
+    throw new ConflictError(`Le Duo ${duo.number} a déjà noté des passages — il ne peut plus être supprimé`);
+  }
+  const names = await jurorNames(duo.members.map((m) => m.account.id));
+  await db.$transaction(async (tx) => {
+    await tx.juryDuo.delete({ where: { id: duo.id } });
+    await audit(tx, req.user!, { category: "Duos", action: "duo.delete", summary: `Duo ${duo.number} de ${dayName(duo.centerDay)} supprimé (${names})` });
+  });
+  res.status(204).send();
+}));
 
 export default router;

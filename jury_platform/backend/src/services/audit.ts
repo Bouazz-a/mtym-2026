@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { AuthenticatedUser } from "../types";
+import { centerName } from "./centers";
 
 // The journal of admin changes: who did what, when. Pass the route's
 // transaction client when there is one, so the entry commits with the
@@ -24,21 +25,6 @@ export async function audit(client: Prisma.TransactionClient, user: Authenticate
 }
 
 // "Casablanca 2026-10-25" — how the journal names a center day
-const CENTER_LABELS: Record<string, string> = {
-  casablanca: "Casablanca",
-  rabat: "Rabat",
-  martil: "Martil",
-  benguerir: "Benguerir",
-  agadir: "Agadir",
-  fez: "Fès",
-  oujda: "Oujda",
-  online: "En ligne",
-};
-
-export function centerName(center: string): string {
-  return CENTER_LABELS[center] ?? center;
-}
-
 export function dayName(day: { center: string; date: string }): string {
   return `${centerName(day.center)} ${day.date}`;
 }

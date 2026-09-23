@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { Alert, Badge, Btn, Modal } from "@/features/shared/primitives";
-import { RoleChip } from "@/features/shared/widgets";
+import { RoleLine } from "@/features/shared/widgets";
 import { setPassageDuo } from "@/lib/repositories/poolRepository";
 import type { JuryDuo, PassageDetails, PoolDetails, ScheduleSlot, Team } from "@/types";
 import { duoMembers, repeatedDuos } from "@/utils/duos";
@@ -219,10 +219,10 @@ function PassageCell({
         </span>
         <span className="font-mont text-micro" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>{passage.label}</span>
       </div>
-      <div className="flex gap-1 flex-wrap">
-        <RoleChip role="defender" quad={quad(passage.defenderTeamId)} />
-        <RoleChip role="opponent" quad={quad(passage.opponentTeamId)} />
-        <RoleChip role="reporter" quad={quad(passage.reporterTeamId)} />
+      <div className="space-y-1">
+        <RoleLine role="defender" quad={quad(passage.defenderTeamId)} />
+        <RoleLine role="opponent" quad={quad(passage.opponentTeamId)} />
+        <RoleLine role="reporter" quad={quad(passage.reporterTeamId)} />
       </div>
       <div className="mt-auto pt-2" style={{ borderTop: "1px dashed var(--border)" }}>
         {duo ? (
@@ -289,11 +289,11 @@ function DuoPicker({
           <div className="font-mont text-micro uppercase tracking-widest mb-2" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
             Poule {pool.label}{slot ? ` · ${slot.start} – ${slotEnd(slot)}` : ""} · Problème {passage.problemNumber}
           </div>
-          <div className="flex gap-1 flex-wrap">
-            <RoleChip role="defender" quad={quad(passage.defenderTeamId)} />
-            <RoleChip role="opponent" quad={quad(passage.opponentTeamId)} />
-            <RoleChip role="reporter" quad={quad(passage.reporterTeamId)} />
-            {passage.extraTeamId && <RoleChip role="extra" quad={quad(passage.extraTeamId)} />}
+          <div className="space-y-1">
+            <RoleLine role="defender" quad={quad(passage.defenderTeamId)} />
+            <RoleLine role="opponent" quad={quad(passage.opponentTeamId)} />
+            <RoleLine role="reporter" quad={quad(passage.reporterTeamId)} />
+            {passage.extraTeamId && <RoleLine role="extra" quad={quad(passage.extraTeamId)} />}
           </div>
         </div>
 

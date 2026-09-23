@@ -1,15 +1,21 @@
-import type { Center, Round } from "@/types";
+import type { Center } from "@/types";
 
-export const CENTERS: { value: Center; label: string; code: string }[] = [
-  { value: "casablanca", label: "Casablanca", code: "CAS" },
-  { value: "rabat", label: "Rabat", code: "RAB" },
-  { value: "martil", label: "Martil", code: "MAR" },
-  { value: "benguerir", label: "Benguerir", code: "BEN" },
-  { value: "agadir", label: "Agadir", code: "AGA" },
-  { value: "fez", label: "Fès", code: "FES" },
-  { value: "oujda", label: "Oujda", code: "OUJ" },
-  { value: "online", label: "En ligne", code: "ONL" },
+// Pool labels ("CAS-B1") are built by the server, like the draws themselves.
+
+export const CENTERS: { value: Center; label: string }[] = [
+  { value: "casablanca", label: "Casablanca" },
+  { value: "rabat", label: "Rabat" },
+  { value: "martil", label: "Martil" },
+  { value: "benguerir", label: "Benguerir" },
+  { value: "agadir", label: "Agadir" },
+  { value: "fez", label: "Fès" },
+  { value: "oujda", label: "Oujda" },
+  { value: "online", label: "En ligne" },
 ];
+
+// The qualifications' problems, for the menus. The server draws from its own
+// copy (QUALIFS_PROBLEMS in backend/src/algorithms/poolDraw.ts): keep them equal.
+export const QUALIFS_PROBLEMS = [1, 2, 3, 4];
 
 export function centerLabel(center: Center): string {
   return CENTERS.find((c) => c.value === center)?.label ?? center;
@@ -22,21 +28,4 @@ export function formatDay(date: string): string {
     day: "numeric",
     month: "short",
   });
-}
-
-// Pool labels carry the center code and a letter per day (A = day 1,
-// B = day 2…) so they stay unique across the whole qualification:
-// "CAS-B" + pool 1 -> "CAS-B1".
-export function poolLabelPrefix(center: Center, dayIndex: number): string {
-  const code = CENTERS.find((c) => c.value === center)?.code ?? center.slice(0, 3).toUpperCase();
-  return `${code}-${String.fromCharCode(65 + dayIndex)}`;
-}
-
-export function buildPoolLabel(round: Round, poolIndexInRound: number): string {
-  const letter = round === 1 ? "A" : "B";
-  return `${letter}${poolIndexInRound + 1}`;
-}
-
-export function buildPassageLabel(poolLabel: string, passageIndex: number): string {
-  return `${poolLabel}P${passageIndex + 1}`;
 }

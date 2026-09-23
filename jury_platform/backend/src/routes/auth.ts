@@ -7,7 +7,7 @@ import { authenticate, signToken } from "../middleware/auth";
 import { audit } from "../services/audit";
 import { accountToUser } from "../types";
 import { generatePassword, hashPassword, verifyPassword } from "../utils/passwords";
-import { BadRequestError, UnauthorizedError } from "../utils/errors";
+import { asyncRoute, BadRequestError, UnauthorizedError } from "../utils/errors";
 
 const router = Router();
 
@@ -33,17 +33,15 @@ const LoginSchema = z.object({
 });
 
 // POST /api/auth/login — { email, password } -> { token, user }
-router.post("/login", loginLimiter, async (req, res, next) => {
-  try {
-    const { email, password } = LoginSchema.parse(req.body);
+router.post("/login", loginLimiter, asyncRoute(async (req, res) => {
+  const { email, password } = LoginSchema.parse(req.body);
 
-    const account = await db.account.findUnique({ where: { email } });
-    const ok = await verifyPassword(password, account?.passwordHash ?? (await dummyHash));
-    if (!account || !ok) throw new UnauthorizedError("Email ou mot de passe incorrect");
+  const account = await db.account.findUnique({ where: { email } });
+  const ok = await verifyPassword(password, account?.passwordHash ?? (await dummyHash));
+  if (!account || !ok) throw new UnauthorizedError("Email ou mot de passe incorrect");
 
-    res.json({ token: await signToken(account.id), user: accountToUser(account) });
-  } catch (err) { next(err); }
-});
+  res.json({ token: await signToken(account.id), user: accountToUser(account) });
+}));
 
 // GET /api/auth/me
 router.get("/me", authenticate, (req, res) => {
@@ -56,25 +54,23 @@ const PasswordSchema = z.object({
 });
 
 // PUT /api/auth/password — change your own password
-router.put("/password", authenticate, async (req, res, next) => {
-  try {
-    const { currentPassword, newPassword } = PasswordSchema.parse(req.body);
+router.put("/password", authenticate, asyncRoute(async (req, res) => {
+  const { currentPassword, newPassword } = PasswordSchema.parse(req.body);
 
-    const account = await db.account.findUniqueOrThrow({ where: { id: req.user!.id } });
-    if (!(await verifyPassword(currentPassword, account.passwordHash))) {
-      throw new BadRequestError("Mot de passe actuel incorrect");
+  const account = await db.account.findUniqueOrThrow({ where: { id: req.user!.id } });
+  if (!(await verifyPassword(currentPassword, account.passwordHash))) {
+    throw new BadRequestError("Mot de passe actuel incorrect");
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await db.$transaction(async (tx) => {
+    await tx.account.update({ where: { id: account.id }, data: { passwordHash } });
+    // The journal covers admin actions only
+    if (account.role === "admin") {
+      await audit(tx, req.user!, { category: "Comptes", action: "account.password", summary: "A changé son mot de passe" });
     }
-
-    const passwordHash = await hashPassword(newPassword);
-    await db.$transaction(async (tx) => {
-      await tx.account.update({ where: { id: account.id }, data: { passwordHash } });
-      // The journal covers admin actions only
-      if (account.role === "admin") {
-        await audit(tx, req.user!, { category: "Comptes", action: "account.password", summary: "A changé son mot de passe" });
-      }
-    });
-    res.status(204).send();
-  } catch (err) { next(err); }
-});
+  });
+  res.status(204).send();
+}));
 
 export default router;

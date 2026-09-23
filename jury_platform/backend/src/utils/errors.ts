@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 
@@ -40,6 +40,14 @@ export class BadRequestError extends AppError {
   constructor(message: string) {
     super(400, message);
   }
+}
+
+// Express 4 doesn't catch the rejection of an async handler: this forwards
+// it to errorHandler, so routes don't each need a try/catch.
+export function asyncRoute(handler: (req: Request, res: Response) => Promise<unknown>): RequestHandler {
+  return (req, res, next) => {
+    handler(req, res).catch(next);
+  };
 }
 
 export function errorHandler(

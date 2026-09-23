@@ -47,6 +47,10 @@ export async function gradedPassageIds(passageIds: string[]): Promise<Set<string
   ]);
 }
 
+export async function isPassageGraded(passageId: string): Promise<boolean> {
+  return (await gradedPassageIds([passageId])).has(passageId);
+}
+
 // A duo is frozen once one of its members has graded one of its passages.
 export async function isDuoGraded(duoId: string): Promise<boolean> {
   const [oral, report] = await Promise.all([

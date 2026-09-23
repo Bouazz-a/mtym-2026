@@ -5,20 +5,19 @@ import {
   Alert, Badge, Btn, BrutalCard, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select,
   Stagger,
 } from "@/features/shared/primitives";
-import { DownloadIcon } from "@/features/shared/icons";
 import { EmptyState, StatCard } from "@/features/shared/widgets";
 import { getTeams, setTeamDay } from "@/lib/repositories/teamRepository";
 import {
   createCenterDay, deleteCenterDay, distributeTeams, getCenterDays, updateCenterDay,
 } from "@/lib/repositories/centerDayRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
-import { exportPoolsXlsx } from "@/lib/services/exportService";
-import { QUALIFS_PROBLEMS } from "@/lib/services/tournamentOptimizer";
 import type { Center, CenterDay, PoolDetails, Team } from "@/types";
-import { CENTERS, centerLabel, formatDay } from "@/utils/labels";
+import { CENTERS, centerLabel, formatDay, QUALIFS_PROBLEMS } from "@/utils/labels";
 import { drawnTeamIds } from "@/utils/teams";
 import { DayDraw } from "./DayDraw";
+import { ExportButton } from "./ExportButton";
 import { useAction, TOURNAMENT_QUERIES } from "./useAction";
+import { useExport } from "./useExport";
 
 // TournamentPage — qualifications, one center at a time:
 //   1. declare the center's days, 2. give each team its day (by hand or
@@ -35,15 +34,17 @@ export function TournamentPage() {
 
   const teams = useMemo(() => teamsQ.data ?? [], [teamsQ.data]);
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
-  const [exportError, setExportError] = useState<string | null>(null);
+  const centerTeams = teams.filter((t) => t.center === center);
+  const days = (daysQ.data ?? []).filter((d) => d.center === center);
+  const pools = (poolsQ.data ?? []).filter((p) => p.centerDay?.center === center);
+  const exporter = useExport(async () =>
+    (await import("@/lib/services/exportService")).exportPoolsXlsx(center, days, pools, centerTeams),
+  );
 
   if (teamsQ.isLoading || daysQ.isLoading || poolsQ.isLoading) {
     return <PageLoading />;
   }
 
-  const centerTeams = teams.filter((t) => t.center === center);
-  const days = (daysQ.data ?? []).filter((d) => d.center === center);
-  const pools = (poolsQ.data ?? []).filter((p) => p.centerDay?.center === center);
   const withoutDay = centerTeams.filter((t) => !t.centerDayId).length;
   const countByCenter = (c: Center) => teams.filter((t) => t.center === c).length;
 
@@ -54,23 +55,15 @@ export function TournamentPage() {
         title="Qualifications"
         sub="Pour chaque centre : déclarez ses jours, répartissez les équipes (une équipe joue un seul jour), puis tirez les poules de chaque jour et ajustez-les à la main."
         right={
-          <Btn
+          <ExportButton
+            label="Exporter les poules (xlsx)"
+            {...exporter}
             disabled={pools.length === 0}
             title={pools.length === 0 ? "Aucune poule à exporter pour ce centre" : `Les poules de ${centerLabel(center)}, une feuille par jour`}
-            onClick={() => {
-              setExportError(null);
-              try {
-                exportPoolsXlsx(center, days, pools, centerTeams);
-              } catch (err) {
-                setExportError(err instanceof Error ? err.message : "Export impossible.");
-              }
-            }}
-          >
-            <DownloadIcon size="0.95rem" /> Exporter les poules (xlsx)
-          </Btn>
+          />
         }
       />
-      {exportError && <Alert>{exportError}</Alert>}
+      {exporter.error && <Alert>{exporter.error}</Alert>}
 
       <Segmented
         options={CENTERS.map((c) => ({ value: c.value, label: `${c.label} · ${countByCenter(c.value)}` }))}

@@ -1,30 +1,17 @@
-import { generateQualifsDay, splitForQualifs, QUALIFS_PROBLEMS } from "./tournamentOptimizer";
-import { ConflictError } from "./errors";
-import type { Team } from "@/types";
+import { describe, expect, it } from "vitest";
+import { generateQualifsDay, splitForQualifs, QUALIFS_PROBLEMS } from "./poolDraw";
 
-function teams(n: number): Team[] {
-  return Array.from({ length: n }, (_, i) => ({
-    id: `team-${i}`,
-    sourceId: i,
-    name: `Team ${i}`,
-    quadrigram: `T${String(i).padStart(3, "0")}`,
-    center: "casablanca",
-    members: [],
-    centerDayId: "day",
-    reports: [],
-  }));
-}
+const teams = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `team-${i}` }));
 
 describe("generateQualifsDay", () => {
   const drawable = [3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 17, 30, 45];
 
   it.each(drawable)("draws %i teams into valid pools", (n) => {
-    const input = teams(n);
-    const { pools, passages } = generateQualifsDay({ teams: input, labelPrefix: "CAS-B" });
+    const { pools, leftover } = generateQualifsDay({ teams: teams(n), labelPrefix: "CAS-B" });
 
-    const placed = new Map<string, string>(); // teamId -> poolId
+    const placed = new Set<string>();
     for (const pool of pools) {
-      const ps = passages.filter((p) => p.poolId === pool.id);
+      const ps = pool.passages;
       const members = new Set(ps.flatMap((p) => [p.defenderTeamId, p.opponentTeamId, p.reporterTeamId, p.extraTeamId ?? []].flat()));
 
       expect([3, 4]).toContain(ps.length); // pools of 3 or 4…
@@ -39,7 +26,7 @@ describe("generateQualifsDay", () => {
       }
       for (const t of members) {
         expect(placed.has(t)).toBe(false); // never in two pools
-        placed.set(t, pool.id);
+        placed.add(t);
       }
       expect(pool.label).toMatch(/^CAS-B\d+$/);
       // passage n of every pool plays in slot n
@@ -49,6 +36,7 @@ describe("generateQualifsDay", () => {
       });
     }
     expect(placed.size).toBe(n); // every team is placed
+    expect(leftover).toHaveLength(0);
   });
 
   it("prefers pools of 4", () => {
@@ -56,43 +44,39 @@ describe("generateQualifsDay", () => {
     expect(pools).toHaveLength(2);
   });
 
-  it.each([0, 1, 2, 5])("refuses %i teams", (n) => {
-    expect(() => generateQualifsDay({ teams: teams(n), labelPrefix: "" })).toThrow(ConflictError);
-  });
-
   it("continues an existing series of labels", () => {
     const { pools } = generateQualifsDay({ teams: teams(8), labelPrefix: "CAS-A", labelStart: 3 });
     expect(pools.map((p) => p.label)).toEqual(["CAS-A3", "CAS-A4"]);
   });
 
-  it("with leftovers allowed, places what it can", () => {
-    const { pools, leftover } = generateQualifsDay({ teams: teams(5), labelPrefix: "", allowLeftovers: true });
+  it("places what it can out of 5 teams", () => {
+    const { pools, leftover } = generateQualifsDay({ teams: teams(5), labelPrefix: "" });
     expect(pools).toHaveLength(1);
     expect(leftover).toHaveLength(1);
   });
 
-  it.each([0, 1, 2])("with leftovers allowed, draws nothing from %i teams", (n) => {
-    const { pools, leftover } = generateQualifsDay({ teams: teams(n), labelPrefix: "", allowLeftovers: true });
+  it.each([0, 1, 2])("draws nothing from %i teams", (n) => {
+    const { pools, leftover } = generateQualifsDay({ teams: teams(n), labelPrefix: "" });
     expect(pools).toHaveLength(0);
     expect(leftover).toHaveLength(n);
   });
 });
 
 describe("splitForQualifs", () => {
-  const sizes = (groups: Team[][]) => groups.map((g) => g.length);
+  const sizes = (groups: unknown[][]) => groups.map((g) => g.length);
 
   it.each([
-    [3, [3], 0],
-    [4, [4], 0],
-    [6, [3, 3], 0],
-    [7, [4, 3], 0],
-    [8, [4, 4], 0],
-    [11, [4, 4, 3], 0],
-    [12, [4, 4, 4], 0],
-  ])("splits %i teams without leaving anyone out", (n, expected, left) => {
+    [3, [3]],
+    [4, [4]],
+    [6, [3, 3]],
+    [7, [4, 3]],
+    [8, [4, 4]],
+    [11, [4, 4, 3]],
+    [12, [4, 4, 4]],
+  ])("splits %i teams without leaving anyone out", (n, expected) => {
     const { groups, leftover } = splitForQualifs(teams(n));
     expect(sizes(groups)).toEqual(expected);
-    expect(leftover).toHaveLength(left);
+    expect(leftover).toHaveLength(0);
   });
 
   it("out of 5 teams, plays 4 and leaves 1 aside", () => {
@@ -109,8 +93,7 @@ describe("splitForQualifs", () => {
 
   it("never loses or duplicates a team", () => {
     for (const n of [3, 5, 9, 14, 23]) {
-      const input = teams(n);
-      const { groups, leftover } = splitForQualifs(input);
+      const { groups, leftover } = splitForQualifs(teams(n));
       const seen = [...groups.flat(), ...leftover].map((t) => t.id);
       expect(new Set(seen).size).toBe(n);
     }

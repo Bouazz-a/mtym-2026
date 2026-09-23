@@ -221,6 +221,45 @@ export const ROLE_PALETTE = {
   },
 } as const;
 
+// "AXIO défend" — a passage read as a sentence rather than three codes.
+// The team carries the weight, the role is a plain verb in lower case, and
+// the colour bar is decoration: the words already say who does what.
+const ROLE_VERB: Record<keyof typeof ROLE_PALETTE, string> = {
+  defender: "défend",
+  opponent: "oppose",
+  reporter: "rapporte",
+  extra: "observe",
+};
+
+// The bar takes the role's colour, except the reporter: its palette green is
+// too close to the opponent's forest to tell apart at this size.
+const ROLE_BAR: Record<keyof typeof ROLE_PALETTE, string> = {
+  defender: "var(--saffron)",
+  opponent: "var(--forest)",
+  reporter: "var(--sage)",
+  extra: "var(--border)",
+};
+
+export function RoleLine({ role, quad }: { role: keyof typeof ROLE_PALETTE; quad: string }) {
+  const muted = role === "extra";
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        aria-hidden
+        className="shrink-0"
+        style={{ width: "0.1875rem", height: "0.85rem", background: ROLE_BAR[role] }}
+      />
+      <span
+        className="font-mont text-xs uppercase tracking-wider"
+        style={{ color: muted ? "var(--ink-faint)" : "var(--forest)", fontWeight: 900 }}
+      >
+        {quad}
+      </span>
+      <span className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>{ROLE_VERB[role]}</span>
+    </div>
+  );
+}
+
 // "DEF PIQU" — a team's role in a passage, in the role's colors
 export function RoleChip({ role, quad }: { role: keyof typeof ROLE_PALETTE; quad: string }) {
   return (

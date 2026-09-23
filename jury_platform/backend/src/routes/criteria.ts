@@ -4,7 +4,7 @@ import type { Criterion } from "@prisma/client";
 import { db } from "../db";
 import { adminOnly, authenticate } from "../middleware/auth";
 import { audit } from "../services/audit";
-import { ConflictError, NotFoundError } from "../utils/errors";
+import { asyncRoute, ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
 
@@ -24,76 +24,68 @@ const CriterionSchema = z.object({
 );
 
 // GET /api/criteria
-router.get("/", authenticate, async (_req, res, next) => {
-  try {
-    res.json(await db.criterion.findMany({ orderBy: [{ type: "asc" }, { order: "asc" }] }));
-  } catch (err) { next(err); }
-});
+router.get("/", authenticate, asyncRoute(async (_req, res) => {
+  res.json(await db.criterion.findMany({ orderBy: [{ type: "asc" }, { order: "asc" }] }));
+}));
 
 // POST /api/criteria
-router.post("/", ...adminOnly, async (req, res, next) => {
-  try {
-    const data = CriterionSchema.parse(req.body);
-    const criterion = await db.$transaction(async (tx) => {
-      const created = await tx.criterion.create({ data });
-      await audit(tx, req.user!, {
-        category: "Critères",
-        action: "criterion.create",
-        summary: `Critère ajouté à la grille ${gridName(created)} : « ${created.label} » (coef. ${created.coefficient})`,
-      });
-      return created;
+router.post("/", ...adminOnly, asyncRoute(async (req, res) => {
+  const data = CriterionSchema.parse(req.body);
+  const criterion = await db.$transaction(async (tx) => {
+    const created = await tx.criterion.create({ data });
+    await audit(tx, req.user!, {
+      category: "Critères",
+      action: "criterion.create",
+      summary: `Critère ajouté à la grille ${gridName(created)} : « ${created.label} » (coef. ${created.coefficient})`,
     });
-    res.status(201).json(criterion);
-  } catch (err) { next(err); }
-});
+    return created;
+  });
+  res.status(201).json(criterion);
+}));
 
 // PUT /api/criteria/:id — the patch is validated merged with the current row
-router.put("/:id", ...adminOnly, async (req, res, next) => {
-  try {
-    const { id, ...current } = await findOrThrow(req.params.id);
-    const data = CriterionSchema.parse({ ...current, ...req.body });
-    const updated = await db.$transaction(async (tx) => {
-      const saved = await tx.criterion.update({ where: { id }, data });
-      const fields = { label: "intitulé", coefficient: "coefficient", theme: "thème" } as const;
-      const changed = (Object.keys(fields) as (keyof typeof fields)[]).filter((k) => (current[k] ?? null) !== (saved[k] ?? null));
-      if (changed.length) {
-        await audit(tx, req.user!, {
-          category: "Critères",
-          action: "criterion.update",
-          summary: `Critère « ${saved.label} » (grille ${gridName(saved)}) : ${changed.map((k) => `${fields[k]} ${current[k] ?? "vide"} devient ${saved[k] ?? "vide"}`).join(", ")}`,
-          details: {
-            before: Object.fromEntries(changed.map((k) => [fields[k], current[k]])),
-            after: Object.fromEntries(changed.map((k) => [fields[k], saved[k]])),
-          },
-        });
-      }
-      return saved;
-    });
-    res.json(updated);
-  } catch (err) { next(err); }
-});
-
-// DELETE /api/criteria/:id — refused once grades use it
-router.delete("/:id", ...adminOnly, async (req, res, next) => {
-  try {
-    const criterion = await findOrThrow(req.params.id);
-    const { id } = criterion;
-    const [report, oral] = await Promise.all([
-      db.reportGrade.count({ where: { criterionId: id } }),
-      db.oralGrade.count({ where: { criterionId: id } }),
-    ]);
-    if (report + oral > 0) throw new ConflictError("Des notes utilisent déjà ce critère");
-    await db.$transaction(async (tx) => {
-      await tx.criterion.delete({ where: { id } });
+router.put("/:id", ...adminOnly, asyncRoute(async (req, res) => {
+  const { id, ...current } = await findOrThrow(req.params.id);
+  const data = CriterionSchema.parse({ ...current, ...req.body });
+  const updated = await db.$transaction(async (tx) => {
+    const saved = await tx.criterion.update({ where: { id }, data });
+    const fields = { label: "intitulé", coefficient: "coefficient", theme: "thème" } as const;
+    const changed = (Object.keys(fields) as (keyof typeof fields)[]).filter((k) => (current[k] ?? null) !== (saved[k] ?? null));
+    if (changed.length) {
       await audit(tx, req.user!, {
         category: "Critères",
-        action: "criterion.delete",
-        summary: `Critère supprimé de la grille ${gridName(criterion)} : « ${criterion.label} »`,
+        action: "criterion.update",
+        summary: `Critère « ${saved.label} » (grille ${gridName(saved)}) : ${changed.map((k) => `${fields[k]} ${current[k] ?? "vide"} devient ${saved[k] ?? "vide"}`).join(", ")}`,
+        details: {
+          before: Object.fromEntries(changed.map((k) => [fields[k], current[k]])),
+          after: Object.fromEntries(changed.map((k) => [fields[k], saved[k]])),
+        },
       });
+    }
+    return saved;
+  });
+  res.json(updated);
+}));
+
+// DELETE /api/criteria/:id — refused once grades use it
+router.delete("/:id", ...adminOnly, asyncRoute(async (req, res) => {
+  const criterion = await findOrThrow(req.params.id);
+  const { id } = criterion;
+  const [report, oral] = await Promise.all([
+    db.reportGrade.count({ where: { criterionId: id } }),
+    db.oralGrade.count({ where: { criterionId: id } }),
+  ]);
+  if (report + oral > 0) throw new ConflictError("Des notes utilisent déjà ce critère");
+  await db.$transaction(async (tx) => {
+    await tx.criterion.delete({ where: { id } });
+    await audit(tx, req.user!, {
+      category: "Critères",
+      action: "criterion.delete",
+      summary: `Critère supprimé de la grille ${gridName(criterion)} : « ${criterion.label} »`,
     });
-    res.status(204).send();
-  } catch (err) { next(err); }
-});
+  });
+  res.status(204).send();
+}));
 
 const ROLE_NAMES: Record<string, string> = { defender: "Défenseur", opponent: "Opposant", reporter: "Rapporteur", extra: "Observateur" };
 
