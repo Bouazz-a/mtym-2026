@@ -210,6 +210,36 @@ body::before {
   }
 }
 
+/* ── Top-nav dropdowns: a page name over what it's for ── */
+.nav-menu-trigger:focus-visible {
+  outline: 2px solid var(--saffron);
+  outline-offset: 4px;
+}
+.nav-menu-item {
+  position: relative;
+  display: block;
+  padding: 0.5rem 1rem;
+  transition: background 150ms;
+}
+.nav-menu-item:hover {
+  background: var(--row-hover);
+}
+.nav-menu-item:focus-visible {
+  background: var(--row-hover);
+  outline: 2px solid var(--saffron);
+  outline-offset: -2px;
+}
+/* The current page: a saffron bar on the left edge */
+.nav-menu-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.375rem;
+  bottom: 0.375rem;
+  width: 4px;
+  background: var(--saffron);
+}
+
 @keyframes ambient-warmth {
   0% {
     background-position:

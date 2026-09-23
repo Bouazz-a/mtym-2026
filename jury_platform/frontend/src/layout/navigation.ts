@@ -7,6 +7,7 @@ import type { Role } from "@/types";
 export interface NavItem {
   to: string;
   label: string;
+  description?: string; // shown under the label in the top-nav dropdown
 }
 
 export interface NavMenu {
@@ -37,16 +38,16 @@ export const NAV: Record<Role, NavEntry[]> = {
         {
           title: "Logistique",
           items: [
-            { to: "/tournoi", label: "Génération des poules" },
-            { to: "/jury", label: "Affectation du jury" },
+            { to: "/tournoi", label: "Génération des poules", description: "Jours, équipes et tirage des poules" },
+            { to: "/jury", label: "Affectation du jury", description: "Duos du jour et passages à juger" },
           ],
         },
         {
           title: "Scientifique",
           items: [
-            { to: "/criteres", label: "Critères de notation" },
-            { to: "/notes", label: "Notes" },
-            { to: "/resultats", label: "Résultats" },
+            { to: "/criteres", label: "Critères de notation", description: "Grilles de notation et coefficients" },
+            { to: "/notes", label: "Notes", description: "Notes du jury, passage par passage" },
+            { to: "/resultats", label: "Résultats", description: "Note finale de chaque équipe" },
           ],
         },
       ],
@@ -56,8 +57,8 @@ export const NAV: Record<Role, NavEntry[]> = {
       sections: [
         {
           items: [
-            { to: "/comptes", label: "Comptes" },
-            { to: "/journal", label: "Journal" },
+            { to: "/comptes", label: "Comptes", description: "Jurés et administrateurs" },
+            { to: "/journal", label: "Journal", description: "Historique des modifications" },
           ],
         },
       ],

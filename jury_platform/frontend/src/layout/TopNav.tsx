@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "@/features/shared/SessionContext";
 import { MtymLogo } from "@/features/shared/widgets";
@@ -16,6 +16,7 @@ export function TopNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openNavMenu, setOpenNavMenu] = useState<string | null>(null); // one dropdown at a time
   const [passwordOpen, setPasswordOpen] = useState(false);
   const chipRef = useRef<HTMLButtonElement>(null);
 
@@ -50,7 +51,16 @@ export function TopNav() {
         {/* Inline from lg; below that the links live in the account menu */}
         <div className="hidden lg:flex items-center gap-6">
           {items.map((entry) =>
-            isNavMenu(entry) ? <NavMenuButton key={entry.label} menu={entry} /> : <NavItemLink key={entry.to} item={entry} />,
+            isNavMenu(entry) ? (
+              <NavMenuButton
+                key={entry.label}
+                menu={entry}
+                open={openNavMenu === entry.label}
+                onOpenChange={(open) => setOpenNavMenu((cur) => (open ? entry.label : cur === entry.label ? null : cur))}
+              />
+            ) : (
+              <NavItemLink key={entry.to} item={entry} />
+            ),
           )}
         </div>
 
@@ -164,31 +174,148 @@ function NavItemLink({ item }: { item: NavItem }) {
 
 // A top-bar entry that opens its pages in a dropdown. Lit like a link when
 // one of its pages is the current one.
-function NavMenuButton({ menu }: { menu: NavMenu }) {
-  const navigate = useNavigate();
+//
+// Mouse: hovering the button opens the menu, leaving the button and the
+// panel closes it. A click toggles it, and a click on a menu opened by
+// hovering keeps it open until the next click, Escape or a click outside.
+//
+// Keyboard (disclosure pattern): Enter/Space toggles, ↓ opens on the first
+// page; inside, ↑/↓/Home/End move between pages, Escape closes and gives
+// the focus back, and tabbing out closes.
+const HOVER_OPEN_DELAY = 100; // ms: sweeping across the bar doesn't flash menus open
+const HOVER_CLOSE_DELAY = 200; // ms: time to reach the panel below the button
+
+function NavMenuButton({ menu, open, onOpenChange }: { menu: NavMenu; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { pathname } = useLocation();
-  const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const focusFirstOnOpen = useRef(false);
+  // Opened (or kept open) by a click or the keyboard: the mouse leaving no longer closes it
+  const pinned = useRef(false);
+  const hoverTimer = useRef<number | undefined>(undefined);
+  const panelId = useId();
   const active = navPages([menu]).some((item) => isCurrentPage(item.to, pathname));
+
+  // The panel mounts after `open` flips (Popover measures first)
+  useEffect(() => {
+    if (!open) pinned.current = false;
+    if (!open || !focusFirstOnOpen.current) return;
+    focusFirstOnOpen.current = false;
+    requestAnimationFrame(() => panelRef.current?.querySelector("a")?.focus());
+  }, [open]);
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+
+  const close = (refocus: boolean) => {
+    onOpenChange(false);
+    if (refocus) buttonRef.current?.focus();
+  };
+
+  // Mouse only: a tap also fires pointerenter, right before its click
+  const onPointerEnter = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
+    window.clearTimeout(hoverTimer.current);
+    if (!open) hoverTimer.current = window.setTimeout(() => onOpenChange(true), HOVER_OPEN_DELAY);
+  };
+  const onPointerLeave = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
+    window.clearTimeout(hoverTimer.current);
+    if (open && !pinned.current) hoverTimer.current = window.setTimeout(() => onOpenChange(false), HOVER_CLOSE_DELAY);
+  };
+
+  const onPanelKeyDown = (e: React.KeyboardEvent) => {
+    const links = [...(panelRef.current?.querySelectorAll("a") ?? [])];
+    const at = links.indexOf(document.activeElement as HTMLAnchorElement);
+    const target =
+      e.key === "ArrowDown" ? links[(at + 1) % links.length]
+      : e.key === "ArrowUp" ? links[(at - 1 + links.length) % links.length]
+      : e.key === "Home" ? links[0]
+      : e.key === "End" ? links[links.length - 1]
+      : null;
+    if (target) {
+      e.preventDefault();
+      target.focus();
+    } else if (e.key === "Escape") {
+      close(true);
+    }
+  };
 
   return (
     <>
       <button
         ref={buttonRef}
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 font-mont text-tiny uppercase tracking-[0.14em] whitespace-nowrap transition-colors"
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        onClick={() => {
+          window.clearTimeout(hoverTimer.current);
+          if (open && !pinned.current) pinned.current = true;
+          else {
+            pinned.current = !open;
+            onOpenChange(!open);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowDown") return;
+          e.preventDefault();
+          pinned.current = true;
+          if (open) panelRef.current?.querySelector("a")?.focus();
+          else {
+            focusFirstOnOpen.current = true;
+            onOpenChange(true);
+          }
+        }}
+        className="nav-menu-trigger flex items-center gap-1.5 font-mont text-tiny uppercase tracking-[0.14em] whitespace-nowrap transition-colors"
         style={{
           color: active ? "var(--saffron)" : open ? "var(--paper)" : "rgba(244,236,216,0.62)",
           fontWeight: active ? 800 : 600,
         }}
-        aria-haspopup="true"
         aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
       >
         {menu.label}
         <ChevronDownIcon size="0.75rem" style={{ transition: "transform 180ms", transform: open ? "rotate(180deg)" : "none" }} />
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} anchorRef={buttonRef} align="left" width={16}>
-        <MenuSections menu={menu} onPick={(to) => { setOpen(false); navigate(to); }} />
+      <Popover open={open} onClose={() => onOpenChange(false)} anchorRef={buttonRef} align="left" width={18}>
+        <div
+          ref={panelRef}
+          id={panelId}
+          onPointerEnter={onPointerEnter}
+          onPointerLeave={onPointerLeave}
+          onKeyDown={onPanelKeyDown}
+          onBlur={(e) => {
+            const next = e.relatedTarget as Node | null;
+            if (next && !e.currentTarget.contains(next) && next !== buttonRef.current) close(false);
+          }}
+        >
+          {menu.sections.map((section, i) => (
+            <div key={section.title ?? i} className="py-1.5" style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
+              {section.title && (
+                <div className="px-4 pt-1.5 pb-1 font-mont text-micro uppercase tracking-widest" style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
+                  {section.title}
+                </div>
+              )}
+              <ul>
+                {section.items.map((item) => (
+                  <li key={item.to}>
+                    <NavLink to={item.to} end={item.to === "/"} onClick={() => close(false)} className="nav-menu-item">
+                      {({ isActive }) => (
+                        <>
+                          <span className="block font-mont text-sm" style={{ color: "var(--forest)", fontWeight: isActive ? 900 : 700 }}>
+                            {item.label}
+                          </span>
+                          {item.description && (
+                            <span className="block font-open text-xs mt-0.5" style={{ color: "var(--ink-soft)" }}>
+                              {item.description}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       </Popover>
     </>
   );
