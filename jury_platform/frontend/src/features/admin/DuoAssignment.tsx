@@ -87,7 +87,7 @@ export function DayJury({
         {pools.length === 0 ? (
           <BrutalCard className="p-6" withCorners={false} style={{ borderStyle: "dashed", boxShadow: "none" }}>
             <p className="font-open text-sm italic" style={{ color: "var(--ink-faint)" }}>
-              Pas encore de tirage pour ce jour : tirez ses poules depuis la page Tournoi.
+              Pas encore de tirage pour ce jour : tirez ses poules depuis la page Génération des poules.
             </p>
           </BrutalCard>
         ) : (

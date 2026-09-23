@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MtymLogo } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
-import { NAV } from "./navigation";
+import { isNavMenu, NAV, type NavItem } from "./navigation";
 import { registerDarkRegion } from "./BackgroundFX";
 
 // SiteFooter — forest band that registers itself as the "dark region" of
@@ -22,6 +22,14 @@ export function SiteFooter() {
   const { role } = useSession();
   const year = new Date().getFullYear();
   const bandRef = useRef<HTMLDivElement>(null);
+
+  const entries = role ? NAV[role] : [];
+  const pages = entries.filter((e): e is NavItem => !isNavMenu(e));
+  // Each menu section is a group of links, titled like in the nav (the
+  // menu's own label when the section has none)
+  const groups = entries.filter(isNavMenu).flatMap(menu =>
+    menu.sections.map(s => ({ title: s.title ?? menu.label, items: s.items })),
+  );
 
   useEffect(() => {
     registerDarkRegion(bandRef.current);
@@ -48,12 +56,13 @@ export function SiteFooter() {
           viewport={{ once: true, amount: 0.2 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-y-8">
-            <div className="md:col-span-4 md:pr-10 md:border-r md:border-[rgba(244,236,216,0.10)]">
+          {/* Four columns from xl; 2×2 from md, where four don't fit */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-y-8 md:gap-x-10 xl:gap-x-0">
+            <div className="xl:col-span-3 xl:pr-8 xl:border-r xl:border-[rgba(244,236,216,0.10)]">
               <div className="flex items-center gap-4 mb-5">
                 <MtymLogo size="1.875rem" />
                 <span
-                  className="font-mont uppercase tracking-[0.22em] pl-4"
+                  className="font-mont uppercase tracking-[0.22em] pl-4 whitespace-nowrap"
                   style={{
                     color: "rgba(244,236,216,0.60)",
                     fontWeight: 600,
@@ -76,18 +85,37 @@ export function SiteFooter() {
 
             <FooterColumn
               title="Plateforme"
-              className="md:col-span-2 md:px-10 md:border-r md:border-[rgba(244,236,216,0.10)]"
+              className="xl:col-span-4 xl:px-8 xl:border-r xl:border-[rgba(244,236,216,0.10)]"
             >
-              {(role ? NAV[role] : []).map(l => (
-                <li key={l.to}>
-                  <Link to={l.to} className="footer-link">{l.label}</Link>
+              {pages.map(item => <PageLink key={item.to} item={item} />)}
+              {/* The groups alternate between two columns: Logistique |
+                  Scientifique, then Administration under Logistique */}
+              {groups.length > 0 && (
+                <li className="grid grid-cols-2 gap-x-6">
+                  {[0, 1].map(col => (
+                    <div key={col} className="space-y-1.5">
+                      {groups.filter((_, i) => i % 2 === col).map(group => (
+                        <div key={group.title} className="pt-3">
+                          <div
+                            className="font-mont text-micro uppercase tracking-widest mb-1.5"
+                            style={{ color: "rgba(244,236,216,0.45)", fontWeight: 700 }}
+                          >
+                            {group.title}
+                          </div>
+                          <ul className="space-y-1.5">
+                            {group.items.map(item => <PageLink key={item.to} item={item} />)}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </li>
-              ))}
+              )}
             </FooterColumn>
 
             <FooterColumn
               title="À propos"
-              className="md:col-span-3 md:px-10 md:border-r md:border-[rgba(244,236,216,0.10)]"
+              className="xl:col-span-2 xl:px-8 xl:border-r xl:border-[rgba(244,236,216,0.10)]"
             >
               {ABOUT_LINKS.map(l => (
                 <li key={l.href}>
@@ -98,7 +126,7 @@ export function SiteFooter() {
               ))}
             </FooterColumn>
 
-            <div className="md:col-span-3 md:pl-10">
+            <div className="xl:col-span-3 xl:pl-8">
               <h3
                 className="font-mont uppercase tracking-[0.18em] mb-4 mt-6 md:mt-0"
                 style={{ color: "var(--saffron)", fontWeight: 800, fontSize: "0.92rem" }}
@@ -210,6 +238,14 @@ function SocialIcon({ href, label, path }: { href: string; label: string; path: 
         <path d={path} />
       </svg>
     </a>
+  );
+}
+
+function PageLink({ item }: { item: NavItem }) {
+  return (
+    <li>
+      <Link to={item.to} className="footer-link">{item.label}</Link>
+    </li>
   );
 }
 

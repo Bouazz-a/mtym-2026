@@ -1,22 +1,67 @@
 import type { Role } from "@/types";
 
 // Pages reachable by each role — shared by the top nav and the footer.
+// A menu gathers several pages under one entry of the top bar, in sections
+// (titled when there are several).
 
 export interface NavItem {
   to: string;
   label: string;
 }
 
-export const NAV: Record<Role, NavItem[]> = {
+export interface NavMenu {
+  label: string;
+  sections: { title?: string; items: NavItem[] }[];
+}
+
+export type NavEntry = NavItem | NavMenu;
+
+export const isNavMenu = (entry: NavEntry): entry is NavMenu => "sections" in entry;
+
+// Every page of the entries, menus flattened in order (the footer's list)
+export function navPages(entries: NavEntry[]): NavItem[] {
+  return entries.flatMap((e) => (isNavMenu(e) ? e.sections.flatMap((s) => s.items) : [e]));
+}
+
+// Whether `to` is the page shown at `pathname` ("/" only matches itself)
+export function isCurrentPage(to: string, pathname: string): boolean {
+  return to === "/" ? pathname === "/" : pathname === to || pathname.startsWith(`${to}/`);
+}
+
+export const NAV: Record<Role, NavEntry[]> = {
   admin: [
     { to: "/", label: "Tableau de bord" },
-    { to: "/tournoi", label: "Tournoi" },
-    { to: "/jury", label: "Jury" },
-    { to: "/criteres", label: "Critères" },
-    { to: "/notes", label: "Notes" },
-    { to: "/resultats", label: "Résultats" },
-    { to: "/comptes", label: "Comptes" },
-    { to: "/journal", label: "Journal" },
+    {
+      label: "Gestion du tournoi",
+      sections: [
+        {
+          title: "Logistique",
+          items: [
+            { to: "/tournoi", label: "Génération des poules" },
+            { to: "/jury", label: "Affectation du jury" },
+          ],
+        },
+        {
+          title: "Scientifique",
+          items: [
+            { to: "/criteres", label: "Critères de notation" },
+            { to: "/notes", label: "Notes" },
+            { to: "/resultats", label: "Résultats" },
+          ],
+        },
+      ],
+    },
+    {
+      label: "Administration",
+      sections: [
+        {
+          items: [
+            { to: "/comptes", label: "Comptes" },
+            { to: "/journal", label: "Journal" },
+          ],
+        },
+      ],
+    },
   ],
   jury: [{ to: "/", label: "Mon planning" }],
 };

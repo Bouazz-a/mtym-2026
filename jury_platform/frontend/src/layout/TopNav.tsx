@@ -1,18 +1,20 @@
 import { useRef, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useSession } from "@/features/shared/SessionContext";
 import { MtymLogo } from "@/features/shared/widgets";
 import { Popover } from "@/features/shared/primitives";
 import { ChangePasswordModal } from "@/features/shared/ChangePasswordModal";
 import { ChevronDownIcon } from "@/features/shared/icons";
-import { NAV, ROLE_LABEL, type NavItem } from "./navigation";
+import { isCurrentPage, isNavMenu, NAV, navPages, ROLE_LABEL, type NavItem, type NavMenu } from "./navigation";
 
-// TopNav — fixed dark top bar. Brand on the left, nav links in the middle,
-// account menu on the right (also carries the links on small screens).
+// TopNav — fixed dark top bar. Brand on the left, nav links and menus in
+// the middle, account menu on the right (also carries the links on small
+// screens).
 
 export function TopNav() {
   const { user, logout } = useSession();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const chipRef = useRef<HTMLButtonElement>(null);
@@ -47,9 +49,9 @@ export function TopNav() {
 
         {/* Inline from lg; below that the links live in the account menu */}
         <div className="hidden lg:flex items-center gap-6">
-          {items.map((item) => (
-            <NavItemLink key={item.to} item={item} />
-          ))}
+          {items.map((entry) =>
+            isNavMenu(entry) ? <NavMenuButton key={entry.label} menu={entry} /> : <NavItemLink key={entry.to} item={entry} />,
+          )}
         </div>
 
         {user && (
@@ -105,13 +107,23 @@ export function TopNav() {
                 </div>
                 <div className="font-open text-xs truncate" style={{ color: "var(--ink-soft)" }}>{user.email}</div>
               </div>
-              <ul className="lg:hidden py-1" style={{ borderBottom: "1px solid var(--border)" }}>
-                {items.map((item) => (
-                  <li key={item.to}>
-                    <MenuButton onClick={() => { setMenuOpen(false); navigate(item.to); }}>{item.label}</MenuButton>
-                  </li>
-                ))}
-              </ul>
+              <div className="lg:hidden py-1" style={{ borderBottom: "1px solid var(--border)" }}>
+                {items.map((entry, i) => {
+                  // One rule on each side of a menu's pages, never two in a row
+                  const rule = i > 0 && (isNavMenu(entry) || isNavMenu(items[i - 1])) ? { borderTop: "1px solid var(--border)" } : undefined;
+                  return isNavMenu(entry) ? (
+                    <div key={entry.label} style={rule}>
+                      <MenuSections menu={entry} onPick={(to) => { setMenuOpen(false); navigate(to); }} />
+                    </div>
+                  ) : (
+                    <div key={entry.to} style={rule}>
+                      <MenuButton active={isCurrentPage(entry.to, pathname)} onClick={() => { setMenuOpen(false); navigate(entry.to); }}>
+                        {entry.label}
+                      </MenuButton>
+                    </div>
+                  );
+                })}
+              </div>
               <div className="py-1">
                 {user.role === "jury" && (
                   <MenuButton onClick={() => { setMenuOpen(false); navigate("/?guide=1"); }}>
@@ -150,12 +162,78 @@ function NavItemLink({ item }: { item: NavItem }) {
   );
 }
 
-function MenuButton({ children, onClick, danger = false }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+// A top-bar entry that opens its pages in a dropdown. Lit like a link when
+// one of its pages is the current one.
+function NavMenuButton({ menu }: { menu: NavMenu }) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const active = navPages([menu]).some((item) => isCurrentPage(item.to, pathname));
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 font-mont text-tiny uppercase tracking-[0.14em] whitespace-nowrap transition-colors"
+        style={{
+          color: active ? "var(--saffron)" : open ? "var(--paper)" : "rgba(244,236,216,0.62)",
+          fontWeight: active ? 800 : 600,
+        }}
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        {menu.label}
+        <ChevronDownIcon size="0.75rem" style={{ transition: "transform 180ms", transform: open ? "rotate(180deg)" : "none" }} />
+      </button>
+      <Popover open={open} onClose={() => setOpen(false)} anchorRef={buttonRef} align="left" width={16}>
+        <MenuSections menu={menu} onPick={(to) => { setOpen(false); navigate(to); }} />
+      </Popover>
+    </>
+  );
+}
+
+// A menu's sections: a title (if any), then its pages, the current one lit
+function MenuSections({ menu, onPick }: { menu: NavMenu; onPick: (to: string) => void }) {
+  const { pathname } = useLocation();
+  return menu.sections.map((section, i) => (
+    <div key={section.title ?? i} className="py-1" style={i > 0 ? { borderTop: "1px solid var(--border)" } : undefined}>
+      {section.title && (
+        <div className="px-4 pt-2 pb-1 font-mont text-micro uppercase tracking-widest" style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
+          {section.title}
+        </div>
+      )}
+      {section.items.map((item) => (
+        <MenuButton key={item.to} active={isCurrentPage(item.to, pathname)} onClick={() => onPick(item.to)}>
+          {item.label}
+        </MenuButton>
+      ))}
+    </div>
+  ));
+}
+
+function MenuButton({
+  children,
+  onClick,
+  danger = false,
+  active = false,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+  active?: boolean;
+}) {
   return (
     <button
       onClick={onClick}
+      aria-current={active ? "page" : undefined}
       className="w-full px-4 py-2 text-left font-mont text-xs uppercase tracking-widest hover-row transition-colors"
-      style={{ color: danger ? "var(--clay)" : "var(--ink)", fontWeight: 700 }}
+      style={{
+        color: danger ? "var(--clay)" : active ? "var(--forest)" : "var(--ink)",
+        fontWeight: active ? 900 : 700,
+        background: active ? "var(--paper-2)" : undefined,
+      }}
     >
       {children}
     </button>

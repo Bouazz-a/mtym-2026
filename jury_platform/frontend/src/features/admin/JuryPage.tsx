@@ -80,7 +80,7 @@ export function JuryPage() {
       )}
 
       {!center || !day ? (
-        <EmptyState title="Aucun jour" sub="Déclarez d'abord les jours des centres depuis la page Tournoi." />
+        <EmptyState title="Aucun jour" sub="Déclarez d'abord les jours des centres depuis la page Génération des poules." />
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
