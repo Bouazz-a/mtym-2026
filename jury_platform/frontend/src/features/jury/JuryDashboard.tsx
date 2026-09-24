@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Btn, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Stagger } from "@/features/shared/primitives";
 import { CalendarIcon } from "@/features/shared/icons";
-import { EmptyState, RoleChip, StatCard } from "@/features/shared/widgets";
+import { EmptyState, RoleLine, StatCard } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
 import { getOralEvaluations, getReportEvaluations } from "@/lib/repositories/evaluationRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
@@ -183,19 +183,24 @@ function PassageSlot({
   tourAnchors?: boolean; // the passage the guide points at
 }) {
   const anchor = (name: string) => (tourAnchors ? name : undefined);
+  // Laid out like a passage of the admin's jury timetable: the problem and
+  // the passage, then who defends, opposes and reports
   return (
     <div className="flex items-center gap-4 flex-wrap" data-tour={anchor("passage-card")}>
-      <div style={{ minWidth: "9.375rem" }}>
-        <div className="font-mont" style={{ color: "var(--forest)", fontWeight: 900 }}>Poule {passage.pool.label}</div>
-        <div className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-          {passage.label}{passage.room ? ` · Salle ${passage.room}` : ""}
+      <div className="flex flex-col gap-2.5" style={{ width: "min(100%, 20rem)" }}>
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="font-mont text-xs uppercase tracking-wider" style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
+            Problème {passage.problemNumber}
+          </span>
+          <span className="font-mont text-micro" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+            {passage.label}{passage.room ? ` · Salle ${passage.room}` : ""}
+          </span>
         </div>
-      </div>
-      <Badge tone="dark">Problème {passage.problemNumber}</Badge>
-      <div className="flex gap-1.5 flex-wrap">
-        {(["defender", "opponent", "reporter"] as const).map((role) => (
-          <RoleChip key={role} role={role} quad={quad(passage[`${role}TeamId`])} />
-        ))}
+        <div className="space-y-1">
+          {(["defender", "opponent", "reporter"] as const).map((role) => (
+            <RoleLine key={role} role={role} quad={quad(passage[`${role}TeamId`])} />
+          ))}
+        </div>
       </div>
       <div className="flex items-center gap-2 ml-auto flex-wrap">
         <Link to={`/passages/${passage.id}`} data-tour={anchor("oral-button")}>

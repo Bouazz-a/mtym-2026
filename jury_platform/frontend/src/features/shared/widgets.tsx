@@ -210,18 +210,6 @@ export function RoleLine({ role, quad }: { role: keyof typeof ROLE_PALETTE; quad
   );
 }
 
-// "DEF PIQU" — a team's role in a passage, in the role's colors
-export function RoleChip({ role, quad }: { role: keyof typeof ROLE_PALETTE; quad: string }) {
-  return (
-    <span
-      className="font-mont text-micro uppercase tracking-widest px-1.5 py-0.5 whitespace-nowrap"
-      style={{ background: ROLE_PALETTE[role].bg, color: ROLE_PALETTE[role].fg, fontWeight: 800 }}
-    >
-      {ROLE_PALETTE[role].short} {quad}
-    </span>
-  );
-}
-
 // ─── StatCard — label + big animated number (+ progress when denom) ────
 
 export function StatCard({
