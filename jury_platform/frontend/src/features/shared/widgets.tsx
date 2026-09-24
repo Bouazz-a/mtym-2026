@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import AppLogo from "@/assets/MTYM2.svg";
+import { InboxIcon, type IconComponent } from "./icons";
 import { BrutalCard } from "./primitives";
 
 // Widgets — composite visuals with motion and depth: animated stat
@@ -88,96 +89,45 @@ export function EmptyState({
   title,
   sub,
   action,
+  icon: Glyph = InboxIcon,
 }: {
   title: string;
   sub?: string;
   action?: React.ReactNode;
+  icon?: IconComponent; // what the page would list (report, calendar…)
 }) {
+  // A dashed placeholder — "nothing here yet" — with the app's forest tile
+  // and saffron hard shadow for its icon
   return (
     <div
-      className="relative overflow-hidden"
+      className="flex flex-col items-center text-center"
       style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 4,
-        padding: "3.75rem 2.5rem",
+        border: "2px dashed rgba(18, 32, 25, 0.25)",
+        background: "rgba(255, 255, 255, 0.6)",
+        padding: "3rem 2rem",
       }}
     >
-      <MoroccoWatermark
-        size="13.75rem"
-        opacity={0.06}
-        top="-2.5rem"
-        right="-2.5rem"
-        color="var(--forest)"
-      />
-      <div className="relative text-center">
-        <div
-          className="font-mont mb-2"
-          style={{
-            fontSize: "1.1rem",
-            color: "var(--forest)",
-            fontWeight: 700,
-          }}
-        >
-          {title}
-        </div>
-        {sub && (
-          <div
-            className="font-open text-sm max-w-md mx-auto"
-            style={{ color: "var(--ink-soft)" }}
-          >
-            {sub}
-          </div>
-        )}
-        {action && <div className="mt-5 flex justify-center">{action}</div>}
-      </div>
-    </div>
-  );
-}
-
-// ─── Morocco silhouette watermark (decorative) ─────────────────────────
-
-// Lengths are CSS values in rem, so the decoration follows the page scale.
-function MoroccoWatermark({
-  size = "17.5rem",
-  opacity = 0.08,
-  top,
-  right,
-  left,
-  bottom,
-  color = "var(--saffron)",
-}: {
-  size?: string;
-  opacity?: number;
-  top?: string;
-  right?: string;
-  left?: string;
-  bottom?: string;
-  color?: string;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top,
-        right,
-        left,
-        bottom,
-        opacity,
-        pointerEvents: "none",
-      }}
-    >
-      <svg
-        style={{ width: size, height: size }}
-        viewBox="0 0 32 32"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
+      <div
+        className="flex items-center justify-center mb-5"
+        style={{
+          width: "3.25rem",
+          height: "3.25rem",
+          background: "var(--forest)",
+          color: "var(--saffron)",
+          boxShadow: "3px 3px 0 0 var(--saffron)",
+        }}
       >
-        <path
-          fill={color}
-          d="M14 4 L19 3 L23 5 L26 9 L28 14 L29 19 L28 24 L26 27 L22 29 L17 30 L13 29 L9 26 L7 22 L7 17 L9 12 L11 8 Z"
-        />
-      </svg>
+        <Glyph size="1.5rem" />
+      </div>
+      <h2 className="font-mont" style={{ fontSize: "1.25rem", color: "var(--forest)", fontWeight: 900, letterSpacing: "-0.01em", textWrap: "balance" }}>
+        {title}
+      </h2>
+      {sub && (
+        <p className="font-open mt-2" style={{ maxWidth: "30rem", fontSize: "0.9rem", lineHeight: 1.6, color: "var(--ink-soft)", textWrap: "pretty" }}>
+          {sub}
+        </p>
+      )}
+      {action && <div className="mt-6 flex justify-center">{action}</div>}
     </div>
   );
 }

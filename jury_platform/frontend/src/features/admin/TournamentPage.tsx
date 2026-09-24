@@ -5,6 +5,7 @@ import {
   Alert, Badge, Btn, BrutalCard, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select,
   Stagger,
 } from "@/features/shared/primitives";
+import { GridIcon } from "@/features/shared/icons";
 import { EmptyState, StatCard } from "@/features/shared/widgets";
 import { getTeams, setTeamDay } from "@/lib/repositories/teamRepository";
 import {
@@ -86,6 +87,7 @@ export function TournamentPage() {
 
       {centerTeams.length === 0 ? (
         <EmptyState
+          icon={GridIcon}
           title={`Aucune équipe à ${centerLabel(center)}`}
           sub="Les équipes viennent de l'import du site principal (scripts/import-dump.sh)."
         />

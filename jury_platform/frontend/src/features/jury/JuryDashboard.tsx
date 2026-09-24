@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Btn, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Stagger } from "@/features/shared/primitives";
+import { CalendarIcon } from "@/features/shared/icons";
 import { EmptyState, RoleChip, StatCard } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
 import { getOralEvaluations, getReportEvaluations } from "@/lib/repositories/evaluationRepository";
@@ -67,7 +68,7 @@ export function JuryDashboard() {
       />
 
       {mine.length === 0 ? (
-        <EmptyState title="Aucun passage pour l'instant" sub="Les organisateurs ne vous ont pas encore attribué de passage." />
+        <EmptyState icon={CalendarIcon} title="Aucun passage pour l'instant" sub="Les organisateurs ne vous ont pas encore attribué de passage." />
       ) : (
         <>
           <Stagger className="grid grid-cols-1 sm:grid-cols-3 gap-6">

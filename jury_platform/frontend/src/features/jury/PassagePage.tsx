@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Badge, BrutalCard, PageHeader, PageLoading, PageMotion, Segmented } from "@/features/shared/primitives";
-import { ChevronLeftIcon } from "@/features/shared/icons";
+import { ChevronLeftIcon, SearchIcon } from "@/features/shared/icons";
 import { EmptyState } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
@@ -35,7 +35,7 @@ export function PassagePage() {
   const criteriaQ = useQuery({ queryKey: ["criteria"], queryFn: getCriteria });
 
   if (passageQ.isError) {
-    return <EmptyState title="Passage introuvable" sub="Ce passage n'est pas jugé par votre duo." action={<BackLink />} />;
+    return <EmptyState icon={SearchIcon} title="Passage introuvable" sub="Ce passage n'est pas jugé par votre duo." action={<BackLink />} />;
   }
   if (passageQ.isLoading || teamsQ.isLoading || criteriaQ.isLoading) return <PageLoading />;
 

@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 // text color and decorative (aria-hidden): the control around them carries
 // the accessible name.
 
-interface IconProps {
+export interface IconProps {
   /** CSS length, in rem so the icon follows the page scale */
   size?: string;
   style?: CSSProperties;
@@ -51,4 +51,50 @@ export const SwapIcon = (p: IconProps) => (
 
 export const CloseIcon = (p: IconProps) => (
   <Icon {...p}><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></Icon>
+);
+
+// Empty states: what the page would list
+
+export type IconComponent = (p: IconProps) => ReactNode;
+
+export const InboxIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+  </Icon>
+);
+
+export const DocumentIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 3 14 8 19 8" />
+    <line x1="9" y1="13" x2="15" y2="13" />
+    <line x1="9" y1="17" x2="13" y2="17" />
+  </Icon>
+);
+
+export const CalendarIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <line x1="16" y1="3" x2="16" y2="7" />
+    <line x1="8" y1="3" x2="8" y2="7" />
+    <line x1="3" y1="11" x2="21" y2="11" />
+  </Icon>
+);
+
+export const GridIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="7" height="7" />
+    <rect x="14" y="3" width="7" height="7" />
+    <rect x="3" y="14" width="7" height="7" />
+    <rect x="14" y="14" width="7" height="7" />
+  </Icon>
+);
+
+export const ClockIcon = (p: IconProps) => (
+  <Icon {...p}><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" /></Icon>
+);
+
+export const SearchIcon = (p: IconProps) => (
+  <Icon {...p}><circle cx="11" cy="11" r="7" /><line x1="20.5" y1="20.5" x2="16" y2="16" /></Icon>
 );

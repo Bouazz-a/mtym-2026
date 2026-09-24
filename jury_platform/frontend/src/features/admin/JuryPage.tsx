@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { Alert, PageHeader, PageLoading, PageMotion, Segmented, Stagger } from "@/features/shared/primitives";
+import { CalendarIcon } from "@/features/shared/icons";
 import { EmptyState, StatCard } from "@/features/shared/widgets";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import { getCenterDays } from "@/lib/repositories/centerDayRepository";
@@ -94,7 +95,7 @@ export function JuryPage() {
       )}
 
       {!center || !day ? (
-        <EmptyState title="Aucun jour" sub="Déclarez d'abord les jours des centres depuis la page Génération des poules." />
+        <EmptyState icon={CalendarIcon} title="Aucun jour" sub="Déclarez d'abord les jours des centres depuis la page Génération des poules." />
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-x-8 gap-y-4">

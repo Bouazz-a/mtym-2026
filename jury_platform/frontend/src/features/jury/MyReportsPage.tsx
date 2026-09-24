@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { Badge, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading, Stagger } from "@/features/shared/primitives";
+import { Link, useNavigate } from "react-router-dom";
+import { Badge, Btn, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading, Stagger } from "@/features/shared/primitives";
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
+import { DocumentIcon } from "@/features/shared/icons";
 import { EmptyState, StatCard } from "@/features/shared/widgets";
 import { getReportEvaluations } from "@/lib/repositories/evaluationRepository";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
@@ -73,7 +74,12 @@ export function MyReportsPage() {
       />
 
       {rows.length === 0 ? (
-        <EmptyState title="Aucun rapport pour l'instant" sub="Les organisateurs ne vous ont pas encore confié de rapport à corriger." />
+        <EmptyState
+          icon={DocumentIcon}
+          title="Aucun rapport pour l'instant"
+          sub="Les organisateurs ne vous ont pas encore confié de rapport à corriger. Ils apparaîtront ici dès qu'on vous en confie."
+          action={<Link to="/"><Btn variant="ghost" size="sm">Voir mon planning</Btn></Link>}
+        />
       ) : (
         <>
           <Stagger className="grid grid-cols-1 sm:grid-cols-2 gap-6">

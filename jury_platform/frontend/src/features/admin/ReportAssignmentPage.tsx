@@ -7,6 +7,7 @@ import {
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { ReportViewer } from "@/features/shared/ReportViewer";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
+import { DocumentIcon } from "@/features/shared/icons";
 import { EmptyState, StatCard } from "@/features/shared/widgets";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
@@ -128,6 +129,7 @@ export function ReportAssignmentPage() {
 
       {rows.length === 0 ? (
         <EmptyState
+          icon={DocumentIcon}
           title="Aucun rapport à attribuer"
           sub="Ils apparaissent une fois le tirage d'un jour validé : tous les rapports de ses équipes, sauf celui du problème que chacune défend."
         />

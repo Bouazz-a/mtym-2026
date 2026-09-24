@@ -5,6 +5,7 @@ import {
 } from "@/features/shared/primitives";
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
+import { ClockIcon } from "@/features/shared/icons";
 import { EmptyState } from "@/features/shared/widgets";
 import { getAuditLog } from "@/lib/repositories/auditRepository";
 import type { FilterColumn } from "@/lib/services/columnFilters";
@@ -66,7 +67,7 @@ export function JournalPage() {
       {logQ.isError && <Alert>{errorMessage(logQ.error, "Journal indisponible.")}</Alert>}
 
       {entries.length === 0 ? (
-        <EmptyState title="Journal vide" sub="Les modifications des administrateurs apparaîtront ici." />
+        <EmptyState icon={ClockIcon} title="Journal vide" sub="Les modifications des administrateurs apparaîtront ici." />
       ) : (
         <>
           <div className="flex items-center gap-3 flex-wrap">

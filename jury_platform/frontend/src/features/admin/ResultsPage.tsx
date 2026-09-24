@@ -1,6 +1,7 @@
 import { Alert, Badge, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading } from "@/features/shared/primitives";
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
+import { GridIcon } from "@/features/shared/icons";
 import { EmptyState } from "@/features/shared/widgets";
 import type { FilterColumn } from "@/lib/services/columnFilters";
 import { fmtNote } from "@/lib/services/gradingService";
@@ -54,7 +55,7 @@ export function ResultsPage() {
       {exporter.error && <Alert>{exporter.error}</Alert>}
 
       {rows.length === 0 ? (
-        <EmptyState title="Aucune poule" sub="Les résultats apparaîtront une fois les poules tirées et notées." />
+        <EmptyState icon={GridIcon} title="Aucune poule" sub="Les résultats apparaîtront une fois les poules tirées et notées." />
       ) : (
         <ResultsTable teams={rows} teamById={teamById} written={written} />
       )}

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Badge, PageHeader, PageLoading, PageMotion } from "@/features/shared/primitives";
-import { ChevronLeftIcon } from "@/features/shared/icons";
+import { ChevronLeftIcon, SearchIcon } from "@/features/shared/icons";
 import { EmptyState } from "@/features/shared/widgets";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getReportEvaluations } from "@/lib/repositories/evaluationRepository";
@@ -25,7 +25,7 @@ export function AssignedReportPage() {
 
   const assigned = (mineQ.data ?? []).find((m) => m.reportId === reportId);
   if (!assigned) {
-    return <EmptyState title="Rapport introuvable" sub="Ce rapport ne vous est pas confié." action={<BackLink />} />;
+    return <EmptyState icon={SearchIcon} title="Rapport introuvable" sub="Ce rapport ne vous est pas confié." action={<BackLink />} />;
   }
   const team = (teamsQ.data ?? []).find((t) => t.id === assigned.teamId);
   const { problemNumber } = assigned;

@@ -5,6 +5,7 @@ import {
 } from "@/features/shared/primitives";
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
+import { GridIcon } from "@/features/shared/icons";
 import { EmptyState, ROLE_PALETTE } from "@/features/shared/widgets";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import type { FilterColumn } from "@/lib/services/columnFilters";
@@ -50,7 +51,7 @@ export function EvaluationsPage() {
       {exporter.error && <Alert>{exporter.error}</Alert>}
 
       {!selected ? (
-        <EmptyState title="Aucune poule" sub="Les notes apparaîtront une fois les poules tirées et notées." />
+        <EmptyState icon={GridIcon} title="Aucune poule" sub="Les notes apparaîtront une fois les poules tirées et notées." />
       ) : (
         <>
           <Segmented options={centers} value={selected} onChange={setCenter} />
