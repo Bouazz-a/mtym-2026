@@ -56,7 +56,7 @@ export function PracticePage() {
     reporterTeamId: "practice-gama",
     extraTeamId: "practice-delt",
     room: "Amphi A",
-    duo: { id: "practice-duo", centerDayId: DAY.id, number: 1, members: [PARTNER] },
+    duo: { id: "practice-duo", centerDayId: DAY.id, number: 1, problemNumber: 2, members: [PARTNER] },
     pool,
   };
   const data: PassageData = {

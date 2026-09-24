@@ -51,6 +51,7 @@ model Account {
   createdAt    DateTime @default(now())
 
   duoSeats          DuoMember[]
+  reportAssignments ReportAssignment[]
   reportEvaluations ReportEvaluation[]
   oralEvaluations   OralEvaluation[]
   auditEntries      AuditLog[]
@@ -103,9 +104,25 @@ model TeamReport {
   problemNumber Int
   fileUrl       String
 
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team       Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  assignment ReportAssignment?
 
   @@unique([teamId, problemNumber])
+}
+
+// A report handed to one juror to correct. Only the reports of problems a
+// team does NOT defend are handed out: the defended one is graded by the
+// duo of its passage (services/reportPool.ts).
+model ReportAssignment {
+  id        String   @id @default(uuid())
+  reportId  String   @unique // one juror per report
+  accountId String
+  createdAt DateTime @default(now())
+
+  report  TeamReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  account Account    @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
 }
 
 // ─── Tournament ───────────────────────────────────────────────────────────────
@@ -127,9 +144,13 @@ model Pool {
 // Two jurors who judge together for a whole day; each passage gets one duo.
 // A juror sits in at most one duo per day (enforced by the duos route).
 model JuryDuo {
-  id          String @id @default(uuid())
-  centerDayId String
-  number      Int // "Duo 1", "Duo 2"… within the day
+  id            String @id @default(uuid())
+  centerDayId   String
+  number        Int // "Duo 1", "Duo 2"… within the day
+  // The duo's problem: its jurors are its specialists. The automatic
+  // assignments give them its passages (between equally loaded duos,
+  // algorithms/duoAssignment.ts) and its reports (reportAssignment.ts) first
+  problemNumber Int?
 
   centerDay CenterDay   @relation(fields: [centerDayId], references: [id], onDelete: Cascade)
   members   DuoMember[]
@@ -183,8 +204,9 @@ model Criterion {
   order         Int
 }
 
-// One per (juror × team × defended problem) — graded by the duo of the
-// passage where the team defends.
+// One per (juror × team × problem): the defended report, graded by the duo
+// of the passage where the team defends, or a report handed to the juror
+// (ReportAssignment).
 model ReportEvaluation {
   id            String  @id @default(uuid())
   juryId        String
@@ -246,6 +268,9 @@ model FinalWeights {
   opponent Float @default(3)
   reporter Float @default(2)
   report   Float @default(5)
+  // The written-report note is the weighted average of the team's reports
+  // (each out of 20): the weight of each problem, in %, adding up to 100
+  problemWeights Json @default("{\"1\":25,\"2\":25,\"3\":25,\"4\":25}")
 }
 
 // ─── Journal ─────────────────────────────────────────────────────────────────

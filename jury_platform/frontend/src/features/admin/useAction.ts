@@ -34,3 +34,6 @@ export const TOURNAMENT_QUERIES = [["teams"], ["center-days"], ["pools"]];
 // What a duo change touches: the duos, the passages carrying them, and the
 // accounts' passage counts.
 export const DUO_QUERIES = [["duos"], ["pools"], ["accounts"]];
+
+// What a report assignment touches: the board of reports to hand out.
+export const REPORT_QUERIES = [["report-assignments"]];

@@ -7,6 +7,7 @@ import { audit } from "../services/audit";
 import { duoInclude, duoPassageWarnings, isPassageGraded, toDuoResponse } from "../services/duos";
 import { teamsOf } from "../services/passages";
 import { clearDrawValidation, poolInclude, toPoolResponse } from "../services/pools";
+import { assertNoAssignedReports } from "../services/reportPool";
 import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
@@ -64,6 +65,7 @@ router.put("/:id", ...adminOnly, asyncRoute(async (req, res) => {
     if (await isPassageGraded(passage.id)) {
       throw new ConflictError("Ce passage est déjà noté — seule la salle peut encore changer");
     }
+    await assertNoAssignedReports({ teamIds: teamsOf(passage) });
   }
 
   const quads = new Map(

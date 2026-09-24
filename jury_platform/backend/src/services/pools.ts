@@ -45,6 +45,17 @@ export function teamsInPools(pools: { passages: Lineup[]; draft: Prisma.JsonValu
   return taken;
 }
 
+// The (slot, problem) of every passage of these pools, drafts included —
+// what new pools of the same day balance their problems against.
+export function playedProblems(
+  pools: { passages: { slot: number; problemNumber: number }[]; draft: Prisma.JsonValue }[],
+): { slot: number; problemNumber: number }[] {
+  return pools.flatMap((pool) => {
+    const draft = pool.draft as unknown as PoolGrid | null;
+    return [...pool.passages, ...(draft?.passages ?? [])].map(({ slot, problemNumber }) => ({ slot, problemNumber }));
+  });
+}
+
 // A draw's pools, saved with their passages (no duo yet).
 export async function createPools(tx: Prisma.TransactionClient, centerDayId: string, pools: DrawPool[]) {
   for (const pool of pools) {

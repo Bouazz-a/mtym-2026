@@ -22,6 +22,7 @@ export function GradingCard({
   disabledHint,
   practice = false,
   tourAnchors = false,
+  outOf,
   onSave,
   children,
 }: {
@@ -32,6 +33,7 @@ export function GradingCard({
   disabledHint?: string;
   practice?: boolean; // the guide's practice passage: saving sends nothing
   tourAnchors?: boolean; // the card the guide's steps point at
+  outOf?: number; // show the note rescaled out of this (written reports: 20) instead of the grid's total
   onSave: (input: GradingInput) => Promise<unknown>;
   children?: ReactNode; // extra content above the grid (e.g. the report viewer)
 }) {
@@ -83,7 +85,9 @@ export function GradingCard({
       <div className="px-5 py-4 flex items-start justify-between gap-3" style={{ borderBottom: "2px solid var(--forest)" }}>
         <div className="min-w-0">{header}</div>
         <span data-tour={tourAnchors ? "note" : undefined}>
-          <NotePill note={note.total} label={`Note / ${note.maxTotal}`} />
+          {outOf && note.maxTotal > 0
+            ? <NotePill note={(note.total / note.maxTotal) * outOf} label={`Note / ${outOf}`} />
+            : <NotePill note={note.total} label={`Note / ${note.maxTotal}`} />}
         </span>
       </div>
 

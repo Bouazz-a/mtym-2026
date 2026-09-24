@@ -40,6 +40,7 @@ export const NAV: Record<Role, NavEntry[]> = {
           items: [
             { to: "/tournoi", label: "Génération des poules", description: "Jours, équipes et tirage des poules" },
             { to: "/jury", label: "Affectation du jury", description: "Duos du jour et passages à juger" },
+            { to: "/rapports", label: "Affectation des rapports", description: "Rapports à corriger par chaque juré" },
           ],
         },
         {
@@ -64,7 +65,10 @@ export const NAV: Record<Role, NavEntry[]> = {
       ],
     },
   ],
-  jury: [{ to: "/", label: "Mon planning" }],
+  jury: [
+    { to: "/", label: "Mon planning" },
+    { to: "/mes-rapports", label: "Mes rapports" },
+  ],
 };
 
 export const ROLE_LABEL: Record<Role, string> = { admin: "Administration", jury: "Jury" };

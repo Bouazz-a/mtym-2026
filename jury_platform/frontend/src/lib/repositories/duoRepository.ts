@@ -10,12 +10,13 @@ export function getDuos(centerDayId?: string): Promise<JuryDuo[]> {
   return apiFetch<JuryDuo[]>("/duos", { params: { centerDayId } });
 }
 
-export function createDuo(centerDayId: string, accountIds: [string, string]): Promise<DuoResult> {
-  return apiFetch<DuoResult>("/duos", { method: "POST", body: { centerDayId, accountIds } });
+export function createDuo(centerDayId: string, accountIds: [string, string], problemNumber: number | null): Promise<DuoResult> {
+  return apiFetch<DuoResult>("/duos", { method: "POST", body: { centerDayId, accountIds, problemNumber } });
 }
 
-export function updateDuo(id: string, accountIds: [string, string]): Promise<DuoResult> {
-  return apiFetch<DuoResult>(`/duos/${id}`, { method: "PUT", body: { accountIds } });
+// Its jurors, its problem (the problem can change at any time), or both
+export function updateDuo(id: string, changes: { accountIds?: [string, string]; problemNumber?: number | null }): Promise<DuoResult> {
+  return apiFetch<DuoResult>(`/duos/${id}`, { method: "PUT", body: changes });
 }
 
 // Its passages go back to "no duo"; refused once the duo has graded.
@@ -30,8 +31,10 @@ export type AutoAssignMode = "fill" | "replace";
 
 export interface AutoAssignResult {
   changed: number;
+  assigned: number; // passages with a duo
   withoutDuo: number; // passages left without a duo (not enough duos)
   samePool: number; // times a duo judges the same pool twice
+  specialized: number; // passages judged by a duo of their problem
   warnings: string[];
 }
 

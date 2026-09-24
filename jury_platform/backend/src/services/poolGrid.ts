@@ -23,12 +23,15 @@ export interface PoolGrid {
 
 const ROLES = ["defenderTeamId", "opponentTeamId", "reporterTeamId", "extraTeamId"] as const;
 
-export function emptyGrid(size: 3 | 4): PoolGrid {
+// `problems`: one per slot, e.g. from pickProblems so the new pool varies
+// the problems of each slot with the day's other pools (the admin can still
+// change them in the grid)
+export function emptyGrid(size: 3 | 4, problems: number[] = Array.from({ length: size }, (_, i) => i + 1)): PoolGrid {
   return {
     size,
     passages: Array.from({ length: size }, (_, i) => ({
       slot: i + 1,
-      problemNumber: i + 1,
+      problemNumber: problems[i],
       defenderTeamId: null,
       opponentTeamId: null,
       reporterTeamId: null,

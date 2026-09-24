@@ -3,7 +3,7 @@ import { Alert, Badge, Btn, Modal } from "@/features/shared/primitives";
 import { RoleLine } from "@/features/shared/widgets";
 import { setPassageDuo } from "@/lib/repositories/poolRepository";
 import type { JuryDuo, PassageDetails, PoolDetails, ScheduleSlot, Team } from "@/types";
-import { duoMembers, repeatedDuos } from "@/utils/duos";
+import { duoLabel, duoMembers, repeatedDuos } from "@/utils/duos";
 import { breakMinutes, slotEnd } from "@/utils/schedule";
 import { DUO_QUERIES, useAction } from "./useAction";
 
@@ -59,9 +59,15 @@ export function DayTimetable({
 
   return (
     <>
+      {/* Its own scroll box, header row frozen on top (like .table-scroll) */}
       <div
-        className="overflow-x-auto"
-        style={{ border: "2px solid var(--forest)", boxShadow: "2px 2px 0 0 var(--forest)", background: "var(--surface)" }}
+        className="overflow-auto"
+        style={{
+          border: "2px solid var(--forest)",
+          boxShadow: "2px 2px 0 0 var(--forest)",
+          background: "var(--surface)",
+          maxHeight: "calc(100vh - 6.5rem)",
+        }}
       >
         <div
           className="grid"
@@ -142,7 +148,12 @@ function HeadCell({ children, sticky = false }: { children: React.ReactNode; sti
         color: "var(--paper)",
         fontWeight: 900,
         borderLeft: sticky ? undefined : "1px solid rgba(255,255,255,0.1)",
-        ...(sticky && { position: "sticky", left: 0, zIndex: 2, borderRight: "2px solid var(--forest)" }),
+        // The header row stays on top while the day scrolls; the corner
+        // cell also stays left, above the frozen time column
+        position: "sticky",
+        top: 0,
+        zIndex: sticky ? 4 : 3,
+        ...(sticky && { left: 0, borderRight: "2px solid var(--forest)" }),
       }}
     >
       {children}
@@ -227,7 +238,7 @@ function PassageCell({
       <div className="mt-auto pt-2" style={{ borderTop: "1px dashed var(--border)" }}>
         {duo ? (
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge tone="dark">Duo {duo.number}</Badge>
+            <Badge tone="dark">{duoLabel(duo)}</Badge>
             <span className="font-open text-xs" style={{ color: "var(--ink)" }}>{duoMembers(duo)}</span>
           </div>
         ) : (
@@ -315,10 +326,11 @@ function DuoPicker({
                   selected={passage.duo?.id === duo.id}
                   disabled={busy}
                   onSelect={() => choose(duo.id)}
-                  title={`Duo ${duo.number}`}
+                  title={duoLabel(duo)}
                   sub={duoMembers(duo)}
                   aside={`${count} passage${count > 1 ? "s" : ""}`}
                 >
+                  {duo.problemNumber === passage.problemNumber && <Badge tone="sage">Spécialiste du P{duo.problemNumber}</Badge>}
                   {inPool.length > 0 && <Badge tone="danger">Doublon · {inPool.join(", ")}</Badge>}
                   {sameTime.length > 0 && <Badge tone="danger">Même heure · {sameTime.join(", ")}</Badge>}
                 </DuoOption>

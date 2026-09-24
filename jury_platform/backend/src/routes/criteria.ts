@@ -4,7 +4,7 @@ import type { Criterion } from "@prisma/client";
 import { db } from "../db";
 import { adminOnly, authenticate } from "../middleware/auth";
 import { audit } from "../services/audit";
-import { asyncRoute, ConflictError, NotFoundError } from "../utils/errors";
+import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
 
@@ -85,6 +85,39 @@ router.delete("/:id", ...adminOnly, asyncRoute(async (req, res) => {
     });
   });
   res.status(204).send();
+}));
+
+// POST /api/criteria/copy — { from, to }: problem `to`'s report grid becomes a
+// copy of problem `from`'s, its own criteria replaced. Refused once grades
+// use the grid it would replace.
+router.post("/copy", ...adminOnly, asyncRoute(async (req, res) => {
+  const Problem = z.number().int().min(1).max(4);
+  const { from, to } = z
+    .object({ from: Problem, to: Problem })
+    .refine((b) => b.from !== b.to, "Choisissez un autre problème")
+    .parse(req.body);
+
+  const [source, target] = await Promise.all([
+    db.criterion.findMany({ where: { type: "report", problemNumber: from }, orderBy: { order: "asc" } }),
+    db.criterion.findMany({ where: { type: "report", problemNumber: to } }),
+  ]);
+  if (source.length === 0) throw new BadRequestError(`La grille du problème ${from} est vide : rien à copier`);
+  if ((await db.reportGrade.count({ where: { criterionId: { in: target.map((c) => c.id) } } })) > 0) {
+    throw new ConflictError(`Des notes utilisent déjà la grille du problème ${to} : elle ne peut plus être remplacée`);
+  }
+
+  const copied = await db.$transaction(async (tx) => {
+    await tx.criterion.deleteMany({ where: { id: { in: target.map((c) => c.id) } } });
+    await tx.criterion.createMany({ data: source.map(({ id: _id, ...c }) => ({ ...c, problemNumber: to })) });
+    await audit(tx, req.user!, {
+      category: "Critères",
+      action: "criteria.copy",
+      summary: `Grille du rapport problème ${to} remplacée par une copie de celle du problème ${from} : ${source.length} critère${source.length > 1 ? "s" : ""}${target.length ? ` (${target.length} supprimé${target.length > 1 ? "s" : ""})` : ""}`,
+      details: { copiés: source.map((c) => `${c.label} (coef. ${c.coefficient})`), supprimés: target.map((c) => c.label) },
+    });
+    return tx.criterion.findMany({ where: { type: "report", problemNumber: to }, orderBy: { order: "asc" } });
+  });
+  res.status(201).json(copied);
 }));
 
 const ROLE_NAMES: Record<string, string> = { defender: "Défenseur", opponent: "Opposant", reporter: "Rapporteur", extra: "Observateur" };

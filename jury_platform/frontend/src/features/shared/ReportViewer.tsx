@@ -60,7 +60,17 @@ export function ReportPanel({ reportId, src, title }: { reportId: string; src?: 
   );
 }
 
-export function ReportViewer({ reportId, src, title }: { reportId: string; src?: string; title: string }) {
+export function ReportViewer({
+  reportId,
+  src,
+  title,
+  label = "Voir le rapport (PDF)",
+}: {
+  reportId: string;
+  src?: string;
+  title: string;
+  label?: string; // the button's text (short in tables)
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +90,7 @@ export function ReportViewer({ reportId, src, title }: { reportId: string; src?:
   return (
     <>
       <Btn variant="forest" size="sm" onClick={open} disabled={busy}>
-        {busy ? "Ouverture…" : "Voir le rapport (PDF)"}
+        {busy ? "Ouverture…" : label}
       </Btn>
       {error && <div className="mt-3"><Alert>{error}</Alert></div>}
       <Modal

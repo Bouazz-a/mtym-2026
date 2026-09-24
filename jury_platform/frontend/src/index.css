@@ -283,6 +283,19 @@ body::before {
   border-top: 1px solid var(--border);
   font-size: 0.82rem;
 }
+/* A table's own scroll box: its header row stays in view while the rows
+   scroll under it, like a spreadsheet's frozen first row. The box fits the
+   screen under the top bar, so on a long table the header never leaves it. */
+.table-scroll {
+  overflow: auto;
+  max-height: calc(100vh - 6.5rem);
+}
+.table-scroll .brutal-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--forest-soft);
+}
 /* Columns that only need their content (a name, badges, buttons). On a wide
    screen the leftover width then goes to the text columns instead of
    stretching a column of buttons. Only for content that carries its own

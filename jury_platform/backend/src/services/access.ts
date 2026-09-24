@@ -26,30 +26,32 @@ export async function isPassageJuror(accountId: string, passageId: string): Prom
   return (await db.passage.count({ where: { id: passageId, ...passagesJudgedBy(accountId) } })) > 0;
 }
 
-// Teams a juror may see: every team of the passages their duo judges.
+// Teams a juror may see: every team of the passages their duo judges, and
+// the teams of the reports they were handed.
 export async function juryTeamIds(accountId: string): Promise<string[]> {
-  const passages = await db.passage.findMany({
-    where: passagesJudgedBy(accountId),
-    select: { defenderTeamId: true, opponentTeamId: true, reporterTeamId: true, extraTeamId: true },
-  });
-  return [...new Set(passages.flatMap(teamsOf))];
+  const [passages, assigned] = await Promise.all([
+    db.passage.findMany({
+      where: passagesJudgedBy(accountId),
+      select: { defenderTeamId: true, opponentTeamId: true, reporterTeamId: true, extraTeamId: true },
+    }),
+    db.reportAssignment.findMany({ where: { accountId }, select: { report: { select: { teamId: true } } } }),
+  ]);
+  return [...new Set([...passages.flatMap(teamsOf), ...assigned.map((a) => a.report.teamId)])];
 }
 
-// A juror grades (and so may read) a team's report only for the problem
-// that team defends in a passage the juror's duo judges.
+// A juror grades (and so may read) a team's report when it's the problem
+// that team defends in a passage the juror's duo judges, or when the report
+// was handed to them (Affectation des rapports).
 export async function juryCanAccessReport(
   accountId: string,
   teamId: string,
   problemNumber: number,
 ): Promise<boolean> {
-  const count = await db.passage.count({
-    where: {
-      defenderTeamId: teamId,
-      problemNumber,
-      ...passagesJudgedBy(accountId),
-    },
-  });
-  return count > 0;
+  const [judged, assigned] = await Promise.all([
+    db.passage.count({ where: { defenderTeamId: teamId, problemNumber, ...passagesJudgedBy(accountId) } }),
+    db.reportAssignment.count({ where: { accountId, report: { teamId, problemNumber } } }),
+  ]);
+  return judged + assigned > 0;
 }
 
 // Once any grade exists for a day, its pools are frozen: redrawing or

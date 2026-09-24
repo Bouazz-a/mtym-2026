@@ -8,7 +8,8 @@ import { audit, dayName } from "../services/audit";
 import { nextPoolNumber, poolLabelPrefix } from "../services/centers";
 import { validateDraw, type DrawPool } from "../services/draw";
 import { teamsOf } from "../services/passages";
-import { clearDrawValidation, createPools, findPools, teamsInPools } from "../services/pools";
+import { clearDrawValidation, createPools, findPools, playedProblems, teamsInPools } from "../services/pools";
+import { assertNoAssignedReports } from "../services/reportPool";
 import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 // Pool draws of a center day — mounted under /api/center-days. The draw
@@ -29,6 +30,7 @@ async function assertNotGraded(centerDayId: string) {
   if (await isDayGraded(centerDayId)) {
     throw new ConflictError("Des notes existent déjà pour ce jour — ses poules ne peuvent plus être modifiées");
   }
+  await assertNoAssignedReports({ centerDayId });
 }
 
 const drawDetails = (pools: DrawPool[]) => pools.map((p) => ({ pool: p.label, passages: p.passages.map((x) => x.label) }));
@@ -74,6 +76,7 @@ router.post("/:id/draw", asyncRoute(async (req, res) => {
     teams: free,
     labelPrefix: await poolLabelPrefix(day),
     labelStart: nextPoolNumber(existing.map((p) => p.label)),
+    taken: playedProblems(existing), // new pools vary the problems of each slot with the old ones
   });
   // The new pools only hold free teams: checked against the free teams alone
   validateDraw(pools, free.map((t) => t.id));
@@ -100,6 +103,8 @@ router.put("/:id/draw-validation", asyncRoute(async (req, res) => {
   const day = await findDayOrThrow(req.params.id);
   const pools = await db.pool.findMany({ where: { centerDayId: day.id }, include: { passages: true } });
 
+  // Reopening the day would let its pools change under the handed-out reports
+  if (!validated) await assertNoAssignedReports({ centerDayId: day.id });
   if (validated) {
     const drafts = pools.filter((p) => p.draft !== null);
     if (drafts.length > 0) {

@@ -74,7 +74,7 @@ export function AdminDashboard() {
       <section>
         <SectionHeading title="Centres" />
         <BrutalCard className="overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="brutal-table">
               <thead>
                 <tr>

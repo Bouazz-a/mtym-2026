@@ -90,7 +90,7 @@ export function PoolCard({
           onDone={() => onEdit?.(false)}
         />
       ) : (
-      <div className="overflow-x-auto">
+      <div className="table-scroll">
         <table className="brutal-table">
           <thead>
             <tr>
@@ -229,7 +229,7 @@ function PoolGridEditor({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="table-scroll">
         <table className="brutal-table">
           <thead>
             <tr>

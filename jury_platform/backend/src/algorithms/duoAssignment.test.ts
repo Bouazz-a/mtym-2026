@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { planDuoAssignment, type AssignPool } from "./duoAssignment";
 
-// A day of `pools` pools of `passages` passages each (pool P1 slot 1 = "P1S1")
+// A day of `pools` pools of `passages` passages each (pool P1 slot 1 =
+// "P1S1"). Problems form a cyclic Latin square, like a real draw: never
+// twice in a pool, each slot's problems as varied as possible.
 const day = (pools: number, passages: number, filled: Record<string, string> = {}): AssignPool[] =>
   Array.from({ length: pools }, (_, p) => ({
     id: `pool${p + 1}`,
@@ -9,12 +11,18 @@ const day = (pools: number, passages: number, filled: Record<string, string> = {
     passages: Array.from({ length: passages }, (_, s) => ({
       id: `P${p + 1}S${s + 1}`,
       slot: s + 1,
+      problemNumber: ((p + s) % 4) + 1,
       duoId: filled[`P${p + 1}S${s + 1}`] ?? null,
       locked: false,
     })),
   }));
 
-const duos = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `duo${i + 1}`, number: i + 1 }));
+// Duos without a problem, or with the given ones
+const duos = (n: number, problems: (number | null)[] = []) =>
+  Array.from({ length: n }, (_, i) => ({ id: `duo${i + 1}`, number: i + 1, problemNumber: problems[i] ?? null }));
+
+const problemOfPassage = (pools: AssignPool[], id: string) =>
+  pools.flatMap((p) => p.passages).find((x) => x.id === id)!.problemNumber;
 
 // duoId per passage id, after applying the plan
 function applied(pools: AssignPool[], plan: ReturnType<typeof planDuoAssignment>) {
@@ -137,5 +145,35 @@ describe("planDuoAssignment", () => {
     // they necessarily see one pool twice — two repeats is the best possible.
     expect(plan.samePool).toBe(2);
     expect(plan.perDuo.map((d) => d.count).sort()).toEqual([3, 4, 4]);
+  });
+
+  it("gives every passage to a specialist of its problem when the day allows it", () => {
+    const pools = day(4, 4); // each slot plays the four problems once
+    const specialists = duos(4, [1, 2, 3, 4]);
+    const plan = planDuoAssignment(pools, specialists, "replace");
+    expect(plan.specialized).toBe(16);
+    expect(plan.samePool).toBe(0);
+    for (const [id, duoId] of applied(pools, plan)) {
+      expect(specialists.find((d) => d.id === duoId)!.problemNumber).toBe(problemOfPassage(pools, id));
+    }
+  });
+
+  it("keeps the loads even before matching problems", () => {
+    // 5 duos for 4 pools: one rests in each slot. Two specialists of
+    // problem 1 can't both judge all of its passages without the others
+    // resting more: the loads stay 4/3/3/3/3.
+    const pools = day(4, 4);
+    const plan = planDuoAssignment(pools, duos(5, [1, 1, 2, 3, 4]), "replace");
+    const counts = plan.perDuo.map((d) => d.count);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+    expect(plan.assigned).toBe(16);
+    expect(plan.specialized).toBeGreaterThanOrEqual(12);
+  });
+
+  it("still uses a duo without a problem", () => {
+    const pools = day(2, 2);
+    const plan = planDuoAssignment(pools, duos(2, [1, null]), "replace");
+    expect(plan.assigned).toBe(4);
+    expect(plan.perDuo.map((d) => d.count)).toEqual([2, 2]);
   });
 });

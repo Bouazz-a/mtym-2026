@@ -9,14 +9,14 @@ import type { AuditEntry, Center, CenterDay, Grade, PoolDetails, Team } from "@/
 import { centerLabel } from "@/utils/labels";
 import { slotTime } from "@/utils/schedule";
 import { buildPoolSheets } from "./poolsExport";
-import { passageResults, percent, teamResults, type NoteSet } from "./results";
+import { passageResults, percent, teamResults, writtenReportNotes, type NoteSet } from "./results";
 
 // exportService — the grades workbook (admin). Every sheet carries readable
 // keys (center, day, pool and passage labels, quadrigrams, juror names) so
 // sheets can be joined without ids.
-//   Passages       one row per passage: duo, the three oral notes, the report note
-//   Équipes        one row per team: its notes as defender/opponent/reporter + report
-//                  (raw and in %) and its final grade
+//   Passages       one row per passage: duo, the three oral notes, the report note (/20)
+//   Équipes        one row per team: its notes as defender/opponent/reporter + written
+//                  reports (raw — reports out of 20 — and in %) and its final grade
 //   Notes orales   one row per juror × team × criterion
 //   Notes rapports one row per juror × report × criterion
 // and the journal of admin changes (exportJournalXlsx).
@@ -64,8 +64,10 @@ export async function exportGradesXlsx(): Promise<void> {
     notes_saisies: `${done}/${expected}`,
   })));
 
-  append(wb, "Équipes", teamResults(results, weights).map(({ teamId, pool, notes, final }) => {
+  const written = writtenReportNotes(teams, criteria, report, weights.problemWeights);
+  append(wb, "Équipes", teamResults(results, weights, written).map(({ teamId, pool, notes, final }) => {
     const defended = results.find((x) => x.passage.defenderTeamId === teamId);
+    const w = written.get(teamId);
     return {
       ...where(pool),
       equipe: quad(teamId),
@@ -77,8 +79,10 @@ export async function exportGradesXlsx(): Promise<void> {
       note_rapporteur: avg(notes.reporter),
       rapporteur_pct: pct(notes.reporter),
       probleme_defendu: defended?.passage.problemNumber ?? "",
-      note_rapport_ecrit: avg(notes.report),
+      note_rapport_ecrit: avg(notes.report), // out of 20
       rapport_ecrit_pct: pct(notes.report),
+      rapports_notes: w ? `${w.graded}/${w.submitted}` : "",
+      rapports_non_deposes: w ? w.missing.map((p) => `P${p}`).join(" ") : "",
       note_finale_pct: final === null ? "" : round2(final),
     };
   }));

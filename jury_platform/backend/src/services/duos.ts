@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "../db";
+import { ConflictError } from "../utils/errors";
+import { dayName } from "./audit";
 import type { ScheduleSlot } from "./schedule";
 
 // A duo = two jurors who judge together for a whole day. Each passage of
@@ -17,6 +19,45 @@ type DuoRow = Prisma.JuryDuoGetPayload<{ include: typeof duoInclude }>;
 // Flattens the DuoMember join rows into a plain `members: Juror[]`.
 export function toDuoResponse({ members, ...duo }: DuoRow) {
   return { ...duo, members: members.map((m) => m.account) };
+}
+
+// A juror has at most one specialty: the problem of their duos, all days
+// and centers together. A duo therefore only forms between jurors of the
+// same specialty (or without one yet), and takes that problem.
+//
+// Returns the problem the duo must have: `wanted` when given, otherwise
+// the jurors' specialty (null if they have none). Throws when the jurors'
+// specialties differ, or differ from `wanted`. `exceptDuoId`: the duo being
+// edited, left out of the jurors' specialties.
+export async function duoProblemFor(
+  accountIds: string[],
+  wanted: number | null | undefined,
+  exceptDuoId?: string,
+): Promise<number | null> {
+  const seats = await db.duoMember.findMany({
+    where: {
+      accountId: { in: accountIds },
+      duo: { problemNumber: { not: null }, ...(exceptDuoId ? { id: { not: exceptDuoId } } : {}) },
+    },
+    include: { account: true, duo: { include: { centerDay: true } } },
+    orderBy: { duo: { centerDay: { date: "asc" } } },
+  });
+  // Each specialty found, with who has it and where it comes from
+  const specialties = new Map<number, string>();
+  for (const { account, duo } of seats) {
+    const p = duo.problemNumber!;
+    if (!specialties.has(p)) {
+      specialties.set(p, `${account.firstName} ${account.lastName} est spécialiste du P${p} (Duo ${duo.number}, ${dayName(duo.centerDay)})`);
+    }
+  }
+  if (specialties.size > 1) {
+    throw new ConflictError(`Un juré n'a qu'une spécialité, et un duo réunit deux jurés de la même : ${[...specialties.values()].join(" ; ")}`);
+  }
+  const [specialty] = [...specialties.keys()];
+  if (wanted != null && specialty !== undefined && wanted !== specialty) {
+    throw new ConflictError(`${specialties.get(specialty)} : ce duo ne peut pas prendre le P${wanted}`);
+  }
+  return wanted === undefined ? specialty ?? null : wanted;
 }
 
 // Passages where the juror sits in the judging duo.
@@ -51,16 +92,25 @@ export async function isPassageGraded(passageId: string): Promise<boolean> {
   return (await gradedPassageIds([passageId])).has(passageId);
 }
 
-// A duo is frozen once one of its members has graded one of its passages.
+// A duo is frozen once one of its members has graded one of its passages:
+// an oral, or the defender's report for the passage's problem (a report of
+// another problem, handed to the juror separately, doesn't count).
 export async function isDuoGraded(duoId: string): Promise<boolean> {
+  const duo = await db.juryDuo.findUnique({
+    where: { id: duoId },
+    include: { passages: { select: { defenderTeamId: true, problemNumber: true } }, members: { select: { accountId: true } } },
+  });
+  if (!duo) return false;
   const [oral, report] = await Promise.all([
     db.oralEvaluation.count({ where: { passage: { duoId } } }),
-    db.reportEvaluation.count({
-      where: {
-        team: { defended: { some: { duoId } } },
-        jury: { duoSeats: { some: { duoId } } },
-      },
-    }),
+    duo.passages.length === 0
+      ? 0
+      : db.reportEvaluation.count({
+        where: {
+          juryId: { in: duo.members.map((m) => m.accountId) },
+          OR: duo.passages.map((p) => ({ teamId: p.defenderTeamId, problemNumber: p.problemNumber })),
+        },
+      }),
   ]);
   return oral + report > 0;
 }

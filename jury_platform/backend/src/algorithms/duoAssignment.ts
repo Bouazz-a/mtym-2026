@@ -8,12 +8,16 @@
 //   2. a duo should judge at most one passage per pool (the "Doublon"
 //      warning of the timetable), so teams meet different jurors;
 //   3. the passages are spread evenly between duos;
-//   4. with too few duos, passages are left without one rather than
+//   4. between equally loaded duos, a passage goes to a duo whose problem
+//      it plays (its specialists) — the pool draw varies the problems of
+//      each slot so there usually is one;
+//   5. with too few duos, passages are left without one rather than
 //      breaking rule 1.
 //
-// Rules 2 and 3 are costs, not walls: with more pools than duos, someone
+// Rules 2 to 4 are costs, not walls: with more pools than duos, someone
 // has to judge a pool twice, and the result is still better than nothing
-// (the timetable keeps flagging what's worth a look).
+// (the timetable keeps flagging what's worth a look). A pool never plays a
+// problem twice, so rule 4 never pushes a duo into the same pool twice.
 //
 // Pure computation: POST /api/duos/auto-assign (routes/duos.ts) feeds it
 // the day and applies the plan.
@@ -23,6 +27,7 @@ import { minCostAssignment } from "./hungarian";
 export interface AssignPassage {
   id: string;
   slot: number;
+  problemNumber: number;
   duoId: string | null;
   /** Already graded: the server refuses to move it, so it stays put */
   locked: boolean;
@@ -37,6 +42,7 @@ export interface AssignPool {
 export interface AssignDuo {
   id: string;
   number: number;
+  problemNumber: number | null; // its specialty
 }
 
 export type AssignMode = "fill" | "replace";
@@ -52,12 +58,14 @@ export interface AssignmentPlan {
   assigned: number; // passages that end up with a duo
   withoutDuo: number; // passages left without one (not enough duos)
   samePool: number; // duos judging a pool twice (rule 2 given up)
+  specialized: number; // passages judged by a duo of their problem (rule 4)
   perDuo: { duoId: string; count: number }[];
 }
 
 const NOT_ASSIGNED = 1e9; // leaving a passage without a duo: last resort
 const SAME_POOL = 1e6; // a duo judging the same pool twice
 const LOAD = 1e3; // one more passage for that duo
+const OFF_PROBLEM = 100; // a duo that isn't a specialist of the passage's problem
 
 export function planDuoAssignment(
   pools: AssignPool[],
@@ -108,13 +116,14 @@ export function planDuoAssignment(
     // One column per candidate duo, plus one "no duo" column per passage so
     // a matching always exists.
     const columns = free.length + candidates.length;
-    const cost = free.map(({ poolId }) =>
+    const cost = free.map(({ passage, poolId }) =>
       Array.from({ length: columns }, (_, col) => {
         const duo = candidates[col];
         if (!duo) return NOT_ASSIGNED;
         return (
           (poolsOfDuo.get(duo.id)!.has(poolId) ? SAME_POOL : 0) +
           LOAD * load.get(duo.id)! +
+          (duo.problemNumber === passage.problemNumber ? 0 : OFF_PROBLEM) +
           duo.number // tiebreak: the lowest-numbered duo goes first
         );
       }),
@@ -136,7 +145,9 @@ export function planDuoAssignment(
   let withoutDuo = 0;
   const changes: Assignment[] = [];
   const seenPools = new Map<string, Set<string>>();
+  const problemOf = new Map(sortedDuos.map((d) => [d.id, d.problemNumber]));
   let samePool = 0;
+  let specialized = 0;
   for (const pool of byLabel) {
     for (const passage of pool.passages) {
       const duoId = chosen.get(passage.id) ?? null;
@@ -146,6 +157,7 @@ export function planDuoAssignment(
         if (pools.has(pool.id)) samePool++;
         pools.add(pool.id);
         seenPools.set(duoId, pools);
+        if (problemOf.get(duoId) === passage.problemNumber) specialized++;
       } else {
         withoutDuo++;
       }
@@ -158,6 +170,7 @@ export function planDuoAssignment(
     assigned,
     withoutDuo,
     samePool,
+    specialized,
     perDuo: sortedDuos.map((d) => ({ duoId: d.id, count: load.get(d.id) ?? 0 })),
   };
 }

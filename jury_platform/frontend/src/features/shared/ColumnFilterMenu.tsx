@@ -4,8 +4,11 @@ import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, FunnelIcon } from "./icons
 import { Badge, Btn, Input, Popover } from "./primitives";
 
 // The dropdown of a table header, like a spreadsheet's filter button: sort
-// the column, keep a numeric range, tick the values to show. Changes apply
-// as they're made.
+// the column, keep a numeric range, tick the values to show — with a search
+// box when there are many (team names…). Changes apply as they're made.
+
+// From this many values on, the checklist gets a search box
+const SEARCH_FROM = 9;
 
 // The menu renders inside a <th>: undo the header's typography
 const MENU_TEXT: CSSProperties = {
@@ -64,20 +67,42 @@ export function ColumnFilterMenu({
   sortKind?: keyof typeof SORT_LABELS;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const anchor = useRef<HTMLButtonElement>(null);
   const filtered = isFilterActive(filter);
   const hidden = new Set(filter.hidden);
-  const shown = values.filter((v) => !hidden.has(v)).length;
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+  };
+
+  // The checklist shows the values matching the search, if any
+  const q = query.trim().toLowerCase();
+  const listed = q ? values.filter((v) => (v === "" ? emptyLabel : v).toLowerCase().includes(q)) : values;
+  const listedShown = listed.filter((v) => !hidden.has(v)).length;
 
   const toggle = (value: string) =>
     onFilter({ ...filter, hidden: hidden.has(value) ? filter.hidden.filter((v) => v !== value) : [...filter.hidden, value] });
+  // "(Tout sélectionner)" ticks or unticks the values listed
+  const toggleListed = () => {
+    const inList = new Set(listed);
+    onFilter({
+      ...filter,
+      hidden: listedShown === listed.length ? [...new Set([...filter.hidden, ...listed])] : filter.hidden.filter((v) => !inList.has(v)),
+    });
+  };
+  // Like a spreadsheet's search: show only what matches
+  const keepListed = () => {
+    const inList = new Set(listed);
+    onFilter({ ...filter, hidden: values.filter((v) => !inList.has(v)) });
+  };
 
   return (
     <>
       <button
         ref={anchor}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? close() : setOpen(true))}
         aria-label={`Filtrer et trier : ${label}`}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -88,7 +113,7 @@ export function ColumnFilterMenu({
         {filtered ? <FunnelIcon size="0.8rem" /> : sort === "asc" ? <ArrowUpIcon size="0.8rem" /> : sort ? <ArrowDownIcon size="0.8rem" /> : <ChevronDownIcon size="0.8rem" />}
       </button>
 
-      <Popover open={open} onClose={() => setOpen(false)} anchorRef={anchor} width={17} align={align}>
+      <Popover open={open} onClose={close} anchorRef={anchor} width={17} align={align}>
         <div className="py-2 font-open" style={MENU_TEXT}>
           <MenuItem active={sort === "asc"} onClick={() => onSort(sort === "asc" ? null : "asc")}>
             <ArrowUpIcon size="0.8rem" /> {SORT_LABELS[sortKind][0]}
@@ -126,15 +151,32 @@ export function ColumnFilterMenu({
 
           <div className="px-3 pt-3 pb-1" style={{ borderTop: range ? undefined : "1px solid var(--border)", marginTop: range ? 0 : 6 }}>
             <SubLabel>Valeurs</SubLabel>
+            {values.length >= SEARCH_FROM && (
+              <div className="mb-2">
+                <Input
+                  type="search"
+                  placeholder="Rechercher…"
+                  aria-label={`${label} : rechercher`}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && q && listed.length > 0) keepListed(); }}
+                />
+                {q && (
+                  <Btn variant="ghost" size="sm" className="mt-1.5 w-full justify-center" disabled={listed.length === 0} onClick={keepListed}>
+                    {listed.length === 0 ? "Aucun résultat" : `Ne garder que ${listed.length > 1 ? `ces ${listed.length}` : "celui-ci"}`}
+                  </Btn>
+                )}
+              </div>
+            )}
             <div style={{ maxHeight: "12rem", overflowY: "auto", border: "1px solid var(--border)" }}>
               <CheckRow
-                checked={shown === values.length}
-                indeterminate={shown > 0 && shown < values.length}
-                onChange={() => onFilter({ ...filter, hidden: shown === values.length ? [...values] : [] })}
+                checked={listed.length > 0 && listedShown === listed.length}
+                indeterminate={listedShown > 0 && listedShown < listed.length}
+                onChange={toggleListed}
               >
                 (Tout sélectionner)
               </CheckRow>
-              {values.map((v) => (
+              {listed.map((v) => (
                 <CheckRow key={v} checked={!hidden.has(v)} onChange={() => toggle(v)}>
                   {v === "" ? emptyLabel : v}
                 </CheckRow>
@@ -146,7 +188,7 @@ export function ColumnFilterMenu({
             <Btn variant="ghost" size="sm" disabled={!filtered && !sort} onClick={() => { onFilter(NO_FILTER); onSort(null); }}>
               Effacer
             </Btn>
-            <Btn size="sm" onClick={() => setOpen(false)}>OK</Btn>
+            <Btn size="sm" onClick={close}>OK</Btn>
           </div>
         </div>
       </Popover>

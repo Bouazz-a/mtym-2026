@@ -227,7 +227,7 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
       />
       {error && <div className="mb-4"><Alert>{error}</Alert></div>}
       <BrutalCard className="overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           <table className="brutal-table">
             <thead>
               <tr>

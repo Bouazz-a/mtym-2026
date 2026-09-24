@@ -90,15 +90,15 @@ router.post("/:id/reset-password", asyncRoute(async (req, res) => {
   res.json({ password });
 }));
 
-// DELETE /api/accounts/:id — refused (409) while the account has evaluations
-// or sits in a duo
+// DELETE /api/accounts/:id — refused (409) while the account has evaluations,
+// sits in a duo or has reports to correct
 router.delete("/:id", asyncRoute(async (req, res) => {
   if (req.params.id === req.user!.id) {
     throw new BadRequestError("Vous ne pouvez pas supprimer votre propre compte");
   }
   const account = await db.account.findUnique({
     where: { id: req.params.id },
-    include: { _count: { select: { reportEvaluations: true, oralEvaluations: true, duoSeats: true } } },
+    include: { _count: { select: { reportEvaluations: true, oralEvaluations: true, duoSeats: true, reportAssignments: true } } },
   });
   if (!account) throw new NotFoundError("Account not found");
   if (account._count.reportEvaluations + account._count.oralEvaluations > 0) {
@@ -106,6 +106,9 @@ router.delete("/:id", asyncRoute(async (req, res) => {
   }
   if (account._count.duoSeats > 0) {
     throw new ConflictError("Ce juré fait partie d'un duo — retirez-le d'abord de son duo");
+  }
+  if (account._count.reportAssignments > 0) {
+    throw new ConflictError("Ce juré a des rapports à corriger — retirez-les d'abord dans Affectation des rapports");
   }
   await db.$transaction(async (tx) => {
     await tx.account.delete({ where: { id: account.id } });

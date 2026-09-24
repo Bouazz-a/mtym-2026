@@ -6,8 +6,11 @@ import { adminOnly, authenticate } from "../middleware/auth";
 import { audit, dayName } from "../services/audit";
 import { firstFreeLabel, poolLabelPrefix } from "../services/centers";
 import { passagesJudgedBy, gradedPassageIds } from "../services/duos";
-import { clearDrawValidation, findPools, poolInclude, teamsInPools, toPoolResponse } from "../services/pools";
+import { pickProblems, QUALIFS_PROBLEMS, slotLoad } from "../algorithms/poolDraw";
+import { clearDrawValidation, findPools, playedProblems, poolInclude, teamsInPools, toPoolResponse } from "../services/pools";
 import { emptyGrid, isComplete, toDrawPool, validateGrid, type PoolGrid } from "../services/poolGrid";
+import { teamsOf } from "../services/passages";
+import { assertNoAssignedReports } from "../services/reportPool";
 import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
@@ -56,9 +59,10 @@ async function findPoolOrThrow(id: string) {
 }
 
 async function assertNotGraded(poolId: string, action: string) {
-  const passages = await db.passage.findMany({ where: { poolId }, select: { id: true } });
+  const passages = await db.passage.findMany({ where: { poolId } });
   const graded = await gradedPassageIds(passages.map((p) => p.id));
   if (graded.size > 0) throw new ConflictError(`Des notes existent déjà pour cette poule — elle ne peut plus ${action}`);
+  await assertNoAssignedReports({ teamIds: [...new Set(passages.flatMap(teamsOf))] });
 }
 
 // POST /api/pools — { centerDayId, size } -> an empty pool to fill in, in the
@@ -72,11 +76,13 @@ router.post("/", ...adminOnly, asyncRoute(async (req, res) => {
   const day = await db.centerDay.findUnique({ where: { id: centerDayId } });
   if (!day) throw new NotFoundError("Center day not found");
 
-  const used = new Set((await db.pool.findMany({ where: { centerDayId }, select: { label: true } })).map((p) => p.label));
-  const label = firstFreeLabel(await poolLabelPrefix(day), used);
+  const existing = await db.pool.findMany({ where: { centerDayId }, include: { passages: true } });
+  const label = firstFreeLabel(await poolLabelPrefix(day), new Set(existing.map((p) => p.label)));
+  // Default problems that vary each slot's problems with the day's other pools
+  const problems = pickProblems(size, QUALIFS_PROBLEMS, slotLoad(playedProblems(existing)));
   const pool = await db.$transaction(async (tx) => {
     const created = await tx.pool.create({
-      data: { label, centerDayId: day.id, draft: emptyGrid(size) as unknown as Prisma.InputJsonValue },
+      data: { label, centerDayId: day.id, draft: emptyGrid(size, problems) as unknown as Prisma.InputJsonValue },
       include: poolInclude,
     });
     await audit(tx, req.user!, {

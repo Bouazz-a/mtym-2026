@@ -38,6 +38,7 @@ export interface JuryDuo {
   id: string;
   centerDayId: string;
   number: number; // "Duo 1", "Duo 2"… within the day
+  problemNumber: number | null; // its jurors specialize in it (report assignment)
   members: Juror[];
 }
 
@@ -164,7 +165,8 @@ export interface OralEvaluation {
   grades: Grade[];
 }
 
-// One per juror × team × defended problem (the defender's report)
+// One per juror × team × problem: the defender's report (graded by the
+// passage's duo), or a report handed to the juror (Affectation des rapports)
 export interface ReportEvaluation {
   id: string;
   juryId: string;
@@ -180,6 +182,34 @@ export interface FinalWeights {
   opponent: number;
   reporter: number;
   report: number;
+  // The written-report note is the weighted average of the team's reports
+  // (each out of 20): each problem's weight in %, keyed "1".."4", adding up to 100
+  problemWeights: Record<string, number>;
+}
+
+// ================== Report assignment ==================
+
+// A report of a problem its team doesn't defend, handed to one juror to
+// correct (the defended one is graded by the duo of its passage)
+export interface AssignableReport {
+  id: string; // the TeamReport
+  teamId: string;
+  problemNumber: number;
+  accountId: string | null; // the juror correcting it
+  graded: boolean; // that juror has saved a grade: it can't move any more
+}
+
+export interface ReportAssignmentBoard {
+  reports: AssignableReport[];
+  pendingDays: { id: string; center: Center; date: string }[]; // draw not validated: teams wait
+  jurors: { id: string; problems: number[] }[]; // every juror's specialties (their duos' problems)
+}
+
+// "Mes rapports": a report handed to the juror
+export interface MyReport {
+  reportId: string;
+  teamId: string;
+  problemNumber: number;
 }
 
 // ================== Journal ==================

@@ -109,7 +109,7 @@ function DayTable({
         )}
       />
       <BrutalCard className="overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           <table className="brutal-table brutal-table--manual-stripes">
             <thead>
               <tr>

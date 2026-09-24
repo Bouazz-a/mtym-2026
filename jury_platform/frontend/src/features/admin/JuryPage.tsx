@@ -9,6 +9,7 @@ import { getDuos } from "@/lib/repositories/duoRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import type { Center } from "@/types";
+import { jurorSpecialties } from "@/utils/duos";
 import { CENTERS, formatDay } from "@/utils/labels";
 import { DayJury } from "./DuoAssignment";
 
@@ -39,6 +40,10 @@ export function JuryPage() {
   const passages = pools.flatMap((p) => p.passages);
   const withDuo = passages.filter((p) => p.duo).length;
   const inDuo = new Set(duos.flatMap((d) => d.members.map((m) => m.id)));
+  // Jurors holding several specialties (duos formed before the one-specialty rule)
+  const multiSpecialty = jurors
+    .map((juror) => ({ juror, problems: jurorSpecialties(duos, juror.id) }))
+    .filter((j) => j.problems.length > 1);
 
   const centers = CENTERS.filter((c) => days.some((d) => d.center === c.value));
   const center = centers.find((c) => c.value === params.get("centre"))?.value ?? centers[0]?.value;
@@ -58,7 +63,7 @@ export function JuryPage() {
       <PageHeader
         eyebrow="Administration"
         title="Jury"
-        sub="Choisissez un jour, formez ses duos, puis cliquez sur un passage du planning pour lui donner un duo."
+        sub="Choisissez un jour, formez ses duos (deux jurés de la même spécialité) et donnez à chacun son problème, puis cliquez sur un passage du planning pour lui donner un duo."
       />
 
       <Stagger className="grid grid-cols-2 lg:grid-cols-4 gap-6">
@@ -72,6 +77,15 @@ export function JuryPage() {
           highlight={passages.length > 0 && withDuo === passages.length}
         />
       </Stagger>
+
+      {multiSpecialty.length > 0 && (
+        <Alert tone="warning" title="Plusieurs spécialités">
+          Un juré n'a qu'une spécialité, mais{" "}
+          {multiSpecialty.map(({ juror, problems }) => `${juror.firstName} ${juror.lastName} (P${problems.join(" et P")})`).join(", ")}{" "}
+          en {multiSpecialty.length > 1 ? "ont" : "a"} plusieurs, venant de duos formés avant cette règle. Choisissez « Problème ? » sur les
+          duos en trop, puis redonnez-leur le bon problème.
+        </Alert>
+      )}
 
       {jurors.length === 0 && (
         <Alert tone="warning" title="Aucun juré">
@@ -101,6 +115,7 @@ export function JuryPage() {
             day={day}
             dayIndex={dayIndex}
             duos={duos.filter((d) => d.centerDayId === day.id).sort((a, b) => a.number - b.number)}
+            allDuos={duos}
             pools={pools.filter((p) => p.centerDayId === day.id)}
             jurors={jurors}
             teamById={teamById}

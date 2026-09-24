@@ -1,17 +1,17 @@
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageLoading } from "@/features/shared/primitives";
 import { ReportPanel, ReportViewer } from "@/features/shared/ReportViewer";
 import { useMediaQuery } from "@/features/shared/useMediaQuery";
 import { getReportEvaluations, saveReportEvaluation } from "@/lib/repositories/evaluationRepository";
 import { reportCriteria } from "@/lib/services/gradingService";
+import type { Criterion, ReportEvaluation, Team } from "@/types";
 import { GradingCard } from "./GradingCard";
 import { TeamHeader } from "./TeamHeader";
 import type { PassageData } from "./passageContext";
 
 // Written-report tab of a passage: the defender's report for the problem it
-// defends. Wide enough, the PDF sits next to the grid and follows the page
-// as it scrolls, so reading and grading happen side by side; otherwise a
-// button opens it in a modal.
+// defends.
 
 // In practice, the report is a bundled sample PDF.
 const SAMPLE_REPORT = "/rapport-exemple.pdf";
@@ -25,12 +25,46 @@ export function ReportGrading({ passage, teamById, criteria, refresh, practice =
     queryFn: () => getReportEvaluations(passage.defenderTeamId),
     enabled: !practice,
   });
-  const sideBySide = useMediaQuery(SIDE_BY_SIDE);
   if (reportQ.isLoading) return <PageLoading />;
 
   const defender = teamById.get(passage.defenderTeamId);
-  const report = defender?.reports.find((r) => r.problemNumber === passage.problemNumber);
-  const title = `${defender?.quadrigram ?? ""} · Rapport du problème ${passage.problemNumber}`;
+  return (
+    <ReportWorkspace
+      team={defender}
+      problemNumber={passage.problemNumber}
+      criteria={criteria}
+      header={<TeamHeader role="defender" team={defender} />}
+      saved={(reportQ.data ?? []).find((e) => e.problemNumber === passage.problemNumber)}
+      practice={practice}
+      onSaved={refresh}
+    />
+  );
+}
+
+// A report and its grading grid. Wide enough, the PDF sits next to the
+// grid and follows the page as it scrolls, so reading and grading happen
+// side by side; otherwise a button opens it in a modal. Shared by the
+// passage's Rapport écrit tab and "Mes rapports".
+export function ReportWorkspace({
+  team,
+  problemNumber,
+  criteria,
+  header,
+  saved,
+  practice = false,
+  onSaved,
+}: {
+  team: Team | undefined;
+  problemNumber: number;
+  criteria: Criterion[];
+  header: ReactNode;
+  saved: ReportEvaluation | undefined; // the juror's own evaluation, if any
+  practice?: boolean; // the guide's practice passage: a sample PDF, nothing sent
+  onSaved: () => Promise<unknown>; // refetch evaluations after a save
+}) {
+  const sideBySide = useMediaQuery(SIDE_BY_SIDE);
+  const report = team?.reports.find((r) => r.problemNumber === problemNumber);
+  const title = `${team?.quadrigram ?? ""} · Rapport du problème ${problemNumber}`;
   const beside = sideBySide && report;
 
   return (
@@ -38,16 +72,17 @@ export function ReportGrading({ passage, teamById, criteria, refresh, practice =
       style={beside ? { gridTemplateColumns: "minmax(0, 34rem) minmax(0, 1fr)" } : undefined}
     >
       <GradingCard
-        header={<TeamHeader role="defender" team={defender} />}
-        criteria={reportCriteria(criteria, passage.problemNumber)}
-        saved={(reportQ.data ?? []).find((e) => e.problemNumber === passage.problemNumber)}
+        header={header}
+        criteria={reportCriteria(criteria, problemNumber)}
+        saved={saved}
+        outOf={20}
         disabled={!report}
         disabledHint="Aucun rapport déposé pour ce problème : rien à noter pour l'instant."
         practice={practice}
         onSave={async (input) => {
-          if (practice) return;
-          await saveReportEvaluation({ teamId: passage.defenderTeamId, problemNumber: passage.problemNumber, ...input });
-          await refresh();
+          if (practice || !team) return;
+          await saveReportEvaluation({ teamId: team.id, problemNumber, ...input });
+          await onSaved();
         }}
       >
         {report && !beside && (

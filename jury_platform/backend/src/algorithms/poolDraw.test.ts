@@ -55,6 +55,36 @@ describe("generateQualifsDay", () => {
     expect(leftover).toHaveLength(1);
   });
 
+  // Per slot, how many passages play each problem
+  const perSlot = (passages: { slot: number; problemNumber: number }[]) => {
+    const counts = new Map<number, number[]>();
+    for (const p of passages) {
+      const row = counts.get(p.slot) ?? QUALIFS_PROBLEMS.map(() => 0);
+      row[QUALIFS_PROBLEMS.indexOf(p.problemNumber)]++;
+      counts.set(p.slot, row);
+    }
+    return counts;
+  };
+
+  it.each([7, 13, 16, 30, 32, 44, 45, 61])("spreads the problems of each slot across %i teams", (n) => {
+    for (let run = 0; run < 20; run++) {
+      const { pools } = generateQualifsDay({ teams: teams(n), labelPrefix: "" });
+      for (const [slot, row] of perSlot(pools.flatMap((p) => p.passages))) {
+        // as even as the slot's passages allow: at most one apart
+        expect(Math.max(...row) - Math.min(...row), `slot ${slot}: ${row}`).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("balances the pools it adds against the day's existing passages", () => {
+    // Existing: two pools that both play problem 1 in slot 1, problem 2 in slot 2…
+    const taken = [1, 2, 3, 4].flatMap((slot) => [{ slot, problemNumber: slot }, { slot, problemNumber: slot }]);
+    const { pools } = generateQualifsDay({ teams: teams(8), labelPrefix: "", taken });
+    for (const p of pools.flatMap((x) => x.passages)) {
+      expect(p.problemNumber).not.toBe(p.slot); // problem s is already twice in slot s
+    }
+  });
+
   it.each([0, 1, 2])("draws nothing from %i teams", (n) => {
     const { pools, leftover } = generateQualifsDay({ teams: teams(n), labelPrefix: "" });
     expect(pools).toHaveLength(0);

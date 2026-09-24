@@ -41,6 +41,15 @@ const PracticePage = lazy(() =>
 const PassagePage = lazy(() =>
   import("@/features/jury/PassagePage").then((m) => ({ default: m.PassagePage })),
 );
+const ReportAssignmentPage = lazy(() =>
+  import("@/features/admin/ReportAssignmentPage").then((m) => ({ default: m.ReportAssignmentPage })),
+);
+const MyReportsPage = lazy(() =>
+  import("@/features/jury/MyReportsPage").then((m) => ({ default: m.MyReportsPage })),
+);
+const AssignedReportPage = lazy(() =>
+  import("@/features/jury/AssignedReportPage").then((m) => ({ default: m.AssignedReportPage })),
+);
 export default function App() {
   return (
     <SessionProvider>
@@ -53,6 +62,7 @@ export default function App() {
                 <Route element={<RoleGuard allow={["admin"]} />}>
                   <Route path="tournoi" element={<TournamentPage />} />
                   <Route path="jury" element={<JuryPage />} />
+                  <Route path="rapports" element={<ReportAssignmentPage />} />
                   <Route path="criteres" element={<CriteriaPage />} />
                   <Route path="notes" element={<EvaluationsPage />} />
                   <Route path="resultats" element={<ResultsPage />} />
@@ -62,6 +72,8 @@ export default function App() {
                 <Route element={<RoleGuard allow={["jury"]} />}>
                   <Route path="passages/:passageId" element={<PassagePage />} />
                   <Route path="entrainement" element={<PracticePage />} />
+                  <Route path="mes-rapports" element={<MyReportsPage />} />
+                  <Route path="mes-rapports/:reportId" element={<AssignedReportPage />} />
                 </Route>
                 <Route path="*" element={<NotFoundPage />} />
               </Route>
