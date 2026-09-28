@@ -48,6 +48,9 @@ model Account {
   lastName     String
   phone        String?
   role         Role
+  // Judges (duos, grading, reports to correct): always for a jury account,
+  // on request for an admin — who then has both spaces with one account
+  isJuror      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   duoSeats          DuoMember[]

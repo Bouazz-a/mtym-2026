@@ -16,7 +16,24 @@ const AccountSchema = z.object({
   lastName: z.string().trim().min(1),
   phone: z.string().trim().optional(),
   role: z.enum(["admin", "jury"]),
+  isJuror: z.boolean().optional(), // an admin who also judges; a jury account always does
 });
+
+// A juror sitting in a duo or with reports to correct can't stop judging
+// (lose its juror status, or be deleted) before being taken out of them
+async function judgingBlocker(accountId: string): Promise<string | null> {
+  const account = await db.account.findUnique({
+    where: { id: accountId },
+    select: { _count: { select: { duoSeats: true, reportAssignments: true } } },
+  });
+  if (account && account._count.duoSeats > 0) return "Ce juré fait partie d'un duo — retirez-le d'abord de son duo";
+  if (account && account._count.reportAssignments > 0) {
+    return "Ce juré a des rapports à corriger — retirez-les d'abord dans Affectation des rapports";
+  }
+  return null;
+}
+
+const showValue = (v: string | boolean | null) => (typeof v === "boolean" ? (v ? "oui" : "non") : v);
 
 // GET /api/accounts?role=jury
 router.get("/", asyncRoute(async (req, res) => {
@@ -32,14 +49,16 @@ router.get("/", asyncRoute(async (req, res) => {
 // only ever returned here (and by reset-password) — it isn't stored.
 router.post("/", asyncRoute(async (req, res) => {
   const data = AccountSchema.parse(req.body);
+  const isJuror = data.role === "jury" || (data.isJuror ?? false);
   const password = generatePassword();
   const passwordHash = await hashPassword(password);
   const account = await db.$transaction(async (tx) => {
-    const created = await tx.account.create({ data: { ...data, passwordHash }, select: publicAccountSelect });
+    const created = await tx.account.create({ data: { ...data, isJuror, passwordHash }, select: publicAccountSelect });
+    const kind = created.role === "admin" && created.isJuror ? "admin (aussi juré)" : created.role;
     await audit(tx, req.user!, {
       category: "Comptes",
       action: "account.create",
-      summary: `Compte ${created.role} créé : ${created.firstName} ${created.lastName} (${created.email})`,
+      summary: `Compte ${kind} créé : ${created.firstName} ${created.lastName} (${created.email})`,
     });
     return created;
   });
@@ -54,9 +73,15 @@ router.put("/:id", asyncRoute(async (req, res) => {
   }
   const before = await db.account.findUnique({ where: { id: req.params.id }, select: publicAccountSelect });
   if (!before) throw new NotFoundError("Account not found");
+  // A jury account always judges; an admin keeps its status unless told
+  const isJuror = (data.role ?? before.role) === "jury" || (data.isJuror ?? before.isJuror);
+  if (before.isJuror && !isJuror) {
+    const blocker = await judgingBlocker(before.id);
+    if (blocker) throw new ConflictError(blocker);
+  }
   const updated = await db.$transaction(async (tx) => {
-    const after = await tx.account.update({ where: { id: before.id }, data, select: publicAccountSelect });
-    const fields = { firstName: "prénom", lastName: "nom", email: "email", phone: "téléphone", role: "rôle" } as const;
+    const after = await tx.account.update({ where: { id: before.id }, data: { ...data, isJuror }, select: publicAccountSelect });
+    const fields = { firstName: "prénom", lastName: "nom", email: "email", phone: "téléphone", role: "rôle", isJuror: "juré" } as const;
     const changed = (Object.keys(fields) as (keyof typeof fields)[]).filter((k) => (before[k] ?? null) !== (after[k] ?? null));
     if (changed.length) {
       await audit(tx, req.user!, {
@@ -64,8 +89,8 @@ router.put("/:id", asyncRoute(async (req, res) => {
         action: "account.update",
         summary: `Compte de ${after.firstName} ${after.lastName} modifié : ${changed.map((k) => fields[k]).join(", ")}`,
         details: {
-          before: Object.fromEntries(changed.map((k) => [fields[k], before[k]])),
-          after: Object.fromEntries(changed.map((k) => [fields[k], after[k]])),
+          before: Object.fromEntries(changed.map((k) => [fields[k], showValue(before[k])])),
+          after: Object.fromEntries(changed.map((k) => [fields[k], showValue(after[k])])),
         },
       });
     }
@@ -98,18 +123,14 @@ router.delete("/:id", asyncRoute(async (req, res) => {
   }
   const account = await db.account.findUnique({
     where: { id: req.params.id },
-    include: { _count: { select: { reportEvaluations: true, oralEvaluations: true, duoSeats: true, reportAssignments: true } } },
+    include: { _count: { select: { reportEvaluations: true, oralEvaluations: true } } },
   });
   if (!account) throw new NotFoundError("Account not found");
   if (account._count.reportEvaluations + account._count.oralEvaluations > 0) {
     throw new ConflictError("Ce juré a déjà saisi des notes — son compte ne peut pas être supprimé");
   }
-  if (account._count.duoSeats > 0) {
-    throw new ConflictError("Ce juré fait partie d'un duo — retirez-le d'abord de son duo");
-  }
-  if (account._count.reportAssignments > 0) {
-    throw new ConflictError("Ce juré a des rapports à corriger — retirez-les d'abord dans Affectation des rapports");
-  }
+  const blocker = await judgingBlocker(account.id);
+  if (blocker) throw new ConflictError(blocker);
   await db.$transaction(async (tx) => {
     await tx.account.delete({ where: { id: account.id } });
     await audit(tx, req.user!, {

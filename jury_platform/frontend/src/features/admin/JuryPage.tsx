@@ -39,7 +39,7 @@ export function JuryPage() {
   const duos = duosQ.data ?? [];
   const days = daysQ.data ?? []; // by center, then date
   const jurors = (accountsQ.data ?? [])
-    .filter((a) => a.role === "jury")
+    .filter((a) => a.isJuror) // jury accounts and admins who also judge
     .sort((a, b) => a.lastName.localeCompare(b.lastName));
   const passages = pools.flatMap((p) => p.passages);
   const withDuo = passages.filter((p) => p.duo).length;

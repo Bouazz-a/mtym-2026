@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MtymLogo } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
-import { isNavMenu, NAV, type NavItem } from "./navigation";
+import { isNavMenu, navFor, type NavItem } from "./navigation";
 import { registerDarkRegion } from "./BackgroundFX";
 
 // SiteFooter — forest band that registers itself as the "dark region" of
@@ -19,11 +19,11 @@ const ABOUT_LINKS: { href: string; label: string }[] = [
 ];
 
 export function SiteFooter() {
-  const { role } = useSession();
+  const { user } = useSession();
   const year = new Date().getFullYear();
   const bandRef = useRef<HTMLDivElement>(null);
 
-  const entries = role ? NAV[role] : [];
+  const entries = navFor(user);
   const pages = entries.filter((e): e is NavItem => !isNavMenu(e));
   // Each menu section is a group of links, titled like in the nav (the
   // menu's own label when the section has none)

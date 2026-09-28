@@ -6,6 +6,7 @@ import { ChevronLeftIcon, SearchIcon } from "@/features/shared/icons";
 import { EmptyState, LoadError } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
 import { useSession } from "@/features/shared/SessionContext";
+import { planningPath } from "@/layout/navigation";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getPassage } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
@@ -110,8 +111,9 @@ export function PassageView({ data, coJurors, banner }: { data: PassageData; coJ
 }
 
 function BackLink() {
+  const { user } = useSession();
   return (
-    <Link to="/" className="font-mont text-tiny uppercase tracking-widest inline-flex items-center gap-1.5" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+    <Link to={planningPath(user)} className="font-mont text-tiny uppercase tracking-widest inline-flex items-center gap-1.5" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
       <ChevronLeftIcon size="0.8rem" /> Mon planning
     </Link>
   );

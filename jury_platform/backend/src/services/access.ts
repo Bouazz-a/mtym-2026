@@ -1,7 +1,15 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "../db";
+import type { AuthenticatedUser } from "../types";
 import { teamsOf } from "./passages";
 import { passagesJudgedBy } from "./duos";
+
+// Whether a list of grades is the user's own only: always for a jury
+// account; for an admin who also judges, when its juror pages ask (?mine=1)
+// — its admin pages read every juror's.
+export function ownGradesOnly(user: AuthenticatedUser, mine: unknown): boolean {
+  return user.role === "jury" || mine === "1";
+}
 
 // Passages in which the team plays any role.
 function passagesOfTeam(teamId: string): Prisma.PassageWhereInput {

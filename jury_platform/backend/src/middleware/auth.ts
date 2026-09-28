@@ -72,3 +72,14 @@ export function requireRole(...roles: Role[]) {
 }
 
 export const adminOnly = [authenticate, requireRole("admin")];
+
+// Juror guard — every jury account, and the admins who also judge
+export function requireJuror(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user?.isJuror) {
+    res.status(403).json({ error: "Réservé aux jurés" });
+    return;
+  }
+  next();
+}
+
+export const jurorOnly = [authenticate, requireJuror];

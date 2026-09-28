@@ -1,8 +1,9 @@
-import type { Role } from "@/types";
+import type { AuthUser, Role } from "@/types";
 
 // Pages reachable by each role — shared by the top nav and the footer.
 // A menu gathers several pages under one entry of the top bar, in sections
-// (titled when there are several).
+// (titled when there are several). An admin who also judges gets the
+// juror's pages in an extra "Jury" menu (navFor).
 
 export interface NavItem {
   to: string;
@@ -72,3 +73,29 @@ export const NAV: Record<Role, NavEntry[]> = {
 };
 
 export const ROLE_LABEL: Record<Role, string> = { admin: "Administration", jury: "Jury" };
+
+// A juror's planning: the home page of a jury account; its own page for an
+// admin who also judges (its home is the admin dashboard)
+export const planningPath = (user: AuthUser | null) => (user?.role === "jury" ? "/" : "/mon-planning");
+
+const JURY_MENU: NavMenu = {
+  label: "Jury",
+  sections: [
+    {
+      items: [
+        { to: "/mon-planning", label: "Mon planning", description: "Les passages que votre duo juge" },
+        { to: "/mes-rapports", label: "Mes rapports", description: "Les rapports qu'on vous a confiés" },
+        { to: "/entrainement", label: "Passage d'entraînement", description: "Essayer la grille sans rien enregistrer" },
+      ],
+    },
+  ],
+};
+
+// The user's entries: its role's, plus the Jury menu for an admin who judges
+export function navFor(user: AuthUser | null): NavEntry[] {
+  if (!user) return [];
+  return user.role === "admin" && user.isJuror ? [...NAV.admin, JURY_MENU] : NAV[user.role];
+}
+
+export const roleLabel = (user: AuthUser) =>
+  user.role === "admin" && user.isJuror ? "Administration · Jury" : ROLE_LABEL[user.role];

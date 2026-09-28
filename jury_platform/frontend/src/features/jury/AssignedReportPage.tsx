@@ -20,7 +20,7 @@ export function AssignedReportPage() {
   const mineQ = useQuery({ queryKey: ["my-reports"], queryFn: getMyReports });
   const teamsQ = useQuery({ queryKey: ["teams"], queryFn: () => getTeams() });
   const criteriaQ = useQuery({ queryKey: ["criteria"], queryFn: getCriteria });
-  const evalsQ = useQuery({ queryKey: ["report-evaluations"], queryFn: () => getReportEvaluations() });
+  const evalsQ = useQuery({ queryKey: ["report-evaluations", "mine"], queryFn: () => getReportEvaluations({ mine: true }) });
 
   if ([mineQ, teamsQ, criteriaQ, evalsQ].some((q) => q.isLoading)) return <PageLoading />;
   const load = queryState(mineQ, teamsQ, criteriaQ, evalsQ);

@@ -5,7 +5,7 @@ import { MtymLogo } from "@/features/shared/widgets";
 import { Popover } from "@/features/shared/primitives";
 import { ChangePasswordModal } from "@/features/shared/ChangePasswordModal";
 import { ChevronDownIcon } from "@/features/shared/icons";
-import { isCurrentPage, isNavMenu, NAV, navPages, ROLE_LABEL, type NavItem, type NavMenu } from "./navigation";
+import { isCurrentPage, isNavMenu, navFor, navPages, planningPath, roleLabel, type NavItem, type NavMenu } from "./navigation";
 
 // TopNav — fixed dark top bar. Brand on the left, nav links and menus in
 // the middle, account menu on the right (also carries the links on small
@@ -20,7 +20,7 @@ export function TopNav() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const chipRef = useRef<HTMLButtonElement>(null);
 
-  const items = user ? NAV[user.role] : [];
+  const items = navFor(user);
   const initials = user ? `${user.firstName[0] ?? ""}${user.lastName[0] ?? ""}`.toUpperCase() : "";
 
   return (
@@ -91,7 +91,7 @@ export function TopNav() {
                   className="font-mont text-micro uppercase tracking-widest"
                   style={{ color: "rgba(244,236,216,0.50)", fontWeight: 600 }}
                 >
-                  {ROLE_LABEL[user.role]}
+                  {roleLabel(user)}
                 </div>
               </div>
               <div
@@ -135,8 +135,8 @@ export function TopNav() {
                 })}
               </div>
               <div className="py-1">
-                {user.role === "jury" && (
-                  <MenuButton onClick={() => { setMenuOpen(false); navigate("/?guide=1"); }}>
+                {user.isJuror && (
+                  <MenuButton onClick={() => { setMenuOpen(false); navigate(`${planningPath(user)}?guide=1`); }}>
                     Guide du juré
                   </MenuButton>
                 )}

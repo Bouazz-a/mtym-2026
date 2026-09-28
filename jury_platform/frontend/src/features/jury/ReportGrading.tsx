@@ -22,8 +22,9 @@ const SIDE_BY_SIDE = "(min-width: 1280px)";
 
 export function ReportGrading({ passage, teamById, criteria, refresh, practice = false }: PassageData) {
   const reportQ = useQuery({
-    queryKey: ["report-evaluations", passage.defenderTeamId],
-    queryFn: () => getReportEvaluations(passage.defenderTeamId),
+    // The juror's own grades, even for an admin who also judges ("mine")
+    queryKey: ["report-evaluations", "mine", passage.defenderTeamId],
+    queryFn: () => getReportEvaluations({ teamId: passage.defenderTeamId, mine: true }),
     enabled: !practice,
   });
   if (reportQ.isLoading) return <PageLoading variant="section" />;

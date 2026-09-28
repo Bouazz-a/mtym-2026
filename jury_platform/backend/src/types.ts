@@ -6,6 +6,7 @@ export interface AuthenticatedUser {
   firstName: string;
   lastName: string;
   role: Role;
+  isJuror: boolean; // judges — every jury account, and some admins
 }
 
 // Extend Express Request
@@ -24,6 +25,7 @@ export function accountToUser(a: Account): AuthenticatedUser {
     firstName: a.firstName,
     lastName: a.lastName,
     role: a.role,
+    isJuror: a.isJuror,
   };
 }
 
@@ -35,5 +37,6 @@ export const publicAccountSelect = {
   lastName: true,
   phone: true,
   role: true,
+  isJuror: true,
   createdAt: true,
 } as const;

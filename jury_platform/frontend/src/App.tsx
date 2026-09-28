@@ -4,7 +4,7 @@ import { SessionProvider, useSession } from "@/features/shared/SessionContext";
 import { LoginPage } from "@/features/shared/LoginPage";
 import { PageLoading } from "@/features/shared/primitives";
 import { AppLayout } from "@/layout/AppLayout";
-import { RoleGuard } from "@/layout/RoleGuard";
+import { JurorGuard, RoleGuard } from "@/layout/RoleGuard";
 
 // Pages are loaded per route: jurors never download the admin screens.
 const AdminDashboard = lazy(() =>
@@ -69,7 +69,10 @@ export default function App() {
                   <Route path="comptes" element={<AccountsPage />} />
                   <Route path="journal" element={<JournalPage />} />
                 </Route>
-                <Route element={<RoleGuard allow={["jury"]} />}>
+                {/* Jury accounts, and admins who also judge (their planning
+                    is /mon-planning: their home is the admin dashboard) */}
+                <Route element={<JurorGuard />}>
+                  <Route path="mon-planning" element={<JuryDashboard />} />
                   <Route path="passages/:passageId" element={<PassagePage />} />
                   <Route path="entrainement" element={<PracticePage />} />
                   <Route path="mes-rapports" element={<MyReportsPage />} />

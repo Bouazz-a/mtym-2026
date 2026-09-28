@@ -13,8 +13,9 @@ const GRADED_ROLES = ["defender", "opponent", "reporter"] as const;
 
 export function OralGrading({ passage, teamById, criteria, refresh, practice = false }: PassageData) {
   const oralQ = useQuery({
-    queryKey: ["oral-evaluations", passage.id],
-    queryFn: () => getOralEvaluations(passage.id),
+    // The juror's own grades, even for an admin who also judges ("mine")
+    queryKey: ["oral-evaluations", "mine", passage.id],
+    queryFn: () => getOralEvaluations({ passageId: passage.id, mine: true }),
     enabled: !practice,
   });
   if (oralQ.isLoading) return <PageLoading variant="section" />;

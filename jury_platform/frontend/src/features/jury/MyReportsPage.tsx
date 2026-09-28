@@ -6,6 +6,8 @@ import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { DocumentIcon } from "@/features/shared/icons";
 import { EmptyState, LoadError, StatCard } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
+import { useSession } from "@/features/shared/SessionContext";
+import { planningPath } from "@/layout/navigation";
 import { getReportEvaluations } from "@/lib/repositories/evaluationRepository";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getMyReports } from "@/lib/repositories/reportAssignmentRepository";
@@ -41,10 +43,11 @@ const FILTER_COLUMNS: FilterColumn<Row>[] = [
 
 export function MyReportsPage() {
   const navigate = useNavigate();
+  const { user } = useSession();
   const mineQ = useQuery({ queryKey: ["my-reports"], queryFn: getMyReports });
   const teamsQ = useQuery({ queryKey: ["teams"], queryFn: () => getTeams() });
   const criteriaQ = useQuery({ queryKey: ["criteria"], queryFn: getCriteria });
-  const evalsQ = useQuery({ queryKey: ["report-evaluations"], queryFn: () => getReportEvaluations() });
+  const evalsQ = useQuery({ queryKey: ["report-evaluations", "mine"], queryFn: () => getReportEvaluations({ mine: true }) });
 
   const teamById = new Map((teamsQ.data ?? []).map((t) => [t.id, t]));
   const rows: Row[] = (mineQ.data ?? [])
@@ -81,7 +84,7 @@ export function MyReportsPage() {
           icon={DocumentIcon}
           title="Aucun rapport pour l'instant"
           sub="Les organisateurs ne vous ont pas encore confié de rapport à corriger. Ils apparaîtront ici dès qu'on vous en confie."
-          action={<Link to="/"><Btn variant="ghost" size="sm">Voir mon planning</Btn></Link>}
+          action={<Link to={planningPath(user)}><Btn variant="ghost" size="sm">Voir mon planning</Btn></Link>}
         />
       ) : (
         <>

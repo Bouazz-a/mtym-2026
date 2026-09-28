@@ -22,6 +22,7 @@ export interface AuthUser {
   firstName: string;
   lastName: string;
   role: Role;
+  isJuror: boolean; // judges (duos, grading, reports): every jury account, and some admins
 }
 
 export interface Account extends AuthUser {

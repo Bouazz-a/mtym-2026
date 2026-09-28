@@ -66,10 +66,11 @@ export async function reportPool(): Promise<ReportPool> {
   };
 }
 
-// Every jury account with the problems of its duos (its specialties)
+// Every juror (jury accounts and admins who also judge) with the problems
+// of its duos (its specialties)
 export async function jurorProblems(): Promise<{ id: string; problems: number[] }[]> {
   const accounts = await db.account.findMany({
-    where: { role: "jury" },
+    where: { isJuror: true },
     include: { duoSeats: { include: { duo: { select: { problemNumber: true } } } } },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });

@@ -35,7 +35,7 @@ export function AccountsPage() {
   const passages = (poolsQ.data ?? []).flatMap((p) => p.passages);
   const passageCount = (id: string) => passages.filter((p) => p.duo?.members.some((m) => m.id === id)).length;
   const sorted = [...accounts].sort((a, b) => a.role.localeCompare(b.role) || a.lastName.localeCompare(b.lastName));
-  const jurors = accounts.filter((a) => a.role === "jury");
+  const jurors = accounts.filter((a) => a.isJuror); // admins who also judge included
 
   const reset = async (account: Account) => {
     const res = await run(() => resetPassword(account.id));
@@ -59,7 +59,7 @@ export function AccountsPage() {
           denom={jurors.length || undefined}
           progressColor="var(--sage)"
         />
-        <StatCard label="Administrateurs" value={accounts.length - jurors.length} progressColor="var(--forest-soft)" />
+        <StatCard label="Administrateurs" value={accounts.filter((a) => a.role === "admin").length} progressColor="var(--forest-soft)" />
       </Stagger>
 
       {error && <Alert>{error}</Alert>}
@@ -92,8 +92,17 @@ export function AccountsPage() {
                     </div>
                   </td>
                   <td className="font-open text-sm" style={{ color: "var(--ink-soft)" }}>{a.email}</td>
-                  <td className="col-tight"><Badge tone={a.role === "admin" ? "dark" : "sage"}>{a.role === "admin" ? "Admin" : "Jury"}</Badge></td>
-                  <td style={{ textAlign: "center" }} className="font-mont col-tight">{a.role === "jury" ? passageCount(a.id) : "—"}</td>
+                  <td className="col-tight">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Badge tone={a.role === "admin" ? "dark" : "sage"}>{a.role === "admin" ? "Admin" : "Jury"}</Badge>
+                      {a.role === "admin" && a.isJuror && (
+                        <span title="Administrateur qui fait aussi partie du jury">
+                          <Badge tone="sage">Juré</Badge>
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: "center" }} className="font-mont col-tight">{a.isJuror ? passageCount(a.id) : "—"}</td>
                   <td className="col-tight" style={{ borderRight: "none" }}>
                     {/* No wrapping: the column hugs the buttons instead of
                         stacking them, and the table scrolls if too narrow */}
@@ -144,9 +153,10 @@ function AccountModal({
     email: account?.email ?? "",
     phone: account?.phone ?? "",
     role: account?.role ?? "jury",
+    isJuror: account?.isJuror ?? false,
   });
   const { run, busy, error } = useAction(ACCOUNT_QUERIES);
-  const set = (key: keyof AccountInput, value: string) => setDraft((d) => ({ ...d, [key]: value }));
+  const set = (key: Exclude<keyof AccountInput, "isJuror">, value: string) => setDraft((d) => ({ ...d, [key]: value }));
   const valid = draft.firstName.trim() && draft.lastName.trim() && draft.email.trim();
 
   const submit = async (e: React.FormEvent) => {
@@ -187,6 +197,24 @@ function AccountModal({
             </Select>
           </Field>
         </div>
+        {/* A jury account always judges; an admin only when ticked */}
+        {draft.role === "admin" && (
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={draft.isJuror ?? false}
+              onChange={(e) => setDraft((d) => ({ ...d, isJuror: e.target.checked }))}
+              className="mt-0.5"
+              style={{ accentColor: "var(--forest)", width: "1rem", height: "1rem" }}
+            />
+            <span>
+              <span className="font-mont text-sm block" style={{ color: "var(--forest)", fontWeight: 800 }}>Également juré</span>
+              <span className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>
+                Peut faire partie d'un duo, noter des passages et corriger des rapports, avec ce même compte.
+              </span>
+            </span>
+          </label>
+        )}
         {!account && (
           <p className="font-open text-xs" style={{ color: "var(--ink-faint)" }}>
             Un mot de passe sera généré et affiché une seule fois.

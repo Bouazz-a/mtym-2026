@@ -11,3 +11,10 @@ export function RoleGuard({ allow }: { allow: Role[] }) {
   if (!role || !allow.includes(role)) return <Navigate to="/" replace />;
   return <Outlet />;
 }
+
+// The juror's pages: jury accounts, and the admins who also judge
+export function JurorGuard() {
+  const { user } = useSession();
+  if (!user?.isJuror) return <Navigate to="/" replace />;
+  return <Outlet />;
+}

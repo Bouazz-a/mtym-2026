@@ -86,7 +86,7 @@ export function ReportAssignmentPage() {
     })
     .sort((a, b) => a.report.problemNumber - b.report.problemNumber || (a.team?.quadrigram ?? "").localeCompare(b.team?.quadrigram ?? ""));
 
-  const jurors = (accountsQ.data ?? []).filter((a) => a.role === "jury").sort((a, b) => jurorName(a).localeCompare(jurorName(b)));
+  const jurors = (accountsQ.data ?? []).filter((a) => a.isJuror).sort((a, b) => jurorName(a).localeCompare(jurorName(b)));
   const specialists = jurors.filter((j) => (problemsOf.get(j.id) ?? []).length > 0);
   const withoutProblem = jurors.filter((j) => (problemsOf.get(j.id) ?? []).length === 0);
   const assigned = rows.filter((r) => r.juror).length;

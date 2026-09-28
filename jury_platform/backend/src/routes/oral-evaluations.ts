@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { authenticate, requireRole } from "../middleware/auth";
-import { isPassageJuror } from "../services/access";
+import { authenticate, jurorOnly } from "../middleware/auth";
+import { isPassageJuror, ownGradesOnly } from "../services/access";
 import { GradesSchema, assertCriteriaApply } from "../services/grading";
 import { roleOf } from "../services/passages";
 import { asyncRoute, BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors";
@@ -17,14 +17,15 @@ const EvalSchema = z.object({
   grades: GradesSchema,
 });
 
-// GET /api/oral-evaluations?passageId= — jury: their own; admin: all
+// GET /api/oral-evaluations?passageId=&mine=1 — jury: their own; admin: all,
+// or their own with mine=1 (an admin who also judges, on its juror pages)
 router.get("/", authenticate, asyncRoute(async (req, res) => {
   const user = req.user!;
   const passageId = z.string().uuid().optional().parse(req.query.passageId);
   res.json(await db.oralEvaluation.findMany({
     where: {
       ...(passageId ? { passageId } : {}),
-      ...(user.role === "jury" ? { juryId: user.id } : {}),
+      ...(ownGradesOnly(user, req.query.mine) ? { juryId: user.id } : {}),
     },
     include: { grades: true },
   }));
@@ -32,7 +33,7 @@ router.get("/", authenticate, asyncRoute(async (req, res) => {
 
 // POST /api/oral-evaluations — upsert the juror's evaluation of one team
 // in one passage, with its grades
-router.post("/", authenticate, requireRole("jury"), asyncRoute(async (req, res) => {
+router.post("/", ...jurorOnly, asyncRoute(async (req, res) => {
   const user = req.user!;
   const { grades = [], ...evalData } = EvalSchema.parse(req.body);
 

@@ -29,8 +29,9 @@ export function JuryDashboard() {
   const [params, setParams] = useSearchParams();
   const poolsQ = useQuery({ queryKey: ["pools"], queryFn: () => getPools() });
   const teamsQ = useQuery({ queryKey: ["teams"], queryFn: () => getTeams() });
-  const oralQ = useQuery({ queryKey: ["oral-evaluations"], queryFn: () => getOralEvaluations() });
-  const reportQ = useQuery({ queryKey: ["report-evaluations"], queryFn: () => getReportEvaluations() });
+  // The juror's own grades, even for an admin who also judges ("mine")
+  const oralQ = useQuery({ queryKey: ["oral-evaluations", "mine"], queryFn: () => getOralEvaluations({ mine: true }) });
+  const reportQ = useQuery({ queryKey: ["report-evaluations", "mine"], queryFn: () => getReportEvaluations({ mine: true }) });
   const loading = poolsQ.isLoading || teamsQ.isLoading || oralQ.isLoading || reportQ.isLoading;
   const guideWanted = params.get("guide") === "1" || (user ? !hasSeenGuide(user.id) : false);
   useJuryGuide("planning", !loading && guideWanted, user?.id);

@@ -24,8 +24,8 @@ const ProblemSchema = z.number().int().min(1).max(4).nullable();
 const problemLabel = (n: number | null) => (n ? `problème ${n}` : "sans problème");
 
 async function assertJurors(accountIds: string[], centerDayId: string, exceptDuoId?: string) {
-  const jurors = await db.account.count({ where: { id: { in: accountIds }, role: "jury" } });
-  if (jurors !== accountIds.length) throw new BadRequestError("Seuls des comptes jury peuvent former un duo");
+  const jurors = await db.account.count({ where: { id: { in: accountIds }, isJuror: true } });
+  if (jurors !== accountIds.length) throw new BadRequestError("Seuls des jurés peuvent former un duo");
 
   // A duo is a duo for the whole day: one duo per juror per day.
   const taken = await db.duoMember.findFirst({

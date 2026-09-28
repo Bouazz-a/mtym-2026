@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { planReportAssignment } from "../algorithms/reportAssignment";
-import { adminOnly, authenticate, requireRole } from "../middleware/auth";
+import { adminOnly, jurorOnly } from "../middleware/auth";
 import { audit } from "../services/audit";
 import { jurorProblems, reportPool } from "../services/reportPool";
 import { asyncRoute, BadRequestError, ConflictError } from "../utils/errors";
@@ -34,8 +34,8 @@ router.get("/", ...adminOnly, asyncRoute(async (_req, res) => {
   res.json({ ...pool, jurors });
 }));
 
-// GET /api/report-assignments/mine — jury: the reports handed to them
-router.get("/mine", authenticate, requireRole("jury"), asyncRoute(async (req, res) => {
+// GET /api/report-assignments/mine — a juror: the reports handed to them
+router.get("/mine", ...jurorOnly, asyncRoute(async (req, res) => {
   const assignments = await db.reportAssignment.findMany({
     where: { accountId: req.user!.id },
     include: { report: { select: { id: true, teamId: true, problemNumber: true } } },
@@ -108,7 +108,7 @@ router.put("/:reportId", ...adminOnly, asyncRoute(async (req, res) => {
   if (report.graded) throw new ConflictError("Ce rapport est déjà corrigé — il ne peut plus changer de juré");
   if (accountId) {
     const juror = await db.account.findUnique({ where: { id: accountId } });
-    if (!juror || juror.role !== "jury") throw new BadRequestError("Seul un juré peut corriger un rapport");
+    if (!juror?.isJuror) throw new BadRequestError("Seul un juré peut corriger un rapport");
   }
 
   const name = await namer([report.id], [report.accountId, accountId]);

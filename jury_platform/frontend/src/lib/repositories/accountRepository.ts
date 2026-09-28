@@ -7,6 +7,7 @@ export type AccountInput = {
   lastName: string;
   phone?: string;
   role: Role;
+  isJuror?: boolean; // an admin who also judges (a jury account always does)
 };
 
 export function getAccounts(role?: Role): Promise<Account[]> {
