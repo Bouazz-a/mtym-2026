@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import AppLogo from "@/assets/MTYM2.svg";
-import { InboxIcon, type IconComponent } from "./icons";
-import { BrutalCard } from "./primitives";
+import { AlertIcon, InboxIcon, type IconComponent } from "./icons";
+import { BrutalCard, Btn } from "./primitives";
 
 // Widgets — composite visuals with motion and depth: animated stat
 // counters and cards, the empty state, the logo and the role palette.
@@ -128,6 +128,21 @@ export function EmptyState({
         </p>
       )}
       {action && <div className="mt-6 flex justify-center">{action}</div>}
+    </div>
+  );
+}
+
+// A page (or section) whose data couldn't be loaded: said plainly, with a
+// way to try again, rather than looking empty ("Aucun passage…").
+export function LoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div role="alert" className="pt-6">
+      <EmptyState
+        icon={AlertIcon}
+        title="Impossible de charger les données"
+        sub="Le serveur n'a pas répondu. Vérifiez votre connexion puis réessayez ; si le problème continue, prévenez l'organisation."
+        action={<Btn onClick={onRetry}>Réessayer</Btn>}
+      />
     </div>
   );
 }

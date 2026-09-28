@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Alert, Badge, Btn, BrutalCard, Field, Input, Modal, PageHeader, PageLoading, PageMotion, Select, Stagger,
 } from "@/features/shared/primitives";
-import { StatCard } from "@/features/shared/widgets";
+import { LoadError, StatCard } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { useSession } from "@/features/shared/SessionContext";
 import {
   createAccount, deleteAccount, getAccounts, resetPassword, updateAccount, type AccountInput,
@@ -27,6 +28,8 @@ export function AccountsPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   if (accountsQ.isLoading || poolsQ.isLoading) return <PageLoading />;
+  const load = queryState(accountsQ, poolsQ);
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const accounts = accountsQ.data ?? [];
   const passages = (poolsQ.data ?? []).flatMap((p) => p.passages);

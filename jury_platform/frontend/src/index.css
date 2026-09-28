@@ -11,13 +11,13 @@
   --forest: #122019;
   --forest-soft: #244b3a;
   --saffron: #f6a806;
-  --saffron-dark: #c8870d;
+  --saffron-dark: #9a6408; /* ≥ 4.5:1 on paper, white and zebra rows (WCAG AA) */
   --sage: #629f73;
   --sage-dark: #244b3a;
   --clay: #b23b1b;
   --ink: #122019;
   --ink-soft: #4a5550;
-  --ink-faint: #8a9290;
+  --ink-faint: #69716e; /* ≥ 4.5:1 on paper, white and zebra rows (WCAG AA) */
   --border: #e1dcc9;
   --row-alt: #f2f3f2; /* zebra stripe */
   --row-hover: #e7eae8; /* clickable row under the pointer */
@@ -104,12 +104,14 @@ body::before {
 .font-open {
   font-family: "Open Sans", system-ui, sans-serif;
 }
+/* The two smallest sizes — uppercase labels, badges. Kept at about 11px
+   and up (the page scale makes them grow on wide screens) */
 .text-tiny {
-  font-size: 0.66rem;
+  font-size: 0.74rem;
   line-height: 1.4;
 }
 .text-micro {
-  font-size: 0.6rem;
+  font-size: 0.68rem;
   line-height: 1.4;
 }
 
@@ -123,6 +125,32 @@ body::before {
 }
 .btn-fx:active:not(:disabled) {
   transform: translateY(0);
+}
+.btn-fx:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+/* "Aller au contenu": the first thing Tab reaches, only shown then */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 200;
+  padding: 0.5rem 0.875rem;
+  background: var(--saffron);
+  color: var(--forest);
+  border: 2px solid var(--forest);
+  font-family: "Montserrat", system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: none;
+  outline: none;
 }
 
 /* Focus ring on inputs */
@@ -255,6 +283,46 @@ body::before {
     background-position:
       85% 10%,
       15% 90%;
+  }
+}
+
+/* Loading skeleton (PageLoading): placeholder bars with a sheen sweeping
+   across them — moved with a transform, and still when the user prefers
+   reduced motion */
+.skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: rgba(18, 32, 25, 0.08);
+}
+.skeleton--saffron {
+  background: rgba(200, 135, 13, 0.3);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation: skeleton-sheen 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+.loading-label {
+  animation: loading-pulse 1.4s ease-in-out infinite;
+}
+@keyframes loading-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after,
+  .loading-label {
+    animation: none;
   }
 }
 
@@ -500,8 +568,8 @@ body::before {
 }
 .mtym-tour .driver-popover-footer .driver-popover-next-btn:hover,
 .mtym-tour .driver-popover-footer .driver-popover-next-btn:focus-visible {
-  background: var(--saffron-dark);
-  border-color: var(--saffron-dark);
+  background: #dc9705;
+  border-color: #dc9705;
 }
 /* The close button's "×" glyph is replaced by the app's close icon */
 .mtym-tour .driver-popover-close-btn {

@@ -3,11 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Badge, BrutalCard, PageHeader, PageLoading, PageMotion, Segmented } from "@/features/shared/primitives";
 import { ChevronLeftIcon, SearchIcon } from "@/features/shared/icons";
-import { EmptyState } from "@/features/shared/widgets";
+import { EmptyState, LoadError } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { useSession } from "@/features/shared/SessionContext";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getPassage } from "@/lib/repositories/poolRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
+import { ForbiddenError, NotFoundError } from "@/lib/services/errors";
 import { centerLabel, formatDay } from "@/utils/labels";
 import { slotTime } from "@/utils/schedule";
 import { Memo } from "./Memo";
@@ -34,10 +36,14 @@ export function PassagePage() {
   const teamsQ = useQuery({ queryKey: ["teams"], queryFn: () => getTeams() });
   const criteriaQ = useQuery({ queryKey: ["criteria"], queryFn: getCriteria });
 
-  if (passageQ.isError) {
+  // Not found or not the duo's: the passage isn't there for this juror.
+  // Any other failure (network, server) can be retried.
+  if (passageQ.error instanceof NotFoundError || passageQ.error instanceof ForbiddenError) {
     return <EmptyState icon={SearchIcon} title="Passage introuvable" sub="Ce passage n'est pas jugé par votre duo." action={<BackLink />} />;
   }
-  if (passageQ.isLoading || teamsQ.isLoading || criteriaQ.isLoading) return <PageLoading />;
+  const load = queryState(passageQ, teamsQ, criteriaQ);
+  if (load.loading) return <PageLoading />;
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const passage = passageQ.data!;
   const coJurors = passage.duo?.members.filter((m) => m.id !== user?.id) ?? [];

@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Badge, Btn, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading, Stagger,
 } from "@/features/shared/primitives";
-import { StatCard } from "@/features/shared/widgets";
+import { LoadError, StatCard } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import { getCenterDays } from "@/lib/repositories/centerDayRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
@@ -21,6 +22,8 @@ export function AdminDashboard() {
   if (teamsQ.isLoading || daysQ.isLoading || poolsQ.isLoading) {
     return <PageLoading />;
   }
+  const load = queryState(teamsQ, daysQ, poolsQ);
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const teams = teamsQ.data ?? [];
   const days = daysQ.data ?? [];

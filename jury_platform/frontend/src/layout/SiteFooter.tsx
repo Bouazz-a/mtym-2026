@@ -98,7 +98,7 @@ export function SiteFooter() {
                         <div key={group.title} className="pt-3">
                           <div
                             className="font-mont text-micro uppercase tracking-widest mb-1.5"
-                            style={{ color: "rgba(244,236,216,0.45)", fontWeight: 700 }}
+                            style={{ color: "rgba(244,236,216,0.6)", fontWeight: 700 }}
                           >
                             {group.title}
                           </div>
@@ -152,7 +152,7 @@ export function SiteFooter() {
               {/* Social row */}
               <div
                 className="font-mont text-tiny uppercase tracking-[0.18em] mb-2"
-                style={{ color: "rgba(244,236,216,0.50)", fontWeight: 700 }}
+                style={{ color: "rgba(244,236,216,0.6)", fontWeight: 700 }}
               >
                 Suivez-nous
               </div>
@@ -171,7 +171,7 @@ export function SiteFooter() {
           >
             <div
               className="font-mont text-micro uppercase tracking-widest"
-              style={{ color: "rgba(244,236,216,0.5)", fontWeight: 600 }}
+              style={{ color: "rgba(244,236,216,0.6)", fontWeight: 600 }}
             >
               <span style={{ color: "var(--saffron)" }}>◆</span>{" "}
               © {year} Math&amp;Maroc · Tous droits réservés

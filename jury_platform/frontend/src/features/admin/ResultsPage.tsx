@@ -2,7 +2,8 @@ import { Alert, Badge, BrutalCard, PageHeader, PageLoading, PageMotion, SectionH
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { GridIcon } from "@/features/shared/icons";
-import { EmptyState } from "@/features/shared/widgets";
+import { EmptyState, LoadError } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import type { FilterColumn } from "@/lib/services/columnFilters";
 import { fmtNote } from "@/lib/services/gradingService";
 import { FINAL_PART_LABELS, FINAL_PARTS, percent, teamResults, type TeamResult, type WrittenNote } from "@/lib/services/results";
@@ -35,10 +36,12 @@ const COLUMNS: FilterColumn<TeamResult>[] = [
 ];
 
 export function ResultsPage() {
-  const { isLoading, teams, weights, results, written } = useGradedPassages();
+  const { queries, teams, weights, results, written } = useGradedPassages();
   const exporter = useExport(async () => (await import("@/lib/services/exportService")).exportGradesXlsx());
 
-  if (isLoading) return <PageLoading />;
+  const load = queryState(...queries);
+  if (load.loading) return <PageLoading />;
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const rows = teamResults(results, weights, written);

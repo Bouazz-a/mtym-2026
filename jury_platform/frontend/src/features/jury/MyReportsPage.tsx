@@ -4,7 +4,8 @@ import { Badge, Btn, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHea
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { DocumentIcon } from "@/features/shared/icons";
-import { EmptyState, StatCard } from "@/features/shared/widgets";
+import { EmptyState, LoadError, StatCard } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { getReportEvaluations } from "@/lib/repositories/evaluationRepository";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getMyReports } from "@/lib/repositories/reportAssignmentRepository";
@@ -61,6 +62,8 @@ export function MyReportsPage() {
   const { shown, narrowed, clear, menuProps } = useColumnFilters(rows, FILTER_COLUMNS);
 
   if ([mineQ, teamsQ, criteriaQ, evalsQ].some((q) => q.isLoading)) return <PageLoading />;
+  const load = queryState(mineQ, teamsQ, criteriaQ, evalsQ);
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const done = rows.filter((r) => r.note !== null).length;
   const open = (r: Row) => navigate(`/mes-rapports/${r.reportId}`);

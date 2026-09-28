@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { BrutalCard, PageLoading } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
+import { LoadError } from "@/features/shared/widgets";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import type { PassageDetails, PoolDetails, Team } from "@/types";
 import { DEFAULT_SCHEDULE } from "@/utils/schedule";
@@ -43,6 +44,7 @@ export function PracticePage() {
   useJuryGuide("practice", !criteriaQ.isLoading && params.get("guide") === "1", user?.id);
 
   if (criteriaQ.isLoading) return <PageLoading />;
+  if (criteriaQ.isError) return <LoadError onRetry={() => criteriaQ.refetch()} />;
 
   const pool: PoolDetails = { id: "practice-pool", label: "ENTR-A1", round: 1, centerDayId: DAY.id, centerDay: DAY, passages: [] };
   const passage: PassageDetails & { pool: PoolDetails } = {

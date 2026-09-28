@@ -6,7 +6,8 @@ import {
   Stagger,
 } from "@/features/shared/primitives";
 import { GridIcon } from "@/features/shared/icons";
-import { EmptyState, StatCard } from "@/features/shared/widgets";
+import { EmptyState, LoadError, StatCard } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { getTeams, setTeamDay } from "@/lib/repositories/teamRepository";
 import {
   createCenterDay, deleteCenterDay, distributeTeams, getCenterDays, updateCenterDay,
@@ -45,6 +46,8 @@ export function TournamentPage() {
   if (teamsQ.isLoading || daysQ.isLoading || poolsQ.isLoading) {
     return <PageLoading />;
   }
+  const load = queryState(teamsQ, daysQ, poolsQ);
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const withoutDay = centerTeams.filter((t) => !t.centerDayId).length;
   const countByCenter = (c: Center) => teams.filter((t) => t.center === c).length;

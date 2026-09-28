@@ -3,11 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Alert, Badge, Btn, BrutalCard, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select,
 } from "@/features/shared/primitives";
+import { LoadError } from "@/features/shared/widgets";
 import {
   copyReportCriteria, createCriterion, deleteCriterion, getCriteria, updateCriterion,
 } from "@/lib/repositories/criteriaRepository";
 import { getFinalWeights, updateFinalWeights } from "@/lib/repositories/finalWeightsRepository";
-import { errorMessage } from "@/lib/services/errors";
 import { FINAL_PART_LABELS, FINAL_PARTS, type FinalPart } from "@/lib/services/results";
 import type { Criterion, FinalWeights, PassageRole } from "@/types";
 import { QUALIFS_PROBLEMS } from "@/utils/labels";
@@ -35,6 +35,7 @@ export function CriteriaPage() {
   if (criteriaQ.isLoading) {
     return <PageLoading />;
   }
+  if (criteriaQ.isError) return <LoadError onRetry={() => criteriaQ.refetch()} />;
 
   const all = criteriaQ.data ?? [];
   const reportCriteria = all
@@ -100,12 +101,12 @@ function FinalWeightsSection() {
     <section>
       <SectionHeading title="Note finale" />
       {weightsQ.isError ? (
-        <Alert>Impossible de charger les coefficients : {errorMessage(weightsQ.error)}</Alert>
+        <LoadError onRetry={() => weightsQ.refetch()} />
       ) : weightsQ.data ? (
         // Remounted when the saved weights change, so the draft starts from them
         <WeightsEditor key={JSON.stringify(weightsQ.data)} saved={weightsQ.data} />
       ) : (
-        <PageLoading />
+        <PageLoading variant="section" />
       )}
     </section>
   );

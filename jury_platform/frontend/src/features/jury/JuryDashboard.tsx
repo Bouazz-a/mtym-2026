@@ -3,7 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Btn, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Stagger } from "@/features/shared/primitives";
 import { CalendarIcon } from "@/features/shared/icons";
-import { EmptyState, RoleLine, StatCard } from "@/features/shared/widgets";
+import { EmptyState, LoadError, RoleLine, StatCard } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { useSession } from "@/features/shared/SessionContext";
 import { getOralEvaluations, getReportEvaluations } from "@/lib/repositories/evaluationRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
@@ -35,6 +36,8 @@ export function JuryDashboard() {
   useJuryGuide("planning", !loading && guideWanted, user?.id);
 
   if (loading) return <PageLoading />;
+  const load = queryState(poolsQ, teamsQ, oralQ, reportQ);
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const teamById = new Map((teamsQ.data ?? []).map((t) => [t.id, t]));
   const mine: MyPassage[] = (poolsQ.data ?? []).flatMap((pool) =>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Alert, Btn, BrutalCard, Field, Input, PageMotion } from "./primitives";
+import { usePageTitle } from "./usePageTitle";
 import { MtymLogo } from "./widgets";
 import { useSession } from "./SessionContext";
 import { errorMessage } from "@/lib/services/errors";
@@ -7,6 +8,7 @@ import { errorMessage } from "@/lib/services/errors";
 // Shown for every route while nobody is logged in. Accounts are created by
 // an admin, who hands out the generated password — there is no sign-up.
 export function LoginPage() {
+  usePageTitle("Connexion");
   const { login } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

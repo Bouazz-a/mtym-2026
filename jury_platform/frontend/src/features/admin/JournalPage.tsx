@@ -6,10 +6,9 @@ import {
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { ClockIcon } from "@/features/shared/icons";
-import { EmptyState } from "@/features/shared/widgets";
+import { EmptyState, LoadError } from "@/features/shared/widgets";
 import { getAuditLog } from "@/lib/repositories/auditRepository";
 import type { FilterColumn } from "@/lib/services/columnFilters";
-import { errorMessage } from "@/lib/services/errors";
 import type { AuditEntry } from "@/types";
 import { ExportButton } from "./ExportButton";
 import { useExport } from "./useExport";
@@ -45,6 +44,7 @@ export function JournalPage() {
   const exporter = useExport(async () => (await import("@/lib/services/exportService")).exportJournalXlsx(shown));
 
   if (logQ.isLoading) return <PageLoading />;
+  if (logQ.isError) return <LoadError onRetry={() => logQ.refetch()} />;
 
   const header = (column: (typeof COLUMNS)[number]) => (
     <th>
@@ -64,7 +64,6 @@ export function JournalPage() {
         right={<ExportButton {...exporter} disabled={shown.length === 0} />}
       />
       {exporter.error && <Alert>{exporter.error}</Alert>}
-      {logQ.isError && <Alert>{errorMessage(logQ.error, "Journal indisponible.")}</Alert>}
 
       {entries.length === 0 ? (
         <EmptyState icon={ClockIcon} title="Journal vide" sub="Les modifications des administrateurs apparaîtront ici." />

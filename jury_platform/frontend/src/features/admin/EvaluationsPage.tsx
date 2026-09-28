@@ -6,7 +6,8 @@ import {
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { GridIcon } from "@/features/shared/icons";
-import { EmptyState, ROLE_PALETTE } from "@/features/shared/widgets";
+import { EmptyState, LoadError, ROLE_PALETTE } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import type { FilterColumn } from "@/lib/services/columnFilters";
 import { fmtNote } from "@/lib/services/gradingService";
@@ -25,13 +26,15 @@ import { useGradedPassages } from "./useGradedPassages";
 // what is still missing, and each juror's note and remark on demand.
 
 export function EvaluationsPage() {
-  const { isLoading, pools, teams, results } = useGradedPassages();
+  const { queries, pools, teams, results } = useGradedPassages();
   const accountsQ = useQuery({ queryKey: ["accounts"], queryFn: () => getAccounts() });
   const [center, setCenter] = useState<Center | null>(null);
   // Loaded on demand: the xlsx writer is heavy and only needed here.
   const exporter = useExport(async () => (await import("@/lib/services/exportService")).exportGradesXlsx());
 
-  if (isLoading || accountsQ.isLoading) return <PageLoading />;
+  const load = queryState(...queries, accountsQ);
+  if (load.loading) return <PageLoading />;
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const quadById = new Map(teams.map((t) => [t.id, t.quadrigram]));
   const nameById = new Map((accountsQ.data ?? []).map((a) => [a.id, `${a.firstName} ${a.lastName}`]));

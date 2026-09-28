@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
 import { NotFoundHero } from "./NotFoundHero";
 import { Btn, BrutalCard, PageMotion } from "./primitives";
+import { usePageTitle } from "./usePageTitle";
 import { useSession } from "./SessionContext";
 
 // NotFoundPage — "proof gone missing": the dot 404 on graph paper, what
@@ -9,6 +10,7 @@ import { useSession } from "./SessionContext";
 // route, and one way back home.
 
 export function NotFoundPage() {
+  usePageTitle("Page introuvable");
   const { role } = useSession();
   const { pathname } = useLocation();
   return (

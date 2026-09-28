@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PageLoading } from "@/features/shared/primitives";
 import { ReportPanel, ReportViewer } from "@/features/shared/ReportViewer";
 import { useMediaQuery } from "@/features/shared/useMediaQuery";
+import { LoadError } from "@/features/shared/widgets";
 import { getReportEvaluations, saveReportEvaluation } from "@/lib/repositories/evaluationRepository";
 import { reportCriteria } from "@/lib/services/gradingService";
 import type { Criterion, ReportEvaluation, Team } from "@/types";
@@ -25,7 +26,8 @@ export function ReportGrading({ passage, teamById, criteria, refresh, practice =
     queryFn: () => getReportEvaluations(passage.defenderTeamId),
     enabled: !practice,
   });
-  if (reportQ.isLoading) return <PageLoading />;
+  if (reportQ.isLoading) return <PageLoading variant="section" />;
+  if (reportQ.isError) return <LoadError onRetry={() => reportQ.refetch()} />;
 
   const defender = teamById.get(passage.defenderTeamId);
   return (
@@ -72,6 +74,7 @@ export function ReportWorkspace({
       style={beside ? { gridTemplateColumns: "minmax(0, 34rem) minmax(0, 1fr)" } : undefined}
     >
       <GradingCard
+        key={`${team?.id}:${problemNumber}`} // a fresh grid (and draft) per report
         header={header}
         criteria={reportCriteria(criteria, problemNumber)}
         saved={saved}
@@ -79,6 +82,7 @@ export function ReportWorkspace({
         disabled={!report}
         disabledHint="Aucun rapport déposé pour ce problème : rien à noter pour l'instant."
         practice={practice}
+        draftKey={team && `report:${team.id}:${problemNumber}`}
         onSave={async (input) => {
           if (practice || !team) return;
           await saveReportEvaluation({ teamId: team.id, problemNumber, ...input });

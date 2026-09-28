@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { Alert, PageHeader, PageLoading, PageMotion, Segmented, Stagger } from "@/features/shared/primitives";
 import { CalendarIcon } from "@/features/shared/icons";
-import { EmptyState, StatCard } from "@/features/shared/widgets";
+import { EmptyState, LoadError, StatCard } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import { getCenterDays } from "@/lib/repositories/centerDayRepository";
 import { getDuos } from "@/lib/repositories/duoRepository";
@@ -31,6 +32,8 @@ export function JuryPage() {
   if (accountsQ.isLoading || poolsQ.isLoading || teamsQ.isLoading || daysQ.isLoading || duosQ.isLoading) {
     return <PageLoading />;
   }
+  const load = queryState(accountsQ, poolsQ, teamsQ, daysQ, duosQ);
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const pools = poolsQ.data ?? [];
   const duos = duosQ.data ?? [];

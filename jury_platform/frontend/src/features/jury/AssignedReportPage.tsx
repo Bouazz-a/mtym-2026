@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Badge, PageHeader, PageLoading, PageMotion } from "@/features/shared/primitives";
 import { ChevronLeftIcon, SearchIcon } from "@/features/shared/icons";
-import { EmptyState } from "@/features/shared/widgets";
+import { EmptyState, LoadError } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getReportEvaluations } from "@/lib/repositories/evaluationRepository";
 import { getMyReports } from "@/lib/repositories/reportAssignmentRepository";
@@ -22,6 +23,8 @@ export function AssignedReportPage() {
   const evalsQ = useQuery({ queryKey: ["report-evaluations"], queryFn: () => getReportEvaluations() });
 
   if ([mineQ, teamsQ, criteriaQ, evalsQ].some((q) => q.isLoading)) return <PageLoading />;
+  const load = queryState(mineQ, teamsQ, criteriaQ, evalsQ);
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const assigned = (mineQ.data ?? []).find((m) => m.reportId === reportId);
   if (!assigned) {

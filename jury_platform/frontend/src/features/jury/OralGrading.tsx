@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { PageLoading } from "@/features/shared/primitives";
+import { LoadError } from "@/features/shared/widgets";
 import { getOralEvaluations, saveOralEvaluation } from "@/lib/repositories/evaluationRepository";
 import { oralCriteria } from "@/lib/services/gradingService";
 import { GradingCard } from "./GradingCard";
@@ -16,7 +17,8 @@ export function OralGrading({ passage, teamById, criteria, refresh, practice = f
     queryFn: () => getOralEvaluations(passage.id),
     enabled: !practice,
   });
-  if (oralQ.isLoading) return <PageLoading />;
+  if (oralQ.isLoading) return <PageLoading variant="section" />;
+  if (oralQ.isError) return <LoadError onRetry={() => oralQ.refetch()} />;
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
@@ -24,12 +26,13 @@ export function OralGrading({ passage, teamById, criteria, refresh, practice = f
         const team = teamById.get(passage[`${role}TeamId`]);
         return (
           <GradingCard
-            key={role}
+            key={`${passage.id}:${role}`}
             header={<TeamHeader role={role} team={team} />}
             criteria={oralCriteria(criteria, role)}
             saved={(oralQ.data ?? []).find((e) => e.teamId === team?.id)}
             practice={practice}
             tourAnchors={i === 0}
+            draftKey={team && `oral:${passage.id}:${team.id}`}
             onSave={async (input) => {
               if (practice) return;
               await saveOralEvaluation({ passageId: passage.id, teamId: team!.id, ...input });

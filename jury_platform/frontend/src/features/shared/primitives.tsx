@@ -1,6 +1,7 @@
-import { Children, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
 import { motion, useReducedMotion, type Transition } from "framer-motion";
 import { FIELD_STYLE } from "./fieldStyle";
+import { usePageTitle } from "./usePageTitle";
 import { CloseIcon } from "./icons";
 
 // Primitives — visual building blocks aligned with the MTYM aesthetic:
@@ -124,6 +125,7 @@ export function PageHeader({
   sub?: string;
   right?: ReactNode;
 }) {
+  usePageTitle(title);
   return (
     <header
       className="flex flex-col md:flex-row md:flex-wrap md:items-end justify-between gap-4 pb-6 mb-8"
@@ -272,11 +274,12 @@ export function PageMotion({
   children: ReactNode;
   className?: string;
 }) {
+  const reduce = useReducedMotion();
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
+      exit={reduce ? undefined : { opacity: 0, y: -8 }}
       transition={PAGE_TRANSITION}
       className={className}
     >
@@ -328,6 +331,9 @@ export function Stagger({
 
 // ─── Modal ────────────────────────────────────────────────────────────
 
+// What Tab can reach inside a dialog
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
+
 export function Modal({
   open, title, children, onClose, footer, width,
 }: {
@@ -338,6 +344,53 @@ export function Modal({
   footer?: ReactNode;
   width?: number | string; // px, or any CSS width
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+
+  // What had focus when the dialog opened, read while rendering: by the
+  // time effects run, a field's autoFocus inside the dialog has taken it.
+  const [opener, setOpener] = useState<HTMLElement | null>(() => (open ? (document.activeElement as HTMLElement | null) : null));
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setOpener(document.activeElement as HTMLElement | null);
+  }
+
+  // Keyboard focus moves into the dialog when it opens (on the dialog
+  // itself, so its title is read first, unless a field took it with
+  // autoFocus), Tab and Shift+Tab stay inside, and focus returns to what
+  // opened it when it closes.
+  useEffect(() => {
+    if (!open) return;
+    const dialog = dialogRef.current;
+    if (!dialog?.contains(document.activeElement)) dialog?.focus();
+    const focusables = () =>
+      [...(dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])].filter((el) => el.offsetParent !== null);
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const els = focusables();
+      if (els.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const [first, last] = [els[0], els[els.length - 1]];
+      const at = document.activeElement;
+      if (e.shiftKey && (at === first || at === dialogRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && at === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onTab);
+    return () => {
+      document.removeEventListener("keydown", onTab);
+      // Only once the dialog is gone (not on StrictMode's test unmount)
+      if (!dialog?.isConnected) opener?.focus?.();
+    };
+  }, [open, opener]);
+
   // Lock the body scroll while a modal is open.
   useEffect(() => {
     if (!open) return;
@@ -355,14 +408,16 @@ export function Modal({
   return (
     <>
       <div className="modal-backdrop" onClick={onClose} />
-      <div className="modal-dialog" role="dialog" aria-modal="true"
-           style={width ? { width } : undefined}
+      <div className="modal-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}
+           ref={dialogRef}
+           tabIndex={-1}
+           style={{ ...(width ? { width } : {}), outline: "none" }}
            onClick={e => e.stopPropagation()}>
         <header
           className="px-6 py-4 flex items-center justify-between gap-3"
           style={{ borderBottom: "2px solid var(--forest)" }}
         >
-          <h2 className="font-mont uppercase tracking-tight"
+          <h2 id={titleId} className="font-mont uppercase tracking-tight"
               style={{ fontSize: "1.05rem", color: "var(--forest)", fontWeight: 900, letterSpacing: "-0.01em" }}>
             {title}
           </h2>
@@ -622,10 +677,62 @@ export function Alert({
 
 // ─── Page loading placeholder ─────────────────────────────────────────
 
-export function PageLoading() {
+// While a page (or a section) loads: the shape of what's coming — a page
+// header, then a table — under a soft sheen, instead of a lone word. It
+// only appears after a short delay, so a fast load doesn't flash it.
+// "section": just the table, for a part of a page.
+const LOADING_DELAY_MS = 150;
+const SKELETON_ROWS = ["55%", "40%", "65%", "35%", "50%"];
+
+export function PageLoading({ variant = "page" }: { variant?: "page" | "section" }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShown(true), LOADING_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const rows = variant === "page" ? SKELETON_ROWS : SKELETON_ROWS.slice(0, 3);
+
   return (
-    <div className="py-24 text-center font-mont text-tiny uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 700 }}>
-      Chargement…
+    <div
+      role="status"
+      aria-busy="true"
+      className={variant === "page" ? "space-y-10" : undefined}
+      style={{ opacity: shown ? 1 : 0, transition: "opacity 200ms ease-out" }}
+    >
+      {variant === "page" && (
+        // Same box as PageHeader, so nothing jumps when the page arrives
+        <div aria-hidden className="pb-6" style={{ borderBottom: "2px solid var(--border)" }}>
+          <Bone width="6rem" height="0.6rem" saffron className="mt-1" />
+          <Bone width="min(18rem, 70%)" height="2.4rem" className="mt-2" />
+          <Bone width="min(34rem, 100%)" height="0.8rem" className="mt-3" />
+          <Bone width="min(24rem, 80%)" height="0.8rem" className="mt-2" />
+        </div>
+      )}
+      <div aria-hidden style={{ border: "2px solid var(--forest)", boxShadow: "2px 2px 0 0 var(--forest)", background: "var(--surface)" }}>
+        <div className="px-4 flex items-center" style={{ height: "2.75rem", background: "var(--forest-soft)" }}>
+          <span className="loading-label font-mont text-micro uppercase tracking-widest" style={{ color: "rgba(244,236,216,0.75)", fontWeight: 800 }}>
+            Chargement…
+          </span>
+        </div>
+        {rows.map((width, i) => (
+          <div
+            key={i}
+            className="px-4 flex items-center gap-6"
+            style={{ height: "3.25rem", borderTop: "1px solid var(--border)", background: i % 2 ? "var(--row-alt)" : undefined }}
+          >
+            <Bone width="3.5rem" />
+            <Bone width={width} />
+            <Bone width="2.5rem" className="ml-auto" />
+          </div>
+        ))}
+      </div>
+      {/* Last, so the spacing above doesn't count it as the first child */}
+      <span className="sr-only">Chargement…</span>
     </div>
   );
+}
+
+// One placeholder bar of the loading skeleton
+function Bone({ width, height = "0.7rem", saffron = false, className = "" }: { width: string; height?: string; saffron?: boolean; className?: string }) {
+  return <span className={`skeleton${saffron ? " skeleton--saffron" : ""} ${className}`} style={{ width, height }} />;
 }

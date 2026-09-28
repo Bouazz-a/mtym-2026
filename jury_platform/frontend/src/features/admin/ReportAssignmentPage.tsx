@@ -8,7 +8,8 @@ import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/C
 import { ReportViewer } from "@/features/shared/ReportViewer";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { DocumentIcon } from "@/features/shared/icons";
-import { EmptyState, StatCard } from "@/features/shared/widgets";
+import { EmptyState, LoadError, StatCard } from "@/features/shared/widgets";
+import { queryState } from "@/features/shared/queryState";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getReportEvaluations } from "@/lib/repositories/evaluationRepository";
@@ -58,7 +59,8 @@ export function ReportAssignmentPage() {
   const evalsQ = useQuery({ queryKey: ["report-evaluations"], queryFn: () => getReportEvaluations() });
 
   if ([boardQ, teamsQ, accountsQ, criteriaQ, evalsQ].some((q) => q.isLoading)) return <PageLoading />;
-  if (boardQ.isError) return <Alert>Impossible de charger les rapports.</Alert>;
+  const load = queryState(boardQ, teamsQ, accountsQ, criteriaQ, evalsQ);
+  if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const board = boardQ.data!;
   const teamById = new Map((teamsQ.data ?? []).map((t) => [t.id, t]));
