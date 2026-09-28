@@ -6,7 +6,7 @@ import { teamsInGrid } from "@/lib/services/poolDraft";
 import type { CenterDay, PoolDetails, Team } from "@/types";
 import { SwapIcon } from "@/features/shared/icons";
 import { formatDay } from "@/utils/labels";
-import { hasFinalReport } from "@/utils/teams";
+import { choiceRank, hasFinalReport, ordinal } from "@/utils/teams";
 import { PoolCard } from "./PoolsEditor";
 import { useAction, TOURNAMENT_QUERIES } from "./useAction";
 
@@ -71,6 +71,15 @@ export function DayDraw({
     .flatMap((p) => p.passages)
     .filter((p) => !hasFinalReport(teamById.get(p.defenderTeamId), p.problemNumber)).length;
 
+  // How many defenders play their 1st, 2nd… choice (teams with a ranking)
+  const choices = [1, 2, 3, 4].map((rank) => pools
+    .flatMap((p) => p.passages)
+    .filter((p) => choiceRank(teamById.get(p.defenderTeamId), p.problemNumber) === rank).length);
+  const choiceSummary = choices
+    .map((n, i) => (n > 0 ? `${n} × ${ordinal(i + 1)}` : null))
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <section>
       <SectionHeading
@@ -79,6 +88,11 @@ export function DayDraw({
           <div className="flex items-center gap-2 flex-wrap">
             <Badge tone="neutral">{teams.length} équipes</Badge>
             <Badge tone={drawn ? "sage" : "neutral"}>{pools.length} poules</Badge>
+            {choiceSummary && (
+              <span title="Problème défendu par rapport au classement de chaque équipe">
+                <Badge tone="neutral">Choix : {choiceSummary}</Badge>
+              </span>
+            )}
             {validated && (
               <Badge tone="sage">
                 Tirage validé{day.drawValidatedAt ? ` · ${formatDay(day.drawValidatedAt.slice(0, 10))}` : ""}

@@ -87,6 +87,9 @@ model Team {
   center      Center
   members     Json // [{ firstName, lastName }] — names only, no contact/health data
   centerDayId String? // a team plays on exactly one day of its center
+  // The problems the team wants to defend, favorite first (the main site's
+  // teams.finalReportRanking); empty when it gave none
+  problemRanking Int[] @default([])
 
   centerDay         CenterDay?         @relation(fields: [centerDayId], references: [id], onDelete: SetNull)
   reports           TeamReport[]

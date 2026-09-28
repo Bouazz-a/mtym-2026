@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateQualifsDay, splitForQualifs, QUALIFS_PROBLEMS } from "./poolDraw";
+import { choiceCost, generateQualifsDay, seatByRanking, splitForQualifs, QUALIFS_PROBLEMS, type DrawnPool } from "./poolDraw";
 
 const teams = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `team-${i}` }));
 
@@ -89,6 +89,59 @@ describe("generateQualifsDay", () => {
     const { pools, leftover } = generateQualifsDay({ teams: teams(n), labelPrefix: "" });
     expect(pools).toHaveLength(0);
     expect(leftover).toHaveLength(n);
+  });
+});
+
+describe("drawing from the teams' rankings", () => {
+  const ranked = (rankings: number[][]) => rankings.map((problemRanking, i) => ({ id: `team-${i}`, problemRanking }));
+  const favoring = (p: number) => [p, ...QUALIFS_PROBLEMS.filter((q) => q !== p)];
+  // The problem each team defends
+  const defended = (pools: DrawnPool[]) =>
+    new Map(pools.flatMap((p) => p.passages).map((x) => [x.defenderTeamId, x.problemNumber]));
+
+  it("gives every team its first choice when the first choices fit", () => {
+    // Two teams favoring each problem: two pools of 4 seat them all
+    const ts = ranked([1, 1, 2, 2, 3, 3, 4, 4].map(favoring));
+    for (let run = 0; run < 20; run++) {
+      const got = defended(generateQualifsDay({ teams: ts, labelPrefix: "" }).pools);
+      for (const t of ts) expect(got.get(t.id)).toBe(t.problemRanking[0]);
+    }
+  });
+
+  it("still defends each problem once per pool when every team wants the same one", () => {
+    const { pools } = generateQualifsDay({ teams: ranked(Array.from({ length: 12 }, () => favoring(1))), labelPrefix: "" });
+    for (const pool of pools) expect(pool.passages.map((p) => p.problemNumber).sort()).toEqual(QUALIFS_PROBLEMS);
+  });
+
+  it.each([7, 10, 11, 17, 29, 45])("defends the 4 problems equally often with %i teams", (n) => {
+    for (let run = 0; run < 30; run++) {
+      const passages = generateQualifsDay({ teams: ranked(Array.from({ length: n }, () => favoring(1))), labelPrefix: "" })
+        .pools.flatMap((p) => p.passages);
+      const counts = QUALIFS_PROBLEMS.map((p) => passages.filter((x) => x.problemNumber === p).length);
+      expect(Math.max(...counts) - Math.min(...counts), `${counts}`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  // Two seats, problems 1 and 2: which team takes which
+  const seat = (a: number[], b: number[]) => {
+    const [[first, second]] = seatByRanking([[1, 2]], ranked([a, b]));
+    return { team0: first.id === "team-0" ? 1 : 2, team1: second.id === "team-1" ? 2 : 1 };
+  };
+
+  it("prefers two 2nd choices to a 1st and a 3rd", () => {
+    // team 0 ranks 1 then 2; team 1 ranks 2 third, 1 second
+    expect(seat([1, 2, 3, 4], [3, 1, 2, 4])).toEqual({ team0: 2, team1: 1 });
+  });
+
+  it("prefers a 1st and a 4th choice to two 3rd choices", () => {
+    // team 0: 1 first, 2 third; team 1: 1 third, 2 fourth
+    expect(seat([1, 3, 2, 4], [3, 4, 1, 2])).toEqual({ team0: 1, team1: 2 });
+  });
+
+  it("costs nothing without a ranking, and ranks left-out problems last", () => {
+    expect(QUALIFS_PROBLEMS.map((p) => choiceCost([], p))).toEqual([0, 0, 0, 0]);
+    expect(QUALIFS_PROBLEMS.map((p) => choiceCost([4, 2, 1, 3], p))).toEqual([3, 1, 5, 0]);
+    expect(QUALIFS_PROBLEMS.map((p) => choiceCost([2], p))).toEqual([1, 0, 1, 1]);
   });
 });
 

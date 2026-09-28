@@ -58,6 +58,7 @@ export interface Team {
   members: TeamMember[];
   centerDayId: string | null;
   reports: { id: string; problemNumber: number }[]; // FINAL reports submitted
+  problemRanking: number[]; // the problems it wants to defend, favorite first; empty = none given
 }
 
 // Slot n of a day holds passage n of every pool (the pools play in parallel)

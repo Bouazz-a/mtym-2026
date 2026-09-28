@@ -26,6 +26,7 @@ const team = (id: string, quadrigram: string, name: string, reports: Team["repor
   members: [],
   centerDayId: DAY.id,
   reports,
+  problemRanking: [],
 });
 
 const TEAMS = [

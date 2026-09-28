@@ -25,6 +25,7 @@ interface SourceTeam {
   name: string | null;
   quadrigram: string | null;
   qualifCenter: string;
+  ranking: string | null; // teams.finalReportRanking as text, e.g. "[4, 2, 1, 3]"
 }
 interface SourceMember {
   teamId: number;
@@ -47,9 +48,12 @@ function sourceUrl(): string {
 
 async function readSource(src: PrismaClient) {
   // ::text casts: on the real main-site schema these columns are enums,
-  // which Prisma's raw queries can't deserialize.
+  // which Prisma's raw queries can't deserialize. The ranking goes through
+  // to_jsonb: text whatever the column's type, and null (not an error) on
+  // dumps from before the column existed.
   const teams = await src.$queryRaw<SourceTeam[]>`
-    SELECT t.id, t.name, t.quadrigram, t."qualifCenter"::text AS "qualifCenter"
+    SELECT t.id, t.name, t.quadrigram, t."qualifCenter"::text AS "qualifCenter",
+           to_jsonb(t) ->> 'finalReportRanking' AS ranking
     FROM teams t
     WHERE t.status::text = 'APPROVED'
       AND t."qualifCenter" IS NOT NULL
@@ -70,6 +74,13 @@ async function readSource(src: PrismaClient) {
     WHERE "reportType"::text IN ('FINAL', 'INTERMEDIATE') AND "teamId" = ANY(${ids})`;
 
   return { teams, members, reports: pickReports(reports) };
+}
+
+// The problems a team wants to defend, favorite first: each of 1–4 once, in
+// the order given ("{4,2,1,3}", "[4, 2, 1, 3]"…); anything else is dropped.
+function parseRanking(text: string | null): number[] {
+  const problems = (text?.match(/\d+/g) ?? []).map(Number).filter((p) => p >= 1 && p <= 4);
+  return [...new Set(problems)];
 }
 
 // One report per team × problem, following REPORT_MODE.
@@ -130,6 +141,7 @@ async function main() {
           name: t.name?.trim() || `Équipe #${t.id}`,
           quadrigram: t.quadrigram?.trim() ?? "",
           members,
+          problemRanking: parseRanking(t.ranking),
         };
 
         let teamId: string;

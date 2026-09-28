@@ -17,7 +17,7 @@ import {
 } from "@/lib/services/poolDraft";
 import type { GridPassage, Passage, PoolDetails, PoolGrid, Team } from "@/types";
 import { slotTime } from "@/utils/schedule";
-import { hasFinalReport } from "@/utils/teams";
+import { choiceRank, hasFinalReport, ordinal } from "@/utils/teams";
 import { repeatedDuos } from "@/utils/duos";
 import { QUALIFS_PROBLEMS } from "@/utils/labels";
 import { useAction, TOURNAMENT_QUERIES } from "./useAction";
@@ -109,6 +109,7 @@ export function PoolCard({
             {pool.passages.map((p) => {
               const defender = teamById.get(p.defenderTeamId);
               const missingReport = !hasFinalReport(defender, p.problemNumber);
+              const rank = choiceRank(defender, p.problemNumber);
               return (
                 <tr key={p.id}>
                   <td>
@@ -124,6 +125,11 @@ export function PoolCard({
                   <td>
                     <span className="inline-flex items-center gap-1.5">
                       <TeamCell quad={defender?.quadrigram} role="defender" />
+                      {rank !== null && (
+                        <span title={`${ordinal(rank)} choix de ${defender?.quadrigram} parmi les problèmes à défendre`}>
+                          <Badge tone={rank === 1 ? "sage" : rank === 2 ? "neutral" : "saffron"}>Choix {rank}</Badge>
+                        </span>
+                      )}
                       {missingReport && (
                         <span title={`Pas de rapport final pour le problème ${p.problemNumber}`}>
                           <Badge tone="danger">RF ?</Badge>

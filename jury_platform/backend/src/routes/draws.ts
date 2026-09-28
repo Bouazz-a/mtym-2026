@@ -20,7 +20,7 @@ router.use(...adminOnly);
 async function findDayOrThrow(id: string) {
   const day = await db.centerDay.findUnique({
     where: { id },
-    include: { teams: { select: { id: true } } },
+    include: { teams: { select: { id: true, problemRanking: true } } }, // the draw follows the rankings
   });
   if (!day) throw new NotFoundError("Center day not found");
   return day;

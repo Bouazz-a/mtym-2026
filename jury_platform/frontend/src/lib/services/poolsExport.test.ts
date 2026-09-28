@@ -26,6 +26,7 @@ const team = (id: string, quadrigram: string, dayId: string): Team => ({
   members: [{ firstName: "A", lastName: "B" }],
   centerDayId: dayId,
   reports: [],
+  problemRanking: [],
 });
 
 // A drawn pool of `size` teams, rotating the roles like the real draw

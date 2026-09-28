@@ -4,15 +4,34 @@
 //
 // One round per center day: pools of 4 (3 when the team count requires it),
 // every team defends once, problems without repeats inside a pool, passage
-// n of every pool in the day's slot n (pools in parallel). Problems are
-// spread so the passages of a slot play problems as different as possible
-// (pickProblems): a specialized jury duo then finds a passage of its problem
-// in every slot. The finale (finaleDraw.ts) builds its first round with the
-// same bricks.
+// n of every pool in the day's slot n (pools in parallel). In two steps:
+//   1. the problem of every passage (spreadProblems): the 4 problems
+//      defended equally often over the day, and the passages of a slot
+//      playing problems as different as possible — a specialized jury duo
+//      then finds a passage of its problem in every slot;
+//   2. which team defends which of those passages (seatByRanking): as close
+//      to each team's ranking of the problems as the first step allows. The
+//      pools themselves come out of this seating.
+// The finale (finaleDraw.ts) builds its first round with the same bricks.
+
+import { minCostAssignment } from "./hungarian";
 
 // The qualifications' problems. The frontend has its own copy for its menus
 // (QUALIFS_PROBLEMS in frontend/src/utils/labels.ts): keep them equal.
 export const QUALIFS_PROBLEMS = [1, 2, 3, 4];
+
+// What defending its 1st…4th choice costs a team; the draw minimizes the
+// sum. Not squares on purpose: a 1st + a 4th choice (5) beat two 3rd
+// choices (6), while two 2nd choices (2) still beat a 1st + a 3rd (3).
+export const CHOICE_COST = [0, 1, 3, 5];
+
+// A team without a ranking has no preference; a problem left out of a
+// partial ranking comes after the ranked ones.
+export function choiceCost(ranking: readonly number[] | undefined, problem: number): number {
+  if (!ranking || ranking.length === 0) return 0;
+  const rank = ranking.indexOf(problem);
+  return CHOICE_COST[Math.min(rank === -1 ? ranking.length : rank, CHOICE_COST.length - 1)];
+}
 
 // How many of the day's passages play each problem in each slot, keyed
 // "slot:problem". spreadProblems reads and updates it.
@@ -26,8 +45,11 @@ export function slotLoad(passages: { slot: number; problemNumber: number }[]): S
   return load;
 }
 
-// Squares tried per block when the day already has passages to balance with
+// Random squares tried per block, unless one is already perfect
 const CANDIDATE_SQUARES = 200;
+// How much more an uneven count of defenses per problem weighs than a
+// repeated problem in a slot: the counts come first
+const COUNT_WEIGHT = 1000;
 
 // A random Latin square over the problems — every row and every column
 // holds each problem once: a cyclic square with its rows, columns and
@@ -46,30 +68,55 @@ function randomLatinSquare(problems: number[]): number[][] {
 // block plays each problem once in every slot, and the last, partial one
 // never twice in the same slot, so each slot is balanced to within one
 // passage. Pools of 4 go first, so slot 4 (which pools of 3 don't have) is
-// only partial in one block. When the day already has passages (`load`),
-// each block keeps the square that repeats them the least. Updates `load`.
+// only partial in one block.
+//
+// Each block keeps, among random squares, the one that best evens out how
+// many times each problem is defended over the day (a pool of 3 leaves one
+// problem out: two such pools shouldn't leave out the same one), then that
+// repeats the problems already in each slot the least. Counts start from
+// `load` (the day's existing passages); a fresh draw ends with counts within
+// one of each other. Updates `load`.
 export function spreadProblems(sizes: number[], problemPool: number[], load: SlotLoad): number[][] {
   if (sizes.some((n) => n > problemPool.length)) throw new Error("Pas assez de problèmes pour cette poule");
   const m = problemPool.length;
   const order = sizes.map((size, index) => ({ size, index })).sort((a, b) => b.size - a.size);
   const problems: number[][] = new Array(sizes.length);
 
+  // How many passages defend each problem so far
+  const defended = new Map(problemPool.map((p) => [p, 0]));
+  for (const [key, n] of load) {
+    const problem = Number(key.split(":")[1]);
+    if (defended.has(problem)) defended.set(problem, defended.get(problem)! + n);
+  }
+
   for (let start = 0; start < order.length; start += m) {
     const block = order.slice(start, start + m);
-    const cost = (square: number[][]) =>
-      block.reduce((sum, { size }, row) =>
-        sum + square[row].slice(0, size).reduce((s, p, i) => s + (load.get(loadKey(i + 1, p)) ?? 0), 0), 0);
+    const rows = (square: number[][]) => block.map(({ size }, row) => square[row].slice(0, size));
+    const cost = (square: number[][]) => {
+      const counts = new Map(defended);
+      let repeats = 0;
+      for (const row of rows(square)) {
+        row.forEach((p, i) => {
+          counts.set(p, counts.get(p)! + 1);
+          repeats += load.get(loadKey(i + 1, p)) ?? 0;
+        });
+      }
+      return COUNT_WEIGHT * (Math.max(...counts.values()) - Math.min(...counts.values())) + repeats;
+    };
 
     let best = randomLatinSquare(problemPool);
-    if (load.size > 0) {
-      for (let k = 1; k < CANDIDATE_SQUARES && cost(best) > 0; k++) {
-        const square = randomLatinSquare(problemPool);
-        if (cost(square) < cost(best)) best = square;
-      }
+    let bestCost = cost(best);
+    for (let k = 1; k < CANDIDATE_SQUARES && bestCost > 0; k++) {
+      const square = randomLatinSquare(problemPool);
+      const c = cost(square);
+      if (c < bestCost) [best, bestCost] = [square, c];
     }
-    block.forEach(({ size, index }, row) => {
-      problems[index] = best[row].slice(0, size);
-      problems[index].forEach((p, i) => load.set(loadKey(i + 1, p), (load.get(loadKey(i + 1, p)) ?? 0) + 1));
+    rows(best).forEach((row, r) => {
+      problems[block[r].index] = row;
+      row.forEach((p, i) => {
+        load.set(loadKey(i + 1, p), (load.get(loadKey(i + 1, p)) ?? 0) + 1);
+        defended.set(p, defended.get(p)! + 1);
+      });
     });
   }
   return problems;
@@ -96,10 +143,15 @@ export interface DrawnPool {
   passages: DrawnPassage[];
 }
 
+export interface RankedTeam {
+  id: string;
+  problemRanking?: readonly number[]; // favorite problem first; empty = no preference
+}
+
 // Draws the pools of one center day. What can't make a clean pool is left
 // aside rather than refused (see splitForQualifs). `taken`: the passages the
 // day already has (completing a draw), which the new pools balance against.
-export function generateQualifsDay<T extends { id: string }>(args: {
+export function generateQualifsDay<T extends RankedTeam>(args: {
   teams: T[];
   labelPrefix: string; // "CAS-A" -> pools CAS-A1, CAS-A2…
   labelStart?: number; // first pool number, to continue an existing series
@@ -107,14 +159,48 @@ export function generateQualifsDay<T extends { id: string }>(args: {
   taken?: { slot: number; problemNumber: number }[];
 }): { pools: DrawnPool[]; leftover: T[] } {
   const { groups, leftover } = splitForQualifs(shuffle(args.teams));
+  const sizes = groups.map((g) => g.length);
+  const problems = spreadProblems(sizes, args.problemPool ?? QUALIFS_PROBLEMS, slotLoad(args.taken ?? []));
   const start = args.labelStart ?? 1;
-  const pools = buildRound(
-    groups,
-    args.problemPool ?? QUALIFS_PROBLEMS,
-    (idx) => `${args.labelPrefix}${idx + start}`,
-    slotLoad(args.taken ?? []),
-  );
+  const pools = seatByRanking(problems, groups.flat()).map((teams, index) =>
+    rotation(`${args.labelPrefix}${index + start}`, teams, problems[index]));
   return { pools, leftover };
+}
+
+// Far below the gap between two choice costs: it only decides between
+// equally good seatings, which keeps the pools random among them.
+const TIE_NOISE = 1e-4;
+
+// Seats the teams in the pools: the team seated at (pool k, slot i) defends
+// problems[k][i]. One min-cost assignment of teams to seats, costed by each
+// team's ranking (choiceCost). Returns each pool's teams, slot 1 first.
+export function seatByRanking<T extends RankedTeam>(problems: number[][], teams: T[]): T[][] {
+  const seats = problems.flatMap((row, pool) => row.map((problem, slot) => ({ pool, slot, problem })));
+  if (seats.length !== teams.length) throw new Error(`${teams.length} équipes pour ${seats.length} places dans les poules`);
+  const cost = teams.map((team) => seats.map((seat) => choiceCost(team.problemRanking, seat.problem) + Math.random() * TIE_NOISE));
+  const pools: T[][] = problems.map((row) => new Array(row.length));
+  minCostAssignment(cost).forEach((seat, team) => {
+    pools[seats[seat].pool][seats[seat].slot] = teams[team];
+  });
+  return pools;
+}
+
+// A pool's passages, in rotation: in passage i, team i defends problems[i],
+// i+1 opposes, i+2 reports and (in a pool of 4) i+3 observes.
+function rotation(label: string, teams: { id: string }[], problems: number[]): DrawnPool {
+  const n = teams.length;
+  return {
+    label,
+    passages: teams.map((_, i) => ({
+      label: `${label}P${i + 1}`,
+      slot: i + 1,
+      problemNumber: problems[i],
+      defenderTeamId: teams[i].id,
+      opponentTeamId: teams[(i + 1) % n].id,
+      reporterTeamId: teams[(i + 2) % n].id,
+      extraTeamId: n === 4 ? teams[(i + 3) % n].id : null,
+    })),
+  };
 }
 
 // Pools of 4, then of 3, and what's left aside. A team that can't make a
@@ -132,9 +218,9 @@ export function splitForQualifs<T>(teams: T[]): { groups: T[][]; leftover: T[] }
   return { groups, leftover: teams.slice(taken) };
 }
 
-// One pool per group of teams, in rotation: in passage i, team i defends,
-// i+1 opposes, i+2 reports and (in a pool of 4) i+3 observes. The pools'
-// problems are spread across each slot (spreadProblems), starting from `load`.
+// One pool per group of teams, as given (no rankings), in rotation. The
+// pools' problems are spread across each slot (spreadProblems), starting
+// from `load`. The finale's first round.
 export function buildRound(
   groups: { id: string }[][],
   problemPool: number[],
@@ -142,23 +228,7 @@ export function buildRound(
   load: SlotLoad = new Map(),
 ): DrawnPool[] {
   const poolProblems = spreadProblems(groups.map((g) => g.length), problemPool, load);
-  return groups.map((teams, index) => {
-    const label = poolLabel(index);
-    const n = teams.length;
-    const problems = poolProblems[index];
-    return {
-      label,
-      passages: teams.map((_, i) => ({
-        label: `${label}P${i + 1}`,
-        slot: i + 1,
-        problemNumber: problems[i],
-        defenderTeamId: teams[i].id,
-        opponentTeamId: teams[(i + 1) % n].id,
-        reporterTeamId: teams[(i + 2) % n].id,
-        extraTeamId: n === 4 ? teams[(i + 3) % n].id : null,
-      })),
-    };
-  });
+  return groups.map((teams, index) => rotation(poolLabel(index), teams, poolProblems[index]));
 }
 
 // Pool sizes for `totalTeams`, as close to `preferredSize` (3 or 4) as the
