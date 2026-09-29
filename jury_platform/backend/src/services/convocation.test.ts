@@ -90,6 +90,22 @@ describe("convocation email", () => {
     expect(reminder).toContain("avant la deadline.");
   });
 
+  it("says in bold, under « IMPORTANT », that it isn't a convocation, the second « convocation » and « légalisée » underlined", () => {
+    const { html, text } = buildConvocation(input());
+    const notice = html.match(/<p[^>]*>Ce mail ne constitue pas[\s\S]*?<\/p>/)?.[0] ?? "";
+    expect(notice).toMatch(/font-weight:700/);
+    expect(notice).toContain("Ce mail ne constitue pas une convocation. L'accès au campus");
+    expect(notice).toContain("présentation de votre <u>convocation</u> ainsi que votre autorisation parentale <u>légalisée</u>.");
+    expect(notice.match(/<u>/g)).toHaveLength(2);
+    // Under a red « ⚠️ IMPORTANT » label, in a box with a red edge
+    expect(html).toMatch(/border-left:4px solid #b23b1b[^>]*><div[^>]*color:#b23b1b[^>]*>⚠️ IMPORTANT<\/div><p[^>]*>Ce mail ne constitue/);
+    expect(text).toContain("⚠️ IMPORTANT\nCe mail ne constitue pas une convocation.");
+    // Before the timetable, in both bodies
+    expect(html.indexOf("Ce mail ne constitue")).toBeLessThan(html.indexOf("Votre journée</div>"));
+    expect(text).toContain("Ce mail ne constitue pas une convocation. L'accès au campus et la participation au tournoi sont conditionnés par la présentation de votre convocation ainsi que votre autorisation parentale légalisée.");
+    expect(text.indexOf("Ce mail ne constitue")).toBeLessThan(text.indexOf("Votre journée"));
+  });
+
   it("heads with the logo, « 2026 Qualifications » and no team name, in the platform's fonts", () => {
     const { html } = buildConvocation(input());
     const header = html.match(/<tr><td style="background:#122019[\s\S]*?<\/td><\/tr>/)?.[0] ?? "";

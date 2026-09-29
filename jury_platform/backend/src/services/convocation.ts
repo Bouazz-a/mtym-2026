@@ -180,6 +180,24 @@ export function buildConvocation(input: ConvocationInput): Convocation {
   const title = `Votre journée du ${day} (${where})`;
   const greeting = `Bonjour à toute l'équipe ${team.name} (${team.quadrigram}),`;
   const intro = "Voici votre programme pour les qualifications du MTYM 2026.";
+  // Under the day's details: an « IMPORTANT » label, then the text in bold,
+  // the second « convocation » and « légalisée » underlined in the HTML
+  const notice: Paragraph = (() => {
+    const label = "⚠️ IMPORTANT";
+    const [a, b, c, d] = [
+      "Ce mail ne constitue pas une convocation. L'accès au campus et la participation au tournoi sont conditionnés par la présentation de votre ",
+      " ainsi que votre autorisation parentale ",
+      "légalisée",
+      ".",
+    ];
+    return {
+      text: `${label}\n${a}convocation${b}${c}${d}`,
+      html: `<div style="margin:0 0 18px;border-left:4px solid ${CLAY};background:#fcf0ec;padding:10px 12px">`
+        + `<div style="margin:0 0 4px;font-family:${HEADING};font-weight:900;font-size:14px;letter-spacing:1px;color:${CLAY}">${label}</div>`
+        + `<p style="margin:0;font-family:${BODY};font-size:15px;line-height:1.55;font-weight:700;color:${FOREST}">`
+        + `${esc(a)}<u>convocation</u>${esc(b)}<u>${esc(c)}</u>${esc(d)}</p></div>`,
+    };
+  })();
   const signoff = ["Bonne préparation, et à très bientôt !", "L'équipe MTYM"];
   const help = "Une question ? Répondez simplement à cet email.";
   const plain = (p: Paragraph) => (typeof p === "string" ? p : p.text);
@@ -195,6 +213,8 @@ export function buildConvocation(input: ConvocationInput): Convocation {
     `Date : ${day}`,
     `${input.center.online ? "Lieu" : "Centre"} : ${where}`,
     ...(pools ? [`Poule : ${pools}`] : []),
+    "",
+    plain(notice),
     "",
     "Votre journée",
     ...timetable.map((t) => t.role === "pause"
@@ -247,6 +267,7 @@ export function buildConvocation(input: ConvocationInput): Convocation {
         <tr>${label(input.center.online ? "Lieu" : "Centre")}${value(where)}</tr>
         ${pools ? `<tr>${label("Poule")}${value(pools)}</tr>` : ""}
       </table>
+      ${para(notice)}
       <div style="font-family:${HEADING};font-weight:900;font-size:14px;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px">Votre journée</div>
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:14px;border-top:2px solid ${FOREST};margin-bottom:8px">${rows}</table>
       ${sections.map((s) => `
