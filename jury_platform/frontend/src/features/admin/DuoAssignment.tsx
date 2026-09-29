@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Alert, Badge, Btn, BrutalCard, Modal, SectionHeading, Select } from "@/features/shared/primitives";
 import { autoAssignDuos, createDuo, deleteDuo, updateDuo, type AutoAssignMode } from "@/lib/repositories/duoRepository";
 import type { Account, CenterDay, JuryDuo, PoolDetails, ScheduleSlot, Team } from "@/types";
@@ -8,7 +8,7 @@ import { DayTimetable } from "./JuryTimetable";
 import { ScheduleEditor } from "./ScheduleEditor";
 import { DUO_QUERIES, useAction } from "./useAction";
 
-// One center day: form its jury duos (two or three jurors) and give each one
+// One center day: form its jury duos (two jurors or more) and give each one
 // a problem (its jurors become that problem's specialists, which steers the
 // automatic assignment of passages and reports), then give each passage of
 // the day's timetable one duo (from the organizers' jury plan). A duo stays
@@ -49,7 +49,7 @@ export function DayJury({
           right={<Badge tone="neutral">{duos.length} duo{duos.length > 1 ? "s" : ""}</Badge>}
         />
         <BrutalCard className="p-5">
-          <ul className="space-y-2">
+          <ul className="space-y-4">
             {duos.map((duo) => (
               <DuoRow
                 key={duo.id}
@@ -264,7 +264,8 @@ function ProblemSelect({
   );
 }
 
-// A duo's jurors: two, and a third on demand (« + Juré »)
+// A duo's jurors: two, and more on demand — « + Juré » opens an empty
+// field; picking « aucun » in a field past the second takes that juror out
 function JurorSelects({
   ids,
   onChange,
@@ -278,11 +279,11 @@ function JurorSelects({
   unavailable: Set<string>;
   specialtyOf: (id: string) => number[];
 }) {
-  const [third, setThird] = useState(false);
-  const slots = ids.length > 2 || third ? 3 : 2;
+  const [adding, setAdding] = useState(false); // an empty field is open
+  const slots = Math.max(2, ids.length) + (adding ? 1 : 0);
   const change = (index: number) => (id: string) => {
     const next = Array.from({ length: slots }, (_, i) => (i === index ? id : ids[i] ?? ""));
-    if (index === 2 && !id) setThird(false);
+    if (index >= ids.length) setAdding(false);
     onChange(next);
   };
   return (
@@ -290,18 +291,29 @@ function JurorSelects({
       {Array.from({ length: slots }, (_, i) => (
         <JurorSelect
           key={i} {...select} value={ids[i] ?? ""} disabled={disabled} onChange={change(i)}
-          placeholder={i < 2 ? `Juré ${i + 1}` : "Juré 3 (aucun)"}
+          placeholder={i < 2 ? `Juré ${i + 1}` : `Juré ${i + 1} (aucun)`}
         />
       ))}
-      {/* As wide as a juror's field, so the problems line up across the duos */}
-      {slots === 2 && (
-        <div style={{ width: "15rem" }}>
-          <Btn variant="ghost" size="sm" disabled={disabled} title="Un duo peut compter trois jurés" onClick={() => setThird(true)}>
-            + Juré
-          </Btn>
-        </div>
+      {!adding && (
+        <Btn variant="ghost" size="sm" disabled={disabled} title="Ajouter un juré à ce duo" onClick={() => setAdding(true)}>
+          + Juré
+        </Btn>
       )}
     </>
+  );
+}
+
+// A duo's row: its badge, its jurors (wrapping onto more lines when there
+// are many), then its problem and actions, at the same place on every row.
+// Aligned on the text baseline, so the badge and actions sit on the jurors'
+// first line.
+function DuoLayout({ badge, children: [jurorFields, actions] }: { badge: ReactNode; children: [ReactNode, ReactNode] }) {
+  return (
+    <div className="flex items-baseline gap-3 flex-wrap">
+      <div style={{ width: "5rem" }}>{badge}</div>
+      <div className="flex items-baseline gap-3 flex-wrap flex-1 min-w-0">{jurorFields}</div>
+      <div className="flex items-baseline gap-3 flex-wrap" style={{ minWidth: "min(24rem, 100%)" }}>{actions}</div>
+    </div>
   );
 }
 
@@ -340,28 +352,29 @@ function DuoRow({
 
   return (
     <li>
-      <div className="flex items-center gap-3 flex-wrap">
-        <Badge tone="dark">Duo {duo.number}</Badge>
+      <DuoLayout badge={<Badge tone="dark">Duo {duo.number}</Badge>}>
         <JurorSelects ids={ids} jurors={jurors} unavailable={busyJurors} specialtyOf={specialtyOf} disabled={busy} onChange={change} />
-        <ProblemSelect
-          value={duo.problemNumber}
-          disabled={busy}
-          onChange={(problemNumber) => run(() => updateDuo(duo.id, { problemNumber }))}
-        />
-        <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800, minWidth: "5.5rem" }}>
-          {passages} passage{passages > 1 ? "s" : ""}
-        </span>
-        {confirmDelete ? (
-          <>
-            <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(false); run(() => deleteDuo(duo.id)); }}>Confirmer</Btn>
-            <Btn variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Annuler</Btn>
-          </>
-        ) : (
-          <Btn variant="danger" size="sm" title="Ses passages repasseront « sans duo »" onClick={() => setConfirmDelete(true)}>
-            Supprimer
-          </Btn>
-        )}
-      </div>
+        <>
+          <ProblemSelect
+            value={duo.problemNumber}
+            disabled={busy}
+            onChange={(problemNumber) => run(() => updateDuo(duo.id, { problemNumber }))}
+          />
+          <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800, minWidth: "5.5rem" }}>
+            {passages} passage{passages > 1 ? "s" : ""}
+          </span>
+          {confirmDelete ? (
+            <>
+              <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(false); run(() => deleteDuo(duo.id)); }}>Confirmer</Btn>
+              <Btn variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Annuler</Btn>
+            </>
+          ) : (
+            <Btn variant="danger" size="sm" title="Ses passages repasseront « sans duo »" onClick={() => setConfirmDelete(true)}>
+              Supprimer
+            </Btn>
+          )}
+        </>
+      </DuoLayout>
       {error && <div className="mt-2"><Alert>{error}</Alert></div>}
     </li>
   );
@@ -389,7 +402,7 @@ function NewDuoRow({
 
   // A juror who only ever had one problem suggests it, while none is chosen
   const pick = (next: string[]) => {
-    setIds(next);
+    setIds(next.filter((id, i) => i < 2 || id)); // an extra juror taken out closes their field
     const added = next.find((id) => id && !ids.includes(id));
     const problems = added ? specialtyOf(added) : [];
     if (problem === null && problems.length === 1) setProblem(problems[0]);
@@ -406,14 +419,15 @@ function NewDuoRow({
 
   return (
     <li className="pt-2" style={{ borderTop: "1px dashed var(--border)" }}>
-      <div className="flex items-center gap-3 flex-wrap">
-        <Badge tone="neutral">Nouveau</Badge>
+      <DuoLayout badge={<Badge tone="neutral">Nouveau</Badge>}>
         <JurorSelects ids={ids} jurors={jurors} unavailable={unavailable} specialtyOf={specialtyOf} onChange={pick} />
-        <ProblemSelect value={problem} onChange={setProblem} />
-        <Btn size="sm" disabled={chosen.length < 2 || busy} onClick={create}>Créer le duo</Btn>
-      </div>
+        <>
+          <ProblemSelect value={problem} onChange={setProblem} />
+          <Btn size="sm" disabled={chosen.length < 2 || busy} onClick={create}>Créer le duo</Btn>
+        </>
+      </DuoLayout>
       <p className="font-open text-xs mt-2" style={{ color: "var(--ink-soft)" }}>
-        Deux ou trois jurés par duo, et le problème de votre choix. À côté de chaque juré : les problèmes de ses autres
+        Deux jurés ou plus par duo (« + Juré » en ajoute un), et le problème de votre choix. À côté de chaque juré : les problèmes de ses autres
         duos, tous jours et centres confondus.
       </p>
       {error && <div className="mt-2"><Alert>{error}</Alert></div>}

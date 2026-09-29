@@ -263,6 +263,7 @@ export interface TeamMailingRow {
   members: number;
   recipients: number; // members with an email
   inPool: boolean;
+  pool: string | null; // its pool's label, "CAS-A1"
   defense: { problem: number } | null;
   opposition: MailingRole | null;
   report: MailingRole | null;
@@ -282,6 +283,22 @@ export interface MailingAttachment {
   size: number | null; // bytes; null when unknown
   state: "attached" | "missing" | "tooLarge";
   error?: string;
+}
+
+// The admin's words in the convocation email, with {variables} filled in
+// per team (backend/src/services/convocation.ts); the rest is generated
+export interface MailTemplate {
+  subject: string;
+  title: string;
+  intro: string; // the opening, up to the day's details; paragraphs split by a blank line
+}
+
+export interface MailTemplateInfo {
+  template: MailTemplate;
+  defaults: MailTemplate;
+  variables: Record<string, string>; // name -> what it becomes
+  updatedAt: string | null; // null: the defaults
+  updatedBy: string | null;
 }
 
 export interface MailingPreview {

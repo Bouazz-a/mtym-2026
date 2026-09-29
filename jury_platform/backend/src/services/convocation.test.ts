@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildConvocation, longDate, recipientsOf, type ConvocationInput, type ConvocationPassage, type ReportState } from "./convocation";
+import {
+  buildConvocation, DEFAULT_TEMPLATE, longDate, recipientsOf, unknownVariables, type ConvocationInput, type ConvocationPassage, type ReportState,
+} from "./convocation";
 
 const TEAMS = new Map(["ALFA", "BETA", "GAMA", "DELT"].map((q) => [q, { id: q, quadrigram: q, name: `Équipe ${q}` }]));
 
@@ -158,6 +160,48 @@ describe("convocation email", () => {
 });
 
 describe("recipients", () => {
+  it("takes the admin's subject, title and opening, variables filled in", () => {
+    const template = {
+      subject: "Convocation {quadrigramme} · {jour}",
+      title: "Rendez-vous à {centre}, poule {poule}",
+      intro: "Chère équipe {equipe},\nune ligne de plus.\n\n\nDeuxième paragraphe, {inconnue} laissée telle quelle.",
+    };
+    const { subject, html, text } = buildConvocation(input({ template }));
+    expect(subject).toBe("Convocation ALFA · samedi 26 septembre");
+    expect(html).toContain(">Rendez-vous à Casablanca, poule CAS-A1</h1>");
+    expect(html).toContain(">Chère équipe Équipe ALFA,<br>une ligne de plus.</p>");
+    expect(html).toContain(">Deuxième paragraphe, {inconnue} laissée telle quelle.</p>");
+    expect(html).not.toContain("Bonjour à toute l'équipe");
+    expect(text).toContain("RENDEZ-VOUS À CASABLANCA, POULE CAS-A1\n\nChère équipe Équipe ALFA,\nune ligne de plus.\n\nDeuxième paragraphe");
+  });
+
+  it("keeps everything after the opening, whatever the template", () => {
+    const custom = buildConvocation(input({ template: { subject: "S", title: "T", intro: "I" } }));
+    const standard = buildConvocation(input());
+    const fromDetails = (html: string) => html.slice(html.indexOf("<table role=\"presentation\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin:6px"));
+    expect(fromDetails(custom.html)).toBe(fromDetails(standard.html));
+    expect(custom.html).toContain("⚠️ IMPORTANT");
+    expect(custom.attachments).toEqual(standard.attachments);
+  });
+
+  it("escapes the template in the HTML", () => {
+    const { html } = buildConvocation(input({ template: { ...DEFAULT_TEMPLATE, intro: "<b>gras</b> & {equipe}" } }));
+    expect(html).toContain("&lt;b&gt;gras&lt;/b&gt; &amp; Équipe ALFA");
+  });
+
+  it("gives the default text when there is no template, as before", () => {
+    const { subject, html } = buildConvocation(input());
+    expect(subject).toBe("[MTYM 2026] Problème à défendre et planning des passages");
+    expect(html).toContain(">Votre journée du samedi 26 septembre (Casablanca)</h1>");
+    expect(html).toContain(">Bonjour à toute l'équipe Équipe ALFA (ALFA),</p>");
+  });
+
+  it("names the variables that don't exist", () => {
+    expect(unknownVariables("{equipe} {jour} {centre} {poule} {quadrigramme}")).toEqual([]);
+    expect(unknownVariables("{equpe}, {Equipe} et {equpe}")).toEqual(["equpe", "Equipe"]);
+    expect(unknownVariables("{ pas une variable } {}")).toEqual([]);
+  });
+
   it("keeps each well-formed address once", () => {
     expect(recipientsOf([{ email: " A@x.ma " }, { email: "a@x.ma" }, { email: "pas-un-email" }, { email: "b@y.org" }]))
       .toEqual(["a@x.ma", "b@y.org"]);

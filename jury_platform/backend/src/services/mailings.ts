@@ -3,7 +3,9 @@ import path from "node:path";
 import { db } from "../db";
 import { AppError, BadRequestError, NotFoundError } from "../utils/errors";
 import { centerName } from "./centers";
-import { buildConvocation, LOGO_CID, recipientsOf, reportFilename, type Convocation, type ReportState } from "./convocation";
+import {
+  buildConvocation, DEFAULT_TEMPLATE, LOGO_CID, recipientsOf, reportFilename, type Convocation, type MailTemplate, type ReportState,
+} from "./convocation";
 import { reportFile, reportFileSize } from "./reportFiles";
 
 // Loads what a team's convocation email is made of — its day, passages,
@@ -38,15 +40,31 @@ export interface AttachmentInfo {
   error?: string;
 }
 
+// The admin's subject, title and opening, or the defaults while none is saved
+export async function mailTemplate(): Promise<MailTemplate> {
+  const saved = await db.mailTemplate.findUnique({ where: { id: 1 } });
+  return saved ? { subject: saved.subject, title: saved.title, intro: saved.intro } : DEFAULT_TEMPLATE;
+}
+
+// How the defending teams' reports are handled:
+//   · "download" — fetched, to attach (sending)
+//   · "size"     — only their size read (the preview: too heavy?)
+//   · "skip"     — nothing fetched, assumed attached (the template editor's
+//                  live preview, called at each pause in the typing)
+export type ReportFiles = "download" | "size" | "skip";
+
 export interface ComposedConvocation extends Convocation {
   to: string[];
   attachmentInfo: AttachmentInfo[];
   files: { filename: string; content: Buffer }[]; // only when asked (sending)
 }
 
-// `withFiles`: download the reports to attach (sending). Without it (the
-// preview), only their sizes are read.
-export async function composeConvocation(teamId: string, withFiles: boolean): Promise<ComposedConvocation> {
+// `template`: a draft to show instead of the saved one (the editor's preview)
+export async function composeConvocation(
+  teamId: string,
+  reportFiles: ReportFiles,
+  template?: MailTemplate,
+): Promise<ComposedConvocation> {
   const team = await db.team.findUnique({ where: { id: teamId }, include: { centerDay: true, contacts: true } });
   if (!team) throw new NotFoundError("Équipe introuvable");
   const day = team.centerDay;
@@ -82,7 +100,7 @@ export async function composeConvocation(teamId: string, withFiles: boolean): Pr
     }
     let size: number | null = null;
     let error: string | undefined;
-    if (withFiles) {
+    if (reportFiles === "download") {
       try {
         const content = await reportFile(report.fileUrl);
         size = content.length;
@@ -91,7 +109,7 @@ export async function composeConvocation(teamId: string, withFiles: boolean): Pr
         // Never send a convocation silently missing a report that exists
         throw new AppError(502, `Impossible de récupérer le rapport de ${quad} (problème ${p.problemNumber}) : ${(err as Error).message}`);
       }
-    } else {
+    } else if (reportFiles === "size") {
       try {
         size = await reportFileSize(report.fileUrl);
       } catch (err) {
@@ -111,6 +129,7 @@ export async function composeConvocation(teamId: string, withFiles: boolean): Pr
     teams,
     reportState: (teamId, problem) => states.get(key(teamId, problem)) ?? "missing",
     uploadUrl: UPLOAD_URL,
+    template: template ?? (await mailTemplate()),
   });
 
   const files = convocation.attachments.flatMap((a) => {

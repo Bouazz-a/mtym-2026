@@ -62,7 +62,7 @@ export function JuryPage() {
       <PageHeader
         eyebrow="Administration"
         title="Jury"
-        sub="Choisissez un jour, formez ses duos (deux ou trois jurés) et donnez à chacun son problème, puis cliquez sur un passage du planning pour lui donner un duo."
+        sub="Choisissez un jour, formez ses duos (deux jurés ou plus) et donnez à chacun son problème, puis cliquez sur un passage du planning pour lui donner un duo."
       />
 
       <Stagger className="grid grid-cols-2 lg:grid-cols-4 gap-6">

@@ -7,6 +7,9 @@
 // opposes and the one it reports on (the defending team's report attached,
 // to read and analyze beforehand). In a pool of 4, the team that has no
 // role in a passage waits outside the room: a pause in its timetable.
+//
+// The subject, the title and the opening (up to the day's details) are the
+// admin's words (MailTemplate), with {variables}; the rest is built here.
 
 export interface ConvocationTeam {
   id: string;
@@ -36,7 +39,43 @@ export interface ConvocationInput {
   teams: Map<string, ConvocationTeam>;
   reportState: (teamId: string, problemNumber: number) => ReportState;
   uploadUrl: string; // where teams upload their presentation, e.g. "mtym.mathmaroc.org"
+  template?: MailTemplate; // DEFAULT_TEMPLATE when left out
 }
+
+// ── The admin's part of the email ──
+
+export interface MailTemplate {
+  subject: string;
+  title: string;
+  intro: string; // paragraphs separated by a blank line
+}
+
+// What each {variable} becomes, for one team
+export const TEMPLATE_VARIABLES = {
+  equipe: "le nom de l'équipe",
+  quadrigramme: "son quadrigramme",
+  jour: "la date, ex. « samedi 3 octobre »",
+  centre: "le centre, ou « En ligne »",
+  poule: "sa poule",
+} as const;
+type Variable = keyof typeof TEMPLATE_VARIABLES;
+
+export const DEFAULT_TEMPLATE: MailTemplate = {
+  subject: "[MTYM 2026] Problème à défendre et planning des passages",
+  title: "Votre journée du {jour} ({centre})",
+  intro: "Bonjour à toute l'équipe {equipe} ({quadrigramme}),\n\nVoici votre programme pour les qualifications du MTYM 2026.",
+};
+
+const VARIABLE = /\{([^{}\s]+)\}/g;
+
+// The {variables} of a text that don't exist, each once: "{equipe}" is
+// one, "{equpe}" isn't
+export function unknownVariables(text: string): string[] {
+  return [...new Set([...text.matchAll(VARIABLE)].map((m) => m[1]).filter((v) => !(v in TEMPLATE_VARIABLES)))];
+}
+
+const fill = (text: string, values: Record<Variable, string>) =>
+  text.replace(VARIABLE, (whole, name: string) => (name in values ? values[name as Variable] : whole));
 
 export interface Convocation {
   subject: string;
@@ -176,10 +215,11 @@ export function buildConvocation(input: ConvocationInput): Convocation {
   });
   const pools = [...new Set(passages.map((p) => p.poolLabel))].join(", ");
 
-  const subject = "[MTYM 2026] Problème à défendre et planning des passages";
-  const title = `Votre journée du ${day} (${where})`;
-  const greeting = `Bonjour à toute l'équipe ${team.name} (${team.quadrigram}),`;
-  const intro = "Voici votre programme pour les qualifications du MTYM 2026.";
+  const template = input.template ?? DEFAULT_TEMPLATE;
+  const values = { equipe: team.name, quadrigramme: team.quadrigram, jour: day, centre: where, poule: pools };
+  const subject = fill(template.subject, values);
+  const title = fill(template.title, values);
+  const opening = fill(template.intro, values).split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
   // Under the day's details: an « IMPORTANT » label, then the text in bold,
   // the second « convocation » and « légalisée » underlined in the HTML
   const notice: Paragraph = (() => {
@@ -206,10 +246,7 @@ export function buildConvocation(input: ConvocationInput): Convocation {
   const text = [
     title.toUpperCase(),
     "",
-    greeting,
-    "",
-    intro,
-    "",
+    ...opening.flatMap((x) => [x, ""]),
     `Date : ${day}`,
     `${input.center.online ? "Lieu" : "Centre"} : ${where}`,
     ...(pools ? [`Poule : ${pools}`] : []),
@@ -227,7 +264,8 @@ export function buildConvocation(input: ConvocationInput): Convocation {
   ].join("\n");
 
   // ── HTML ──
-  const p = (s: string) => `<p style="margin:0 0 10px;font-family:${BODY};font-size:15px;line-height:1.55;color:${FOREST}">${esc(s)}</p>`;
+  // A paragraph; a line break in the admin's text stays one
+  const p = (s: string) => `<p style="margin:0 0 10px;font-family:${BODY};font-size:15px;line-height:1.55;color:${FOREST}">${esc(s).replace(/\n/g, "<br>")}</p>`;
   const para = (x: Paragraph) => (typeof x === "string" ? p(x) : x.html);
   const cell = `padding:8px 10px;border-bottom:1px solid #e1dcc9;font-family:${BODY}`;
   const rows = timetable
@@ -260,8 +298,7 @@ export function buildConvocation(input: ConvocationInput): Convocation {
     </td></tr>
     <tr><td style="padding:22px 24px">
       <h1 style="margin:0 0 18px;font-family:${HEADING};font-weight:900;font-size:24px;line-height:1.25;color:${FOREST}">${esc(title)}</h1>
-      ${p(greeting)}
-      ${p(intro)}
+      ${opening.map(p).join("\n      ")}
       <table role="presentation" cellspacing="0" cellpadding="0" style="margin:6px 0 18px;font-size:15px">
         <tr>${label("Date")}${value(day)}</tr>
         <tr>${label(input.center.online ? "Lieu" : "Centre")}${value(where)}</tr>

@@ -4,8 +4,8 @@ import { db } from "../db";
 import { adminOnly } from "../middleware/auth";
 import { audit } from "../services/audit";
 import { sendMail, mailConfigured } from "../services/mailer";
-import { recipientsOf } from "../services/convocation";
-import { composeConvocation, logoAttachment, withInlineLogo } from "../services/mailings";
+import { DEFAULT_TEMPLATE, recipientsOf, TEMPLATE_VARIABLES, unknownVariables, type MailTemplate } from "../services/convocation";
+import { composeConvocation, logoAttachment, mailTemplate, withInlineLogo } from "../services/mailings";
 import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 // Convocation emails to the teams — mounted under /api/mailings, admins
@@ -29,7 +29,7 @@ router.get("/", asyncRoute(async (req, res) => {
     include: { contacts: true, mailings: { orderBy: { sentAt: "desc" }, take: 1 } },
     orderBy: { quadrigram: "asc" },
   });
-  const passages = await db.passage.findMany({ where: { pool: { centerDayId } } });
+  const passages = await db.passage.findMany({ where: { pool: { centerDayId } }, include: { pool: { select: { label: true } } } });
   const reports = await db.teamReport.findMany({
     where: { teamId: { in: teams.map((t) => t.id) } },
     select: { teamId: true, problemNumber: true },
@@ -57,6 +57,7 @@ router.get("/", asyncRoute(async (req, res) => {
         members: (t.members as unknown[]).length,
         recipients: recipientsOf(t.contacts).length,
         inPool: Boolean(defense),
+        pool: defense?.pool.label ?? null,
         defense: defense ? { problem: defense.problemNumber } : null,
         opposition: against(opposition) ?? null,
         report: against(report) ?? null,
@@ -68,9 +69,99 @@ router.get("/", asyncRoute(async (req, res) => {
   });
 }));
 
+// ─── The admin's words: subject, title, opening ──────────────────────
+
+// The template, cleaned up and checked: a one-line subject and title, an
+// opening of paragraphs, and only {variables} that exist
+function parseTemplate(body: unknown): MailTemplate {
+  const raw = z.object({ subject: z.string(), title: z.string(), intro: z.string() }).parse(body);
+  const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+  const template = { subject: oneLine(raw.subject), title: oneLine(raw.title), intro: raw.intro.replace(/\r\n?/g, "\n").trim() };
+  if (!template.subject) throw new BadRequestError("L'objet ne peut pas être vide");
+  if (!template.title) throw new BadRequestError("Le titre ne peut pas être vide");
+  if (template.subject.length > 200 || template.title.length > 200) {
+    throw new BadRequestError("L'objet et le titre font 200 caractères au plus");
+  }
+  if (template.intro.length > 5000) throw new BadRequestError("Le texte d'ouverture fait 5 000 caractères au plus");
+  const unknown = unknownVariables(`${template.subject} ${template.title} ${template.intro}`);
+  if (unknown.length > 0) {
+    const known = Object.keys(TEMPLATE_VARIABLES).map((v) => `{${v}}`).join(", ");
+    throw new BadRequestError(`Variable${unknown.length > 1 ? "s" : ""} inconnue${unknown.length > 1 ? "s" : ""} : ${unknown.map((v) => `{${v}}`).join(", ")}. Possibles : ${known}`);
+  }
+  return template;
+}
+
+// The template as the editor needs it: the current one, the defaults to go
+// back to, the variables, and who changed it last (null: the defaults)
+async function templateInfo() {
+  const saved = await db.mailTemplate.findUnique({ where: { id: 1 } });
+  return {
+    template: await mailTemplate(),
+    defaults: DEFAULT_TEMPLATE,
+    variables: TEMPLATE_VARIABLES,
+    updatedAt: saved?.updatedAt ?? null,
+    updatedBy: saved?.updatedBy ?? null,
+  };
+}
+
+const FIELD_NAMES: Record<keyof MailTemplate, string> = { subject: "objet", title: "titre", intro: "ouverture" };
+
+// GET /api/mailings/template
+router.get("/template", asyncRoute(async (_req, res) => {
+  res.json(await templateInfo());
+}));
+
+// PUT /api/mailings/template — { subject, title, intro }: every email from
+// now on (the ones already sent stay as they were)
+router.put("/template", asyncRoute(async (req, res) => {
+  const template = parseTemplate(req.body);
+  const before = await mailTemplate();
+  const changed = (Object.keys(FIELD_NAMES) as (keyof MailTemplate)[]).filter((k) => before[k] !== template[k]);
+  if (changed.length > 0) {
+    const updatedBy = `${req.user!.firstName} ${req.user!.lastName}`;
+    await db.$transaction(async (tx) => {
+      await tx.mailTemplate.upsert({ where: { id: 1 }, create: { id: 1, ...template, updatedBy }, update: { ...template, updatedBy } });
+      await audit(tx, req.user!, {
+        category: "Convocations",
+        action: "mail.template",
+        summary: `Texte des convocations modifié : ${changed.map((k) => FIELD_NAMES[k]).join(", ")}`,
+        details: { before: Object.fromEntries(changed.map((k) => [FIELD_NAMES[k], before[k]])), after: Object.fromEntries(changed.map((k) => [FIELD_NAMES[k], template[k]])) },
+      });
+    });
+  }
+  res.json(await templateInfo());
+}));
+
+// DELETE /api/mailings/template — back to the default text
+router.delete("/template", asyncRoute(async (req, res) => {
+  const before = await mailTemplate();
+  await db.$transaction(async (tx) => {
+    const { count } = await tx.mailTemplate.deleteMany({ where: { id: 1 } });
+    if (count > 0) {
+      await audit(tx, req.user!, {
+        category: "Convocations",
+        action: "mail.template.reset",
+        summary: "Texte des convocations remis par défaut",
+        details: { before: { objet: before.subject, titre: before.title, ouverture: before.intro } },
+      });
+    }
+  });
+  res.json(await templateInfo());
+}));
+
+// ─── One team's email ────────────────────────────────────────────────
+
 // GET /api/mailings/:teamId/preview — the email as it will be sent
 router.get("/:teamId/preview", asyncRoute(async (req, res) => {
-  const c = await composeConvocation(req.params.teamId, false);
+  const c = await composeConvocation(req.params.teamId, "size");
+  res.json({ to: c.to, subject: c.subject, html: withInlineLogo(c.html), attachments: c.attachmentInfo });
+}));
+
+// POST /api/mailings/:teamId/preview — { template }: the email with a
+// template not saved yet (the editor's live preview; reports not fetched)
+router.post("/:teamId/preview", asyncRoute(async (req, res) => {
+  const template = parseTemplate(z.object({ template: z.unknown() }).parse(req.body).template);
+  const c = await composeConvocation(req.params.teamId, "skip", template);
   res.json({ to: c.to, subject: c.subject, html: withInlineLogo(c.html), attachments: c.attachmentInfo });
 }));
 
@@ -90,7 +181,7 @@ router.post("/:teamId/send", asyncRoute(async (req, res) => {
     throw new ConflictError("Validez d'abord le tirage de ce jour : les convocations partent quand les poules ne bougent plus");
   }
 
-  const c = await composeConvocation(team.id, true);
+  const c = await composeConvocation(team.id, "download");
   const to = test ? [testTo ?? req.user!.email] : c.to;
   if (to.length === 0) throw new BadRequestError(`Aucun membre de ${team.quadrigram} n'a d'adresse email`);
   await sendMail({

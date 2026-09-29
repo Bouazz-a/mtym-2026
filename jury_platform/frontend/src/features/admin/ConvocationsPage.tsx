@@ -1,24 +1,28 @@
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  Alert, Badge, Btn, BrutalCard, Input, Modal, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Stagger,
+  Alert, Badge, Btn, BrutalCard, Field, Input, Modal, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Stagger, Textarea,
 } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import { CalendarIcon } from "@/features/shared/icons";
 import { EmptyState, LoadError, Picker, StatCard } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
 import { getCenterDays } from "@/lib/repositories/centerDayRepository";
-import { getMailingPreview, getMailings, sendMailing } from "@/lib/repositories/mailingRepository";
+import {
+  getDraftPreview, getMailingPreview, getMailings, getMailTemplate, resetMailTemplate, saveMailTemplate, sendMailing,
+} from "@/lib/repositories/mailingRepository";
 import { errorMessage } from "@/lib/services/errors";
-import type { Center, CenterDay, MailingAttachment, MailingRole, TeamMailingRow } from "@/types";
+import type { Center, CenterDay, MailingAttachment, MailingRole, MailTemplate, MailTemplateInfo, TeamMailingRow } from "@/types";
 import { CENTERS, formatDay } from "@/utils/labels";
 
 // ConvocationsPage — one email per team before its day: the date, its
 // center, its timetable, the problem it defends (upload the presentation),
 // and the ones it opposes and reports on with the defending team's report
-// attached (backend: services/convocation.ts). One day at a time; the
-// emails only go once the day's draw is validated. A test goes to the admin.
+// attached (backend: services/convocation.ts). One day at a time, all its
+// teams or one pool; the emails only go once the day's draw is validated. A
+// test goes to the admin. The subject, title and opening are the admin's
+// to write (« Modifier le mail »); the rest is generated.
 
 export function ConvocationsPage() {
   const [params, setParams] = useSearchParams();
@@ -33,7 +37,8 @@ export function ConvocationsPage() {
   const centerDays = days.filter((d) => d.center === center);
   const dayIndex = Math.max(0, centerDays.findIndex((d) => d.id === params.get("jour")));
   const day = centerDays[dayIndex];
-  const select = (c: Center, dayId?: string) => setParams(dayId ? { centre: c, jour: dayId } : { centre: c }, { replace: true });
+  const select = (c: Center, dayId?: string, pool?: string | null) =>
+    setParams({ centre: c, ...(dayId && { jour: dayId }), ...(pool && { poule: pool }) }, { replace: true });
 
   return (
     <PageMotion className="space-y-10">
@@ -45,21 +50,27 @@ export function ConvocationsPage() {
       {!center || !day ? (
         <EmptyState icon={CalendarIcon} title="Aucun jour" sub="Déclarez d'abord les jours des centres depuis la page Génération des poules." />
       ) : (
-        <>
-          <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
-            <Picker label="Centre">
-              <Segmented options={centers.map((c) => ({ value: c.value, label: c.label }))} value={center} onChange={(c) => select(c)} />
-            </Picker>
-            <Picker label="Jour">
-              <Segmented
-                options={centerDays.map((d, i) => ({ value: d.id, label: `J${i + 1} · ${formatDay(d.date)}` }))}
-                value={day.id}
-                onChange={(id) => select(center, id)}
-              />
-            </Picker>
-          </div>
-          <DayMailings key={day.id} day={day} dayIndex={dayIndex} />
-        </>
+        <DayMailings
+          key={day.id}
+          day={day}
+          dayIndex={dayIndex}
+          pool={params.get("poule")}
+          onPool={(pool) => select(center, day.id, pool)}
+          pickers={
+            <>
+              <Picker label="Centre">
+                <Segmented options={centers.map((c) => ({ value: c.value, label: c.label }))} value={center} onChange={(c) => select(c)} />
+              </Picker>
+              <Picker label="Jour">
+                <Segmented
+                  options={centerDays.map((d, i) => ({ value: d.id, label: `J${i + 1} · ${formatDay(d.date)}` }))}
+                  value={day.id}
+                  onChange={(id) => select(center, id)}
+                />
+              </Picker>
+            </>
+          }
+        />
       )}
     </PageMotion>
   );
@@ -67,10 +78,25 @@ export function ConvocationsPage() {
 
 // ─── One day ─────────────────────────────────────────────────────────
 
-function DayMailings({ day, dayIndex }: { day: CenterDay; dayIndex: number }) {
+// One day, or one of its pools (`pool`): the table, the counts and the
+// sends all follow the filter
+function DayMailings({
+  day,
+  dayIndex,
+  pool: wantedPool,
+  onPool,
+  pickers,
+}: {
+  day: CenterDay;
+  dayIndex: number;
+  pool: string | null; // from the URL; ignored when the day has no such pool
+  onPool: (pool: string | null) => void;
+  pickers: ReactNode; // center and day, on the same line as the pool
+}) {
   const queryClient = useQueryClient();
   const boardQ = useQuery({ queryKey: ["mailings", day.id], queryFn: () => getMailings(day.id) });
   const [preview, setPreview] = useState<TeamMailingRow | null>(null);
+  const [editing, setEditing] = useState(false); // the template editor
   const [confirm, setConfirm] = useState<TeamMailingRow[] | null>(null); // teams about to be sent
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +105,10 @@ function DayMailings({ day, dayIndex }: { day: CenterDay; dayIndex: number }) {
   if (load.loading) return <PageLoading variant="section" />;
   if (load.failed) return <LoadError onRetry={load.retry} />;
 
-  const { teams, mailConfigured, drawValidated } = boardQ.data!;
+  const { mailConfigured, drawValidated } = boardQ.data!;
+  const pools = [...new Set(boardQ.data!.teams.flatMap((t) => (t.pool ? [t.pool] : [])))].sort();
+  const pool = wantedPool && pools.includes(wantedPool) ? wantedPool : null;
+  const teams = pool ? boardQ.data!.teams.filter((t) => t.pool === pool) : boardQ.data!.teams;
   const sendable = (t: TeamMailingRow) => t.inPool && t.recipients > 0;
   const fresh = teams.filter((t) => sendable(t) && t.status === "never");
   const outdated = teams.filter((t) => sendable(t) && t.status === "outdated");
@@ -105,127 +134,342 @@ function DayMailings({ day, dayIndex }: { day: CenterDay; dayIndex: number }) {
   };
 
   return (
-    <section className="space-y-6">
-      <SectionHeading
-        title={`Jour ${dayIndex + 1} · ${formatDay(day.date)}`}
-        right={
-          <div className="flex items-center gap-2 flex-wrap">
-            {outdated.length > 0 && (
-              <Btn variant="ghost" size="sm" disabled={!canSend} onClick={() => setConfirm(outdated)}>
-                Renvoyer les convocations à renvoyer ({outdated.length})
+    <>
+      <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+        {pickers}
+        {pools.length > 0 && (
+          <Picker label="Poule">
+            <Segmented
+              options={[{ value: "", label: "Toutes" }, ...pools.map((p) => ({ value: p, label: p }))]}
+              value={pool ?? ""}
+              onChange={(p) => onPool(p || null)}
+            />
+          </Picker>
+        )}
+      </div>
+      <section className="space-y-6">
+        <SectionHeading
+          title={`Jour ${dayIndex + 1} · ${formatDay(day.date)}${pool ? ` · ${pool}` : ""}`}
+          right={
+            <div className="flex items-center gap-2 flex-wrap">
+              <Btn variant="ghost" size="sm" onClick={() => setEditing(true)}>Modifier le mail</Btn>
+              {outdated.length > 0 && (
+                <Btn variant="ghost" size="sm" disabled={!canSend} onClick={() => setConfirm(outdated)}>
+                  Renvoyer les convocations à renvoyer ({outdated.length})
+                </Btn>
+              )}
+              <Btn size="sm" disabled={!canSend || fresh.length === 0} onClick={() => setConfirm(fresh)}>
+                {pool ? `Envoyer à la poule ${pool}` : "Envoyer aux équipes du jour"} ({fresh.length})
               </Btn>
-            )}
-            <Btn size="sm" disabled={!canSend || fresh.length === 0} onClick={() => setConfirm(fresh)}>
-              Envoyer aux équipes du jour ({fresh.length})
-            </Btn>
-          </div>
-        }
-      />
-
-      {!mailConfigured && (
-        <Alert tone="warning" title="Envoi non configuré">
-          Les aperçus fonctionnent, mais aucun email ne peut partir : les réglages SMTP_… manquent dans le fichier backend/.env du serveur.
-        </Alert>
-      )}
-      {!drawValidated && (
-        <Alert tone="warning" title="Tirage non validé">
-          Les convocations partent quand les poules ne bougent plus : validez d'abord le tirage de ce jour sur{" "}
-          <Link to="/tournoi" className="underline font-semibold">Génération des poules</Link>. Les tests restent possibles.
-        </Alert>
-      )}
-      {noEmail.length > 0 && (
-        <Alert tone="warning" title="Équipes sans adresse email">
-          {noEmail.map((t) => t.quadrigram).join(", ")} : aucun membre n'a d'email importé depuis le site principal, elles ne recevront rien.
-        </Alert>
-      )}
-      {error && <Alert>{error}</Alert>}
-
-      <Stagger className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard label="Équipes du jour" value={teams.length} />
-        <StatCard label="Convocations envoyées" value={sent} denom={teams.length || undefined} progressColor="var(--sage)" highlight={teams.length > 0 && sent === teams.length} />
-        <StatCard label="À renvoyer" value={outdated.length} progressColor="var(--saffron)" />
-        <StatCard label="Sans email" value={noEmail.length} progressColor="var(--clay)" />
-      </Stagger>
-
-      {progress && (
-        <BrutalCard withCorners={false} className="px-5 py-4" role="status">
-          <div className="flex items-center justify-between font-mont text-xs uppercase tracking-widest mb-2" style={{ color: "var(--forest)", fontWeight: 800 }}>
-            <span>Envoi · {progress.current}</span>
-            <span>{progress.done}/{progress.total}</span>
-          </div>
-          <div style={{ height: 6, background: "var(--paper-2)" }}>
-            <div style={{ height: "100%", width: `${(progress.done / progress.total) * 100}%`, background: "var(--saffron)", transition: "width 200ms" }} />
-          </div>
-        </BrutalCard>
-      )}
-
-      {teams.length === 0 ? (
-        <EmptyState icon={CalendarIcon} title="Aucune équipe ce jour" sub="Répartissez d'abord les équipes du centre entre ses jours." />
-      ) : (
-        <BrutalCard className="overflow-hidden">
-          <div className="table-scroll">
-            <table className="brutal-table">
-              <thead>
-                <tr>
-                  <th>Équipe</th>
-                  <th className="col-tight" title="Membres au statut QUALIFIED ayant un email">Destinataires</th>
-                  <th className="col-tight">Défense</th>
-                  <th className="col-tight">Opposition</th>
-                  <th className="col-tight">Rapport</th>
-                  <th className="col-tight">Statut</th>
-                  <th className="col-tight" style={{ borderRight: "none" }} />
-                </tr>
-              </thead>
-              <tbody>
-                {teams.map((t) => (
-                  <tr key={t.teamId}>
-                    <td>
-                      <div className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900, letterSpacing: "0.05em" }}>{t.quadrigram}</div>
-                      <div className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>{t.name}</div>
-                    </td>
-                    <td className="col-tight font-mont text-xs" style={{ color: t.recipients === 0 ? "var(--clay)" : "var(--ink)", fontWeight: 700 }}>
-                      {t.recipients}/{t.members}
-                    </td>
-                    <td className="col-tight">{t.defense ? <Problem n={t.defense.problem} /> : "—"}</td>
-                    <td className="col-tight"><Against role={t.opposition} /></td>
-                    <td className="col-tight"><Against role={t.report} /></td>
-                    <td className="col-tight"><StatusBadge row={t} /></td>
-                    <td className="col-tight" style={{ borderRight: "none" }}>
-                      <div className="flex gap-1.5 justify-end flex-nowrap">
-                        <Btn variant="ghost" size="sm" disabled={!t.inPool} onClick={() => setPreview(t)}>Aperçu</Btn>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </BrutalCard>
-      )}
-
-      {confirm && (
-        <Modal
-          open
-          title="Envoyer les convocations"
-          onClose={() => setConfirm(null)}
-          width={480}
-          footer={
-            <>
-              <Btn variant="ghost" onClick={() => setConfirm(null)}>Annuler</Btn>
-              <Btn onClick={() => sendAll(confirm)}>Envoyer</Btn>
-            </>
+            </div>
           }
-        >
-          <p className="font-open text-sm" style={{ color: "var(--ink)" }}>
-            {confirm.length} équipe{confirm.length > 1 ? "s" : ""} ({confirm.reduce((s, t) => s + t.recipients, 0)} destinataires) vont
-            recevoir leur convocation : {confirm.map((t) => t.quadrigram).join(", ")}.
+        />
+
+        {!mailConfigured && (
+          <Alert tone="warning" title="Envoi non configuré">
+            Les aperçus fonctionnent, mais aucun email ne peut partir : les réglages SMTP_… manquent dans le fichier backend/.env du serveur.
+          </Alert>
+        )}
+        {!drawValidated && (
+          <Alert tone="warning" title="Tirage non validé">
+            Les convocations partent quand les poules ne bougent plus : validez d'abord le tirage de ce jour sur{" "}
+            <Link to="/tournoi" className="underline font-semibold">Génération des poules</Link>. Les tests restent possibles.
+          </Alert>
+        )}
+        {noEmail.length > 0 && (
+          <Alert tone="warning" title="Équipes sans adresse email">
+            {noEmail.map((t) => t.quadrigram).join(", ")} : aucun membre n'a d'email importé depuis le site principal, elles ne recevront rien.
+          </Alert>
+        )}
+        {error && <Alert>{error}</Alert>}
+
+        <Stagger className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard label={pool ? `Équipes de ${pool}` : "Équipes du jour"} value={teams.length} />
+          <StatCard label="Convocations envoyées" value={sent} denom={teams.length || undefined} progressColor="var(--sage)" highlight={teams.length > 0 && sent === teams.length} />
+          <StatCard label="À renvoyer" value={outdated.length} progressColor="var(--saffron)" />
+          <StatCard label="Sans email" value={noEmail.length} progressColor="var(--clay)" />
+        </Stagger>
+
+        {progress && (
+          <BrutalCard withCorners={false} className="px-5 py-4" role="status">
+            <div className="flex items-center justify-between font-mont text-xs uppercase tracking-widest mb-2" style={{ color: "var(--forest)", fontWeight: 800 }}>
+              <span>Envoi · {progress.current}</span>
+              <span>{progress.done}/{progress.total}</span>
+            </div>
+            <div style={{ height: 6, background: "var(--paper-2)" }}>
+              <div style={{ height: "100%", width: `${(progress.done / progress.total) * 100}%`, background: "var(--saffron)", transition: "width 200ms" }} />
+            </div>
+          </BrutalCard>
+        )}
+
+        {teams.length === 0 ? (
+          <EmptyState icon={CalendarIcon} title="Aucune équipe ce jour" sub="Répartissez d'abord les équipes du centre entre ses jours." />
+        ) : (
+          <BrutalCard className="overflow-hidden">
+            <div className="table-scroll">
+              <table className="brutal-table">
+                <thead>
+                  <tr>
+                    <th>Équipe</th>
+                    <th className="col-tight">Poule</th>
+                    <th className="col-tight" title="Membres au statut QUALIFIED ayant un email">Destinataires</th>
+                    <th className="col-tight">Défense</th>
+                    <th className="col-tight">Opposition</th>
+                    <th className="col-tight">Rapport</th>
+                    <th className="col-tight">Statut</th>
+                    <th className="col-tight" style={{ borderRight: "none" }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {teams.map((t) => (
+                    <tr key={t.teamId}>
+                      <td>
+                        <div className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900, letterSpacing: "0.05em" }}>{t.quadrigram}</div>
+                        <div className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>{t.name}</div>
+                      </td>
+                      <td className="col-tight font-mont text-xs" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>{t.pool ?? "—"}</td>
+                      <td className="col-tight font-mont text-xs" style={{ color: t.recipients === 0 ? "var(--clay)" : "var(--ink)", fontWeight: 700 }}>
+                        {t.recipients}/{t.members}
+                      </td>
+                      <td className="col-tight">{t.defense ? <Problem n={t.defense.problem} /> : "—"}</td>
+                      <td className="col-tight"><Against role={t.opposition} /></td>
+                      <td className="col-tight"><Against role={t.report} /></td>
+                      <td className="col-tight"><StatusBadge row={t} /></td>
+                      <td className="col-tight" style={{ borderRight: "none" }}>
+                        <div className="flex gap-1.5 justify-end flex-nowrap">
+                          <Btn variant="ghost" size="sm" disabled={!t.inPool} onClick={() => setPreview(t)}>Aperçu</Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </BrutalCard>
+        )}
+
+        {confirm && (
+          <Modal
+            open
+            title="Envoyer les convocations"
+            onClose={() => setConfirm(null)}
+            width={480}
+            footer={
+              <>
+                <Btn variant="ghost" onClick={() => setConfirm(null)}>Annuler</Btn>
+                <Btn onClick={() => sendAll(confirm)}>Envoyer</Btn>
+              </>
+            }
+          >
+            <p className="font-open text-sm" style={{ color: "var(--ink)" }}>
+              {confirm.length} équipe{confirm.length > 1 ? "s" : ""} ({confirm.reduce((s, t) => s + t.recipients, 0)} destinataires) vont
+              recevoir leur convocation : {confirm.map((t) => t.quadrigram).join(", ")}.
+            </p>
+          </Modal>
+        )}
+        {preview && (
+          <PreviewModal row={preview} canSend={canSend} onClose={() => setPreview(null)} />
+        )}
+        {editing && <TemplateModal teams={teams.filter((t) => t.inPool)} onClose={() => setEditing(false)} />}
+      </section>
+    </>
+  );
+}
+
+// ─── The admin's words: subject, title, opening ──────────────────────
+
+function TemplateModal({ teams, onClose }: { teams: TeamMailingRow[]; onClose: () => void }) {
+  const infoQ = useQuery({ queryKey: ["mail-template"], queryFn: getMailTemplate });
+  if (infoQ.data) return <TemplateEditor info={infoQ.data} teams={teams} onClose={onClose} />;
+  return (
+    <Modal open title="Modifier le mail" onClose={onClose} width="min(30rem, calc(100vw - 2rem))">
+      {infoQ.isError ? <Alert>{errorMessage(infoQ.error, "Texte du mail indisponible.")}</Alert> : <PageLoading variant="section" />}
+    </Modal>
+  );
+}
+
+// The value, once it has stopped changing for `ms`
+function useSettled<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return settled;
+}
+
+const TEMPLATE_FIELDS = ["subject", "title", "intro"] as const;
+const sameTemplate = (a: MailTemplate, b: MailTemplate) => TEMPLATE_FIELDS.every((k) => a[k] === b[k]);
+
+// The three fields on the left, the email of a team of the day on the
+// right, redrawn as the admin types. A {variable} chip goes in at the
+// cursor of the last field used.
+function TemplateEditor({ info, teams, onClose }: { info: MailTemplateInfo; teams: TeamMailingRow[]; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState(info.template);
+  const [sampleId, setSampleId] = useState(teams[0]?.teamId ?? "");
+  const [field, setField] = useState<keyof MailTemplate>("intro");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false); // closing with unsaved changes: asked first
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const introRef = useRef<HTMLTextAreaElement>(null);
+  const refs = { subject: subjectRef, title: titleRef, intro: introRef };
+
+  const settled = useSettled(draft, 400);
+  const previewQ = useQuery({
+    queryKey: ["mailing-draft-preview", sampleId, settled],
+    queryFn: () => getDraftPreview(sampleId, settled),
+    enabled: Boolean(sampleId),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+
+  const dirty = !sameTemplate(draft, info.template);
+  const set = (key: keyof MailTemplate) => (e: { target: { value: string } }) => setDraft({ ...draft, [key]: e.target.value });
+
+  const insert = (name: string) => {
+    const el = refs[field].current;
+    const token = `{${name}}`;
+    const value = draft[field];
+    const [start, end] = [el?.selectionStart ?? value.length, el?.selectionEnd ?? value.length];
+    setDraft({ ...draft, [field]: value.slice(0, start) + token + value.slice(end) });
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
+
+  const close = () => (dirty && !leaving ? setLeaving(true) : onClose());
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await (sameTemplate(draft, info.defaults) ? resetMailTemplate() : saveMailTemplate(draft));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["mail-template"] }),
+        queryClient.invalidateQueries({ queryKey: ["mailing-preview"] }),
+      ]);
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const p = previewQ.data;
+  const updated = info.updatedAt
+    ? `Modifié par ${info.updatedBy} le ${new Date(info.updatedAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+    : "Texte par défaut";
+
+  return (
+    <Modal
+      open
+      title="Modifier le mail"
+      onClose={close}
+      width="min(80rem, 96vw)"
+      footer={
+        leaving ? (
+          <>
+            <span className="font-open text-sm mr-auto" style={{ color: "var(--ink)" }}>Abandonner les modifications ?</span>
+            <Btn variant="ghost" onClick={() => setLeaving(false)}>Continuer à modifier</Btn>
+            <Btn variant="danger" onClick={onClose}>Abandonner</Btn>
+          </>
+        ) : (
+          <>
+            <Btn
+              variant="ghost"
+              className="mr-auto"
+              disabled={sameTemplate(draft, info.defaults)}
+              title="Remet l'objet, le titre et l'ouverture d'origine (appliqué en enregistrant)"
+              onClick={() => setDraft(info.defaults)}
+            >
+              Texte par défaut
+            </Btn>
+            <Btn variant="ghost" onClick={close}>Annuler</Btn>
+            <Btn disabled={busy || !dirty} onClick={save}>{busy ? "Enregistrement…" : "Enregistrer"}</Btn>
+          </>
+        )
+      }
+    >
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+        <div className="space-y-4 min-w-0">
+          {error && <Alert>{error}</Alert>}
+          <Field label="Objet">
+            <Input ref={subjectRef} value={draft.subject} maxLength={200} onChange={set("subject")} onFocus={() => setField("subject")} />
+          </Field>
+          <Field label="Titre">
+            <Input ref={titleRef} value={draft.title} maxLength={200} onChange={set("title")} onFocus={() => setField("title")} />
+          </Field>
+          <Field label="Ouverture" hint="Jusqu'aux informations du jour. Une ligne vide sépare deux paragraphes.">
+            <Textarea ref={introRef} rows={7} value={draft.intro} maxLength={5000} onChange={set("intro")} onFocus={() => setField("intro")} />
+          </Field>
+          <div>
+            <div className="font-mont text-tiny uppercase tracking-widest mb-2" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>
+              Variables
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(info.variables).map(([name, meaning]) => (
+                <button
+                  key={name}
+                  type="button"
+                  title={`${meaning} · insérer dans le champ « ${{ subject: "Objet", title: "Titre", intro: "Ouverture" }[field]} »`}
+                  onMouseDown={(e) => e.preventDefault()} // the field keeps its cursor
+                  onClick={() => insert(name)}
+                  className="px-2 py-1 font-mono text-xs focus-ring"
+                  style={{ border: "1px solid var(--border)", background: "var(--paper-2)", color: "var(--forest)" }}
+                >
+                  {`{${name}}`}
+                </button>
+              ))}
+            </div>
+            <p className="font-open text-xs mt-2" style={{ color: "var(--ink-faint)" }}>
+              Remplacées pour chaque équipe. Un clic l'insère dans le dernier champ utilisé.
+            </p>
+          </div>
+          <p className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>
+            La suite du mail ne se modifie pas : date, centre et poule, encadré IMPORTANT, planning, rôles, rapports joints et
+            signature sont générés pour chaque équipe.
           </p>
-        </Modal>
-      )}
-      {preview && (
-        <PreviewModal row={preview} canSend={canSend} onClose={() => setPreview(null)} />
-      )}
-    </section>
+          <p className="font-open text-xs" style={{ color: "var(--ink-faint)" }}>{updated}. Les convocations déjà envoyées restent telles quelles.</p>
+        </div>
+
+        <div className="min-w-0 space-y-3">
+          {teams.length === 0 ? (
+            <Alert tone="warning">Aucune équipe en poule ce jour : pas d'aperçu possible.</Alert>
+          ) : (
+            <>
+              <label className="flex items-center gap-2">
+                <span className="font-mont text-tiny uppercase tracking-widest shrink-0" style={{ color: "var(--ink-soft)", fontWeight: 800 }}>Aperçu pour</span>
+                <Select value={sampleId} onChange={(e) => setSampleId(e.target.value)} style={{ width: "16rem" }}>
+                  {teams.map((t) => <option key={t.teamId} value={t.teamId}>{t.quadrigram} · {t.name}</option>)}
+                </Select>
+              </label>
+              {previewQ.isError && <Alert>{errorMessage(previewQ.error, "Aperçu indisponible.")}</Alert>}
+              {p && (
+                <>
+                  <div className="font-open text-sm">
+                    <span style={{ color: "var(--ink-soft)" }}>Objet : </span>
+                    <span className="font-semibold" style={{ color: "var(--forest)" }}>{p.subject}</span>
+                  </div>
+                  {/* Sandboxed: no script runs */}
+                  <iframe
+                    title="Aperçu du mail"
+                    srcDoc={p.html}
+                    sandbox=""
+                    className="w-full"
+                    style={{ height: "62vh", border: "1px solid var(--border)", background: "#faf7ee", opacity: previewQ.isFetching ? 0.6 : 1 }}
+                  />
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 

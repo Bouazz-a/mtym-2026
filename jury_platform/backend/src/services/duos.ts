@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "../db";
 import type { ScheduleSlot } from "./schedule";
 
-// A duo = two or three jurors who judge together for a whole day. Each
+// A duo = two jurors or more who judge together for a whole day. Each
 // passage of that day gets one duo. Its problem (JuryDuo.problemNumber) is
 // the admin's free choice: it only steers the automatic assignments.
 

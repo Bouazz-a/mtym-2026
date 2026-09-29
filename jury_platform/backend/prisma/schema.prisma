@@ -132,6 +132,19 @@ model TeamMailing {
 }
 
 // FINAL reports only — the file itself lives in the main site's S3 bucket.
+// The admin's words in the convocation email (page Convocations): its
+// subject, its title and its opening, up to the IMPORTANT box, with
+// {variables} filled in per team (services/convocation.ts). One row, and
+// none until the admin edits it: the defaults live in the code.
+model MailTemplate {
+  id        Int      @id @default(1)
+  subject   String
+  title     String
+  intro     String
+  updatedAt DateTime @updatedAt
+  updatedBy String // the admin's name at that moment, like AuditLog
+}
+
 model TeamReport {
   id            String @id @default(uuid())
   teamId        String

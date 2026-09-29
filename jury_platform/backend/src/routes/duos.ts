@@ -9,14 +9,13 @@ import {
 } from "../services/duos";
 import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
-// Jury duos of a center day — two or three jurors who judge together all day.
+// Jury duos of a center day — two jurors or more, who judge together all day.
 const router = Router();
 router.use(...adminOnly);
 
 const MembersSchema = z
   .array(z.string().uuid())
-  .min(2, "Un duo compte deux ou trois jurés")
-  .max(3, "Un duo compte deux ou trois jurés")
+  .min(2, "Un duo compte au moins deux jurés")
   .refine((ids) => new Set(ids).size === ids.length, "Choisissez des jurés différents");
 
 // The duo's problem, free: its jurors specialize in it for the automatic
@@ -65,7 +64,7 @@ router.get("/", asyncRoute(async (req, res) => {
   res.json(duos.map(toDuoResponse));
 }));
 
-// POST /api/duos — { centerDayId, accountIds: [a, b(, c)], problemNumber? } -> { duo, warnings }
+// POST /api/duos — { centerDayId, accountIds: [a, b, …], problemNumber? } -> { duo, warnings }
 router.post("/", asyncRoute(async (req, res) => {
   const body = z.object({
     centerDayId: z.string().uuid(),
@@ -166,7 +165,7 @@ router.post("/auto-assign", asyncRoute(async (req, res) => {
   });
 }));
 
-// PUT /api/duos/:id — { accountIds?: [a, b(, c)], problemNumber?: n | null } -> { duo, warnings }
+// PUT /api/duos/:id — { accountIds?: [a, b, …], problemNumber?: n | null } -> { duo, warnings }
 // The problem only steers the automatic assignments, so it can change at
 // any time; the jurors, until the duo has graded.
 router.put("/:id", asyncRoute(async (req, res) => {

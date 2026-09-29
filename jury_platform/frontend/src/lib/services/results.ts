@@ -27,7 +27,7 @@ export interface PassageResult {
   passage: PassageDetails;
   oral: Record<GradedRole, NoteSet>;
   report: NoteSet; // the defender's report, for the defended problem (out of 20)
-  expected: number; // evaluations the duo owes: its jurors (2 or 3) × (3 orals + 1 report)
+  expected: number; // evaluations the duo owes: each of its jurors × (3 orals + 1 report)
   done: number;
 }
 
