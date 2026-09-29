@@ -6,6 +6,7 @@ import {
   Stagger,
 } from "@/features/shared/primitives";
 import { GridIcon } from "@/features/shared/icons";
+import { ReportModal } from "@/features/shared/ReportViewer";
 import { EmptyState, LoadError, StatCard } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
 import { getTeams, setTeamDay } from "@/lib/repositories/teamRepository";
@@ -211,6 +212,7 @@ function DayRow({ day, index }: { day: CenterDay; index: number }) {
 
 function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]; pools: PoolDetails[] }) {
   const [onlyWithoutDay, setOnlyWithoutDay] = useState(false);
+  const [viewing, setViewing] = useState<{ id: string; title: string } | null>(null); // the report open in the modal
   const { run, error } = useAction(TOURNAMENT_QUERIES);
   const drawn = drawnTeamIds(pools);
   const shown = onlyWithoutDay ? teams.filter((t) => !t.centerDayId) : teams;
@@ -259,12 +261,30 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
                       {team.members.map((m) => `${m.firstName} ${m.lastName}`).join(", ") || "—"}
                     </td>
                     <td>
+                      {/* A filed report opens in the modal; a missing one is just a mark */}
                       <div className="flex gap-1">
-                        {QUALIFS_PROBLEMS.map((n) => (
-                          <Badge key={n} tone={team.reports.some((r) => r.problemNumber === n) ? "sage" : "neutral"} outlined={!team.reports.some((r) => r.problemNumber === n)}>
-                            P{n}
-                          </Badge>
-                        ))}
+                        {QUALIFS_PROBLEMS.map((n) => {
+                          const report = team.reports.find((r) => r.problemNumber === n);
+                          if (!report) {
+                            return (
+                              <span key={n} title={`Pas de rapport pour le problème ${n}`}>
+                                <Badge tone="neutral" outlined>P{n}</Badge>
+                              </span>
+                            );
+                          }
+                          return (
+                            <button
+                              key={n}
+                              type="button"
+                              className="report-chip"
+                              title={`Voir le rapport du problème ${n}`}
+                              aria-label={`Voir le rapport de ${team.quadrigram}, problème ${n}`}
+                              onClick={() => setViewing({ id: report.id, title: `${team.quadrigram} · Rapport du problème ${n}` })}
+                            >
+                              <Badge tone="sage">P{n}</Badge>
+                            </button>
+                          );
+                        })}
                       </div>
                     </td>
                     <td style={{ borderRight: "none" }}>
@@ -287,6 +307,7 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
           </table>
         </div>
       </BrutalCard>
+      <ReportModal report={viewing} onClose={() => setViewing(null)} />
     </section>
   );
 }

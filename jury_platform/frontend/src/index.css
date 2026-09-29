@@ -131,6 +131,26 @@ body::before {
   outline-offset: 2px;
 }
 
+/* A badge that opens something (a team's report): it lifts and darkens
+   under the pointer, and gets the focus ring */
+.report-chip {
+  display: inline-flex;
+  cursor: pointer;
+  transition: transform 120ms, filter 120ms;
+}
+.report-chip:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.9);
+}
+.report-chip:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .report-chip { transition: none; }
+  .report-chip:hover { transform: none; }
+}
+
 /* "Aller au contenu": the first thing Tab reaches, only shown then */
 .skip-link {
   position: fixed;

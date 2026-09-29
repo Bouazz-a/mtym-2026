@@ -4,12 +4,14 @@ import { Alert, BrutalCard, Btn, Modal } from "./primitives";
 import { getReportUrl } from "@/lib/repositories/reportRepository";
 import { errorMessage } from "@/lib/services/errors";
 
-// A team's report PDF from the main site's bucket, in two shapes:
+// A team's report PDF from the main site's bucket, in three shapes:
 //
 // - ReportPanel: the report next to the grading grid on a wide screen, so a
 //   juror reads and grades at the same time;
 // - ReportViewer: a button opening the report in a modal, for narrow screens
-//   where there's no room for two columns.
+//   where there's no room for two columns;
+// - ReportModal: just the modal, for a table of many reports — the page
+//   keeps which one is open, so it holds a single modal.
 //
 // The signed link expires after ten minutes; an already-loaded PDF keeps
 // showing, and both shapes can hand it over to a new tab (phone browsers
@@ -18,11 +20,11 @@ import { errorMessage } from "@/lib/services/errors";
 
 const REPORT_URL_FRESH_MS = 8 * 60 * 1000;
 
-function useReportUrl(reportId: string, src?: string) {
+function useReportUrl(reportId: string | null, src?: string) {
   return useQuery({
     queryKey: ["report-url", reportId],
-    queryFn: () => getReportUrl(reportId),
-    enabled: !src,
+    queryFn: () => getReportUrl(reportId!),
+    enabled: !src && reportId !== null,
     staleTime: REPORT_URL_FRESH_MS,
     retry: false,
   });
@@ -57,6 +59,38 @@ export function ReportPanel({ reportId, src, title }: { reportId: string; src?: 
         </div>
       )}
     </BrutalCard>
+  );
+}
+
+const FRAME_STYLE = { width: "100%", height: "68vh", border: "1px solid var(--border)", background: "var(--paper-2)" } as const;
+
+// `report`: the one to show (its id and the modal's title), null when closed
+export function ReportModal({ report, onClose }: { report: { id: string; title: string } | null; onClose: () => void }) {
+  const query = useReportUrl(report?.id ?? null);
+  const url = query.data?.url ?? null;
+  return (
+    <Modal
+      open={report !== null}
+      title={report?.title ?? ""}
+      width="min(62rem, calc(100vw - 2rem))"
+      onClose={onClose}
+      footer={
+        <>
+          <Btn variant="ghost" onClick={onClose}>Fermer</Btn>
+          <Btn disabled={!url} onClick={() => openInTab(url)}>Ouvrir dans un onglet</Btn>
+        </>
+      }
+    >
+      {query.isError ? (
+        <Alert>{errorMessage(query.error, "Rapport introuvable.")}</Alert>
+      ) : url ? (
+        <iframe src={url} title={report?.title ?? "Rapport"} style={FRAME_STYLE} />
+      ) : (
+        <div className="grid place-items-center font-mont text-tiny uppercase tracking-widest" style={{ ...FRAME_STYLE, color: "var(--ink-faint)" }}>
+          Ouverture du rapport…
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -106,11 +140,7 @@ export function ReportViewer({
         }
       >
         {url && (
-          <iframe
-            src={url}
-            title={title}
-            style={{ width: "100%", height: "68vh", border: "1px solid var(--border)", background: "var(--paper-2)" }}
-          />
+          <iframe src={url} title={title} style={FRAME_STYLE} />
         )}
       </Modal>
     </>
