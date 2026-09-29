@@ -47,16 +47,18 @@ docker compose exec -T db sh -c 'pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB"'
 [[ -s "$DUMP" ]] || { echo "Sauvegarde vide : $DUMP — arrêt, rien n'a été modifié" >&2; exit 1; }
 echo "Sauvegarde : $DUMP ($(du -h "$DUMP" | cut -f1))"
 
+# --include=dev: the builds need typescript, vite and the prisma CLI, which
+# npm leaves out when NODE_ENV=production (or omit=dev) is set around it
 step "API : dépendances, build, migrations"
 cd "$ROOT/backend"
-npm ci --no-audit --no-fund
+npm ci --include=dev --no-audit --no-fund
 npx prisma generate
 npm run build
 npx prisma migrate deploy
 
 step "Interface : dépendances et build"
 cd "$ROOT/frontend"
-npm ci --no-audit --no-fund
+npm ci --include=dev --no-audit --no-fund
 npm run build
 
 step "Interface : mise en ligne dans $STATIC_DIR"
