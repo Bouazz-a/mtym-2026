@@ -15,21 +15,26 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT=$PWD
+
+step() { printf '\n== %s\n' "$*"; }
+
+# Pulled before .env is loaded: its variables are exported to every command
+# below, and git's ssh must not inherit them (with them, it lost the deploy
+# key: "Permission denied (publickey)" while a plain git pull worked)
+if [[ -z "${SKIP_PULL:-}" ]]; then
+  step "Mise à jour du code"
+  git pull --ff-only
+fi
+
 set -a; source ./.env; set +a
 STATIC_DIR="${STATIC_DIR:-/srv/mtym-jury}"
 BACKUP_DIR="${BACKUP_DIR:-$ROOT/backups}"
 PM2="${PM2:-pm2}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3011/api/health}"
 
-step() { printf '\n== %s\n' "$*"; }
 for cmd in docker node npm curl; do
   command -v "$cmd" > /dev/null || { echo "Commande introuvable : $cmd" >&2; exit 1; }
 done
-
-if [[ -z "${SKIP_PULL:-}" ]]; then
-  step "Mise à jour du code"
-  git pull --ff-only
-fi
 
 step "Base de données : démarrage et sauvegarde avant déploiement"
 docker compose up -d --wait db

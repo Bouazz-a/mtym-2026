@@ -145,6 +145,7 @@ export interface Criterion {
   role?: PassageRole | null; // oral only
   problemNumber?: number | null; // report only — 1..4
   theme?: string | null; // grouping label, e.g. "Débat", "Malus"
+  description?: string | null; // what it looks at: shown to jurors on hover/click of its title
   order: number;
 }
 

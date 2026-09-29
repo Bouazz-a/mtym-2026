@@ -1,4 +1,7 @@
+import { useEffect, useId, useRef, useState } from "react";
 import { FIELD_STYLE } from "@/features/shared/fieldStyle";
+import { InfoIcon } from "@/features/shared/icons";
+import { Popover } from "@/features/shared/primitives";
 import type { Criterion } from "@/types";
 import { fmtNote } from "@/lib/services/gradingService";
 
@@ -67,6 +70,74 @@ function ScoreInput({
   );
 }
 
+// ─── Criterion title (and its description) ────────────────────────────
+
+const TITLE_STYLE = { color: "var(--forest)", fontWeight: 800 } as const;
+
+// A criterion's title. With a description, hovering shows it and a click
+// pins it open (touch screens have no hover; Escape or a click elsewhere
+// closes it). It floats in a Popover, fixed on screen, so the grading card
+// can't clip it — and closes when the page scrolls, which it can't follow.
+function CriterionTitle({ label, description }: { label: string; description?: string | null }) {
+  const anchor = useRef<HTMLButtonElement>(null);
+  const id = useId();
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const leaveTimer = useRef<number | undefined>(undefined);
+  const open = pinned || hovered;
+  const close = () => {
+    setPinned(false);
+    setHovered(false);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onScroll = (e: Event) => {
+      if (document.getElementById(id)?.contains(e.target as Node)) return; // scrolling the description itself
+      setPinned(false);
+      setHovered(false);
+    };
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => window.removeEventListener("scroll", onScroll, { capture: true });
+  }, [open, id]);
+  useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
+
+  if (!description?.trim()) {
+    return <span className="font-mont text-xs" style={TITLE_STYLE}>{label}</span>;
+  }
+  return (
+    <div
+      className="inline-flex min-w-0"
+      onMouseEnter={() => {
+        window.clearTimeout(leaveTimer.current);
+        setHovered(true);
+      }}
+      // A short grace: time to move the pointer into the description
+      onMouseLeave={() => {
+        leaveTimer.current = window.setTimeout(() => setHovered(false), 150);
+      }}
+    >
+      <button
+        ref={anchor}
+        type="button"
+        onClick={() => setPinned((p) => !p)}
+        aria-expanded={open}
+        aria-controls={id}
+        className="font-mont text-xs inline-flex items-center gap-1 text-left focus-ring"
+        style={{ ...TITLE_STYLE, textDecoration: "underline dotted", textUnderlineOffset: "3px", cursor: "help" }}
+      >
+        {label}
+        <InfoIcon size="0.8rem" style={{ color: "var(--ink-faint)" }} />
+      </button>
+      <Popover open={open} onClose={close} anchorRef={anchor} align="left" width={22} id={id} role="tooltip">
+        <p className="font-open text-sm px-4 py-3" style={{ color: "var(--ink)", whiteSpace: "pre-line", lineHeight: 1.5 }}>
+          {description}
+        </p>
+      </Popover>
+    </div>
+  );
+}
+
 // ─── Criterion grading table (controlled) ─────────────────────────────
 
 export function CriterionGradingTable({
@@ -116,12 +187,7 @@ export function CriterionGradingTable({
                 >
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className="font-mont text-xs"
-                        style={{ color: "var(--forest)", fontWeight: 800 }}
-                      >
-                        {c.label}
-                      </span>
+                      <CriterionTitle label={c.label} description={c.description} />
                       <span
                         data-tour={anchor(c.id, "coef")}
                         className="font-mont text-micro uppercase tracking-widest px-1.5 py-0.5"

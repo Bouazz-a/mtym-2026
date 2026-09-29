@@ -235,6 +235,9 @@ model Criterion {
   role          PassageRole?
   problemNumber Int?
   theme         String?
+  // What the criterion looks at, for the jurors: shown when they hover or
+  // click its title in the grading grid
+  description   String?
   order         Int
 }
 

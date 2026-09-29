@@ -31,6 +31,10 @@ export const ChevronDownIcon = (p: IconProps) => <Icon {...p}><polyline points="
 
 export const ChevronLeftIcon = (p: IconProps) => <Icon {...p}><polyline points="15 18 9 12 15 6" /></Icon>;
 
+export const InfoIcon = (p: IconProps) => (
+  <Icon {...p}><circle cx="12" cy="12" r="9.5" /><line x1="12" y1="11" x2="12" y2="16.5" /><line x1="12" y1="7.5" x2="12.01" y2="7.5" /></Icon>
+);
+
 export const FunnelIcon = (p: IconProps) => <Icon {...p}><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5 3 4" /></Icon>;
 
 export const ArrowUpIcon = (p: IconProps) => (

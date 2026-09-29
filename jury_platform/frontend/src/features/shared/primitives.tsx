@@ -458,6 +458,8 @@ export function Popover({
   children,
   align = "right",
   width = 20,
+  id,
+  role = "dialog",
 }: {
   open: boolean;
   onClose: () => void;
@@ -466,6 +468,8 @@ export function Popover({
   align?: "left" | "right";
   /** Width in rem: the popover follows the page scale like everything else */
   width?: number;
+  id?: string; // for the anchor's aria-controls / aria-describedby
+  role?: "dialog" | "tooltip";
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -556,7 +560,8 @@ export function Popover({
         width: pos.width,
         ...(pos.maxHeight !== undefined && { maxHeight: pos.maxHeight, overflowY: "auto" }),
       }}
-      role="dialog"
+      id={id}
+      role={role}
     >
       {children}
     </div>

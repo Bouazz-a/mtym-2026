@@ -17,6 +17,9 @@ const CriterionSchema = z.object({
   role: z.enum(["defender", "opponent", "reporter"]).nullable().optional(),
   problemNumber: z.number().int().min(1).max(4).nullable().optional(),
   theme: z.string().trim().nullable().optional(),
+  // Empty means none
+  description: z.string().trim().max(2000, "Description trop longue (2000 caractères au plus)").nullable().optional()
+    .transform((d) => (d === undefined ? undefined : d || null)),
   order: z.number().int(),
 }).refine(
   (c) => (c.type === "report" ? c.problemNumber != null && c.role == null : c.role != null && c.problemNumber == null),
@@ -49,13 +52,16 @@ router.put("/:id", ...adminOnly, asyncRoute(async (req, res) => {
   const data = CriterionSchema.parse({ ...current, ...req.body });
   const updated = await db.$transaction(async (tx) => {
     const saved = await tx.criterion.update({ where: { id }, data });
-    const fields = { label: "intitulé", coefficient: "coefficient", theme: "thème" } as const;
+    const fields = { label: "intitulé", coefficient: "coefficient", theme: "thème", description: "description" } as const;
     const changed = (Object.keys(fields) as (keyof typeof fields)[]).filter((k) => (current[k] ?? null) !== (saved[k] ?? null));
+    // A description is too long for the summary: its texts go in the details
+    const change = (k: keyof typeof fields) =>
+      k === "description" ? "description modifiée" : `${fields[k]} ${current[k] ?? "vide"} devient ${saved[k] ?? "vide"}`;
     if (changed.length) {
       await audit(tx, req.user!, {
         category: "Critères",
         action: "criterion.update",
-        summary: `Critère « ${saved.label} » (grille ${gridName(saved)}) : ${changed.map((k) => `${fields[k]} ${current[k] ?? "vide"} devient ${saved[k] ?? "vide"}`).join(", ")}`,
+        summary: `Critère « ${saved.label} » (grille ${gridName(saved)}) : ${changed.map(change).join(", ")}`,
         details: {
           before: Object.fromEntries(changed.map((k) => [fields[k], current[k]])),
           after: Object.fromEntries(changed.map((k) => [fields[k], saved[k]])),

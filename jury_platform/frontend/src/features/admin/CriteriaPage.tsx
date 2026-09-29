@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Alert, Badge, Btn, BrutalCard, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select,
+  Alert, Badge, Btn, BrutalCard, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Textarea,
 } from "@/features/shared/primitives";
 import { LoadError } from "@/features/shared/widgets";
 import {
@@ -313,7 +313,8 @@ function CriterionRowEditor({ criterion }: { criterion: Criterion }) {
   const dirty =
     draft.label !== criterion.label ||
     draft.coefficient !== criterion.coefficient ||
-    (draft.theme ?? "") !== (criterion.theme ?? "");
+    (draft.theme ?? "") !== (criterion.theme ?? "") ||
+    (draft.description ?? "") !== (criterion.description ?? "");
   const valid = draft.label.trim().length > 0 && draft.coefficient !== 0;
 
   const label = (text: string) => (
@@ -350,6 +351,7 @@ function CriterionRowEditor({ criterion }: { criterion: Criterion }) {
               label: draft.label.trim(),
               coefficient: draft.coefficient,
               theme: draft.theme?.trim() || null,
+              description: draft.description?.trim() || null,
             }))}
           >
             Enregistrer
@@ -366,6 +368,17 @@ function CriterionRowEditor({ criterion }: { criterion: Criterion }) {
           )}
         </div>
       </div>
+      {/* Shown to the jurors when they hover or click the criterion's title */}
+      <label className="block mt-2.5">
+        {label("Description pour les jurés (optionnelle)")}
+        <Textarea
+          value={draft.description ?? ""}
+          onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+          placeholder="Ce que le critère évalue, par ex. « Bonne compréhension des objets mathématiques introduits dans le problème (définitions, hypothèses, questions). »"
+          rows={2}
+          maxLength={2000}
+        />
+      </label>
       {error && <div className="mt-3"><Alert>{error}</Alert></div>}
     </div>
   );
