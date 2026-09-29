@@ -4,7 +4,8 @@
 //
 // Eligible = teams.status APPROVED + intermediate report PASS + a
 // qualification center. Re-runnable: teams are matched on the main site's
-// team id (sourceId), and only names are kept from `users`.
+// team id (sourceId). From `users`, only the names (Team.members) and the
+// email addresses (TeamContact, for the convocation emails) are kept.
 import "dotenv/config";
 import { Center, PrismaClient } from "@prisma/client";
 import { teamsOf } from "../src/services/passages";
@@ -31,6 +32,7 @@ interface SourceMember {
   teamId: number;
   firstName: string | null;
   lastName: string | null;
+  email: string | null;
 }
 interface SourceReport {
   teamId: number;
@@ -64,10 +66,11 @@ async function readSource(src: PrismaClient) {
     ORDER BY t.id`;
   const ids = teams.map((t) => t.id);
 
+  // The email through to_jsonb too: null on dumps that don't carry it
   const members = await src.$queryRaw<SourceMember[]>`
-    SELECT "teamId", "firstName", "lastName" FROM users
-    WHERE "teamId" = ANY(${ids})
-    ORDER BY "lastName", "firstName"`;
+    SELECT u."teamId", u."firstName", u."lastName", to_jsonb(u) ->> 'email' AS email FROM users u
+    WHERE u."teamId" = ANY(${ids})
+    ORDER BY u."lastName", u."firstName"`;
 
   const reports = await src.$queryRaw<SourceReport[]>`
     SELECT "teamId", "reportType"::text AS "reportType", "problemNumber", "fileUrl" FROM team_reports
@@ -126,7 +129,7 @@ async function main() {
     const locked = new Set<string>([...passages.flatMap(teamsOf), ...graded.map((g) => g.teamId)]);
 
     const existing = new Map((await db.team.findMany()).map((t) => [t.sourceId, t]));
-    const stats = { created: 0, updated: 0, removed: 0, withoutReport: 0, reports: { FINAL: 0, INTERMEDIATE: 0 } as Record<string, number> };
+    const stats = { created: 0, updated: 0, removed: 0, withoutReport: 0, members: 0, emails: 0, reports: { FINAL: 0, INTERMEDIATE: 0 } as Record<string, number> };
     const kept: string[] = [];
 
     await db.$transaction(async (tx) => {
@@ -178,6 +181,16 @@ async function main() {
         });
         for (const r of reports) stats.reports[r.reportType]++;
         if (!reports.length) stats.withoutReport++;
+
+        // The members' addresses, for the convocation emails: replaced as a whole
+        const contacts = (membersByTeam.get(t.id) ?? []).flatMap((m) => {
+          const email = m.email?.trim().toLowerCase();
+          return email ? [{ teamId, firstName: m.firstName ?? "", lastName: m.lastName ?? "", email }] : [];
+        });
+        await tx.teamContact.deleteMany({ where: { teamId } });
+        if (contacts.length) await tx.teamContact.createMany({ data: contacts });
+        stats.emails += contacts.length;
+        stats.members += (membersByTeam.get(t.id) ?? []).length;
       }
 
       // Teams that are no longer eligible on the main site
@@ -201,6 +214,7 @@ async function main() {
     console.log(`Teams: ${stats.created} created, ${stats.updated} updated, ${stats.removed} removed (no longer eligible)`);
     const { FINAL, INTERMEDIATE } = stats.reports;
     console.log(`Reports graded (mode ${REPORT_MODE.toLowerCase()}): ${FINAL + INTERMEDIATE} — ${FINAL} final, ${INTERMEDIATE} intermediate — ${stats.withoutReport} team(s) have none yet`);
+    console.log(`Emails for the convocations: ${stats.emails} of ${stats.members} members`);
     if (kept.length) {
       console.log(`Kept although no longer eligible (already drawn or graded): ${kept.join(", ")}`);
     }

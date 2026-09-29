@@ -101,6 +101,34 @@ model Team {
   reported          Passage[]          @relation("PassageReporter")
   observed          Passage[]          @relation("PassageExtra")
   reportEvaluations ReportEvaluation[]
+  contacts          TeamContact[]
+  mailings          TeamMailing[]
+}
+
+// A member's email, for the convocation emails only — kept out of
+// Team.members (names only) so no team route ever hands it out. Replaced
+// on every import.
+model TeamContact {
+  id        String @id @default(uuid())
+  teamId    String
+  firstName String
+  lastName  String
+  email     String
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+// A convocation email sent to a team (tests to the admin aren't recorded)
+model TeamMailing {
+  id         String   @id @default(uuid())
+  teamId     String
+  sentAt     DateTime @default(now())
+  sentBy     String // the admin's name at that moment, like AuditLog
+  recipients String[]
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, sentAt])
 }
 
 // FINAL reports only — the file itself lives in the main site's S3 bucket.

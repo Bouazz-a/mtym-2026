@@ -22,6 +22,27 @@ function s3() {
   return { client, bucket: s3Config.bucket };
 }
 
+const keyOf = (fileUrl: string) => fileUrl.replace(/^\/+/, "");
+
+// A report file itself, e.g. to attach it to an email
+export async function reportFile(fileUrl: string): Promise<Buffer> {
+  const { client, bucket } = s3();
+  const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: keyOf(fileUrl) }));
+  if (!res.Body) throw new AppError(502, "Rapport introuvable dans le stockage");
+  return Buffer.from(await res.Body.transformToByteArray());
+}
+
+// A report file's size in bytes, without downloading it: a GET of its first
+// byte, whose Content-Range carries the total ("bytes 0-0/276636") — the
+// main site's storage refuses HEAD requests.
+export async function reportFileSize(fileUrl: string): Promise<number> {
+  const { client, bucket } = s3();
+  const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: keyOf(fileUrl), Range: "bytes=0-0" }));
+  await res.Body?.transformToByteArray(); // drain the one byte
+  const total = Number(res.ContentRange?.split("/")[1]);
+  return Number.isFinite(total) ? total : (res.ContentLength ?? 0);
+}
+
 // The main site stores the object key itself in team_reports.fileUrl
 // ("reports/<QUAD>/<type>/<file>.pdf"), so it maps straight to the key.
 export function signedReportUrl(fileUrl: string): Promise<string> {
@@ -30,7 +51,7 @@ export function signedReportUrl(fileUrl: string): Promise<string> {
     client,
     new GetObjectCommand({
       Bucket: bucket,
-      Key: fileUrl.replace(/^\/+/, ""),
+      Key: keyOf(fileUrl),
       ResponseContentType: "application/pdf",
       ResponseContentDisposition: "inline",
     }),

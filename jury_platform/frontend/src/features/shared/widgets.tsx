@@ -288,3 +288,16 @@ export function StatCard({
     </BrutalCard>
   );
 }
+
+// ─── Picker (a labelled control above the page, e.g. center / day) ────
+
+export function Picker({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="font-mont text-micro uppercase tracking-widest mb-1.5" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}

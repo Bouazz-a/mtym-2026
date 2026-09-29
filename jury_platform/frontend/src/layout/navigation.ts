@@ -42,6 +42,7 @@ export const NAV: Record<Role, NavEntry[]> = {
             { to: "/tournoi", label: "Génération des poules", description: "Jours, équipes et tirage des poules" },
             { to: "/jury", label: "Affectation du jury", description: "Duos du jour et passages à juger" },
             { to: "/rapports", label: "Affectation des rapports", description: "Rapports à corriger par chaque juré" },
+            { to: "/convocations", label: "Convocations", description: "Emails aux équipes : jour, problèmes, rapports" },
           ],
         },
         {

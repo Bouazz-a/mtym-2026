@@ -23,6 +23,33 @@ function s3Config() {
   };
 }
 
+// Outgoing email (the teams' convocations). Optional: without it previews
+// still work and sending answers 503. MAIL_OUTBOX_DIR writes each email to
+// that folder as an .eml file instead of sending it (local use, tests).
+function mailConfig() {
+  const outboxDir = process.env.MAIL_OUTBOX_DIR || undefined;
+  const host = process.env.SMTP_HOST || undefined;
+  if (!outboxDir && !host) return undefined;
+  const port = parseInt(process.env.SMTP_PORT ?? "587", 10);
+  return {
+    outboxDir,
+    smtp: host
+      ? {
+          host,
+          port,
+          secure: port === 465, // SSL from the start on 465; STARTTLS otherwise
+          user: requiredEnv("SMTP_USER"),
+          password: requiredEnv("SMTP_PASSWORD"),
+        }
+      : undefined,
+    from: {
+      address: process.env.SMTP_FROM_ADDRESS || "noreply@mail.mathmaroc.org",
+      name: process.env.SMTP_FROM_NAME || "MTYM",
+    },
+    replyTo: process.env.SMTP_REPLY_TO || "mtym@mathmaroc.org",
+  };
+}
+
 export const config = {
   port: parseInt(process.env.PORT ?? "3001", 10),
   // Loopback by default: in production Caddy is the only way in (the
@@ -34,6 +61,7 @@ export const config = {
   databaseUrl: requiredEnv("DATABASE_URL"),
   jwtSecret: requiredEnv("JWT_SECRET"),
   s3: s3Config(),
+  mail: mailConfig(),
 };
 
 if (config.jwtSecret.length < 32) {

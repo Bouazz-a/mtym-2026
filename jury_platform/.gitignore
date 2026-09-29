@@ -7,3 +7,5 @@ dist/
 *.dump
 backups/
 !backend/prisma/migrations/**/migration.sql
+# Local convocation emails (MAIL_OUTBOX_DIR): real addresses and reports
+outbox/

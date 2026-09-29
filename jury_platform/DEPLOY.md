@@ -131,6 +131,32 @@ unset U P
 (Contrepartie : un `backend/.env` qui fuite donne les clés maîtresses de MinIO,
 alors que `mtym-jury-reader` se révoque seul avec `mc admin user remove`.)
 
+### Envoi des convocations (emails aux équipes)
+
+La page **Convocations** envoie à chaque équipe son jour, son centre et ses
+problèmes, avec les rapports à lire en pièce jointe. L'envoi passe par SMTP
+(ZeptoMail) ; à ajouter à la fin de `backend/.env` :
+
+```
+SMTP_HOST='smtp.zeptomail.eu'
+SMTP_PORT=587                       # 465 : SSL d'emblée ; sinon STARTTLS
+SMTP_USER='emailapikey'             # toujours ce mot chez ZeptoMail
+SMTP_PASSWORD='…'                   # le jeton « Send Mail » de ZeptoMail
+SMTP_FROM_ADDRESS='noreply@mail.mathmaroc.org'
+SMTP_FROM_NAME='MTYM'
+SMTP_REPLY_TO='mtym@mathmaroc.org'  # où vont les réponses des équipes
+```
+
+Sans ces lignes, la page fonctionne (aperçus) mais n'envoie rien. L'API ne
+les lit qu'au démarrage : relancer `scripts/deploy.sh` (ou
+`pm2 restart mtym_jury_api`) après les avoir ajoutées. Les adresses des
+participants arrivent avec `scripts/import-from-mainsite.sh`.
+
+En local, **ne pas** mettre le jeton : `MAIL_OUTBOX_DIR=./outbox` dans
+`backend/.env` écrit chaque email dans ce dossier (fichiers `.eml`, lisibles
+par n'importe quel client mail) au lieu de l'envoyer — une base locale
+contient de vraies adresses.
+
 ## 5. Premier démarrage
 
 ```bash

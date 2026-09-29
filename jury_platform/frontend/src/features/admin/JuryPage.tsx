@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { Alert, PageHeader, PageLoading, PageMotion, Segmented, Stagger } from "@/features/shared/primitives";
 import { CalendarIcon } from "@/features/shared/icons";
-import { EmptyState, LoadError, StatCard } from "@/features/shared/widgets";
+import { EmptyState, LoadError, Picker, StatCard } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import { getCenterDays } from "@/lib/repositories/centerDayRepository";
@@ -127,16 +127,5 @@ export function JuryPage() {
         </>
       )}
     </PageMotion>
-  );
-}
-
-function Picker({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="font-mont text-micro uppercase tracking-widest mb-1.5" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-        {label}
-      </div>
-      {children}
-    </div>
   );
 }

@@ -41,6 +41,9 @@ const PracticePage = lazy(() =>
 const PassagePage = lazy(() =>
   import("@/features/jury/PassagePage").then((m) => ({ default: m.PassagePage })),
 );
+const ConvocationsPage = lazy(() =>
+  import("@/features/admin/ConvocationsPage").then((m) => ({ default: m.ConvocationsPage })),
+);
 const ReportAssignmentPage = lazy(() =>
   import("@/features/admin/ReportAssignmentPage").then((m) => ({ default: m.ReportAssignmentPage })),
 );
@@ -63,6 +66,7 @@ export default function App() {
                   <Route path="tournoi" element={<TournamentPage />} />
                   <Route path="jury" element={<JuryPage />} />
                   <Route path="rapports" element={<ReportAssignmentPage />} />
+                  <Route path="convocations" element={<ConvocationsPage />} />
                   <Route path="criteres" element={<CriteriaPage />} />
                   <Route path="notes" element={<EvaluationsPage />} />
                   <Route path="resultats" element={<ResultsPage />} />

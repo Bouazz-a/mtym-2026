@@ -16,6 +16,7 @@ import reportAssignmentsRouter from "./report-assignments";
 import oralEvaluationsRouter from "./oral-evaluations";
 import finalWeightsRouter from "./final-weights";
 import auditLogRouter from "./audit-log";
+import mailingsRouter from "./mailings";
 
 const router = Router();
 
@@ -34,6 +35,7 @@ router.use("/report-assignments", reportAssignmentsRouter);
 router.use("/oral-evaluations", oralEvaluationsRouter);
 router.use("/final-weights", finalWeightsRouter);
 router.use("/audit-log", auditLogRouter);
+router.use("/mailings", mailingsRouter);
 
 router.get("/health", async (_req, res) => {
   try {

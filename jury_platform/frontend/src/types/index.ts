@@ -227,3 +227,50 @@ export interface AuditEntry {
   summary: string;
   details: unknown;
 }
+
+// ================== Convocations ==================
+
+// A role the team plays against another team's defense
+export interface MailingRole {
+  problem: number;
+  defender: string; // the defending team's quadrigram
+  reportFiled: boolean; // its report exists, so it goes with the email
+}
+
+// "never" sent; "sent"; "outdated": the day's draw was validated again since
+export type MailingStatus = "never" | "sent" | "outdated";
+
+export interface TeamMailingRow {
+  teamId: string;
+  quadrigram: string;
+  name: string;
+  members: number;
+  recipients: number; // members with an email
+  inPool: boolean;
+  defense: { problem: number } | null;
+  opposition: MailingRole | null;
+  report: MailingRole | null;
+  status: MailingStatus;
+  sentAt: string | null;
+  sentBy: string | null;
+}
+
+export interface MailingBoard {
+  mailConfigured: boolean; // SMTP (or the local outbox) set on the server
+  drawValidated: boolean; // real sends wait for it
+  teams: TeamMailingRow[];
+}
+
+export interface MailingAttachment {
+  name: string;
+  size: number | null; // bytes; null when unknown
+  state: "attached" | "missing" | "tooLarge";
+  error?: string;
+}
+
+export interface MailingPreview {
+  to: string[];
+  subject: string;
+  html: string;
+  attachments: MailingAttachment[];
+}
