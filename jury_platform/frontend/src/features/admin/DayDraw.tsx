@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Alert, Badge, Btn, BrutalCard, Modal, SectionHeading, Select } from "@/features/shared/primitives";
-import { completeDraw, deleteDraw, saveDraw, setDrawValidation, swapTeams } from "@/lib/repositories/centerDayRepository";
+import { completeDraw, deleteDraw, getValidationImpact, saveDraw, setDrawValidation, swapTeams } from "@/lib/repositories/centerDayRepository";
 import { createPool } from "@/lib/repositories/poolRepository";
 import { teamsInGrid } from "@/lib/services/poolDraft";
-import type { CenterDay, PoolDetails, Team } from "@/types";
+import type { CenterDay, PoolDetails, Team, ValidationImpact } from "@/types";
 import { SwapIcon } from "@/features/shared/icons";
 import { formatDay } from "@/utils/labels";
 import { choiceRank, hasFinalReport, ordinal } from "@/utils/teams";
 import { PoolCard } from "./PoolsEditor";
-import { useAction, TOURNAMENT_QUERIES } from "./useAction";
+import { useAction, TOURNAMENT_QUERIES, VALIDATION_QUERIES } from "./useAction";
 
 // One day of a center: draw (or redraw) its pools, then adjust them.
 
@@ -25,8 +25,9 @@ export function DayDraw({
   pools: PoolDetails[];
   teamById: Map<string, Team>;
 }) {
-  const { run, busy, error } = useAction(TOURNAMENT_QUERIES);
+  const { run, busy, error } = useAction(VALIDATION_QUERIES);
   const [confirm, setConfirm] = useState<"redraw" | "cancel" | null>(null);
+  const [impact, setImpact] = useState<ValidationImpact | null>(null); // validation waiting for a yes
   const [adding, setAdding] = useState(false);
   const [openPool, setOpenPool] = useState<string | null>(null); // the pool being edited
   const drawn = pools.length > 0;
@@ -60,7 +61,18 @@ export function DayDraw({
 
   const complete = () => run(() => completeDraw(day.id));
 
-  const validate = async (validated: boolean) => run(() => setDrawValidation(day.id, validated));
+  // Validating may cancel grades and move reports (the pools changed since
+  // the day's reports were handed out): the admin sees what first
+  const validate = async () => {
+    const next = await run(() => getValidationImpact(day.id));
+    if (!next) return;
+    if (next.removed.length + next.assigned.length + next.unassigned.length === 0) await run(() => setDrawValidation(day.id, true));
+    else setImpact(next);
+  };
+  const confirmValidate = async () => {
+    setImpact(null);
+    await run(() => setDrawValidation(day.id, true));
+  };
 
   const cancel = async () => {
     setConfirm(null);
@@ -135,7 +147,7 @@ export function DayDraw({
                       ? `À terminer d'abord : ${drafts.map((p) => p.label).join(", ")}`
                       : "Fige la composition du jour, même s'il reste des équipes sans poule"
                 }
-                onClick={() => validate(!validated)}
+                onClick={() => (validated ? run(() => setDrawValidation(day.id, false)) : validate())}
               >
                 {validated ? "Dévalider" : "Valider le tirage"}
               </Btn>
@@ -165,7 +177,7 @@ export function DayDraw({
           <Alert tone="success" title="Tirage validé">
             Composition figée{day.drawValidatedBy ? ` par ${day.drawValidatedBy}` : ""}
             {day.drawValidatedAt ? `, le ${formatDay(day.drawValidatedAt.slice(0, 10))}` : ""}. Toute modification des
-            poules retire la validation.
+            poules retire la validation ; les rapports déjà attribués sont remis à jour quand le jour est validé à nouveau.
           </Alert>
         )}
         {drawn && missingReports > 0 && (
@@ -241,10 +253,82 @@ export function DayDraw({
         <p className="font-open text-sm" style={{ color: "var(--ink)" }}>
           Les poules actuelles de ce jour et les duos attribués à leurs passages seront supprimés
           {confirm === "redraw" ? " et remplacés par un nouveau tirage" : ""} ; les duos du jour, eux, restent.
-          Impossible une fois des notes saisies.
+          Impossible une fois des passages notés.
         </p>
       </Modal>
+      <ValidationModal impact={impact} onCancel={() => setImpact(null)} onConfirm={confirmValidate} />
     </section>
+  );
+}
+
+// ─── Validating again after the pools changed ─────────────────────────
+
+function ValidationModal({
+  impact,
+  onCancel,
+  onConfirm,
+}: {
+  impact: ValidationImpact | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const graded = impact?.removed.filter((r) => r.graded) ?? [];
+  const ungraded = impact?.removed.filter((r) => !r.graded) ?? [];
+  const why = (r: ValidationImpact["removed"][number]) =>
+    r.reason === "defended" ? `${r.team} défend désormais le P${r.problemNumber}` : `${r.team} n'est plus dans une poule`;
+  const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
+
+  return (
+    <Modal
+      open={impact !== null}
+      title="Valider le tirage ?"
+      onClose={onCancel}
+      width="min(36rem, calc(100vw - 2rem))"
+      footer={
+        <>
+          <Btn variant="ghost" onClick={onCancel}>Annuler</Btn>
+          <Btn variant={graded.length > 0 ? "danger" : "primary"} onClick={onConfirm}>
+            {graded.length > 0 ? `Valider et annuler ${plural(graded.length, "note")}` : "Valider"}
+          </Btn>
+        </>
+      }
+    >
+      <div className="space-y-4 font-open text-sm" style={{ color: "var(--ink)" }}>
+        <p>Les poules ont changé depuis que les rapports de ce jour ont été attribués. En validant :</p>
+        <ImpactList
+          title={`${plural(graded.length, "note")} annulée${graded.length > 1 ? "s" : ""}`}
+          tone="clay"
+          items={graded.map((r) => `${r.team} P${r.problemNumber}, corrigé par ${r.juror} : ${why(r)}`)}
+        />
+        <ImpactList
+          title={`${plural(ungraded.length, "rapport")} retiré${ungraded.length > 1 ? "s" : ""} à ${ungraded.length > 1 ? "leurs jurés" : "son juré"} (pas encore corrigé${ungraded.length > 1 ? "s" : ""})`}
+          items={ungraded.map((r) => `${r.team} P${r.problemNumber}, chez ${r.juror} : ${why(r)}`)}
+        />
+        <ImpactList
+          title={`${plural(impact?.assigned.length ?? 0, "rapport")} attribué${(impact?.assigned.length ?? 0) > 1 ? "s" : ""}`}
+          items={(impact?.assigned ?? []).map((r) => `${r.team} P${r.problemNumber} → ${r.juror}`)}
+        />
+        <ImpactList
+          title={`${plural(impact?.unassigned.length ?? 0, "rapport")} à attribuer à la main`}
+          items={(impact?.unassigned ?? []).map((r) => `${r.team} P${r.problemNumber} : aucun duo n'a encore de problème`)}
+        />
+        <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Les autres rapports gardent leur juré et leur note.</p>
+      </div>
+    </Modal>
+  );
+}
+
+function ImpactList({ title, items, tone }: { title: string; items: string[]; tone?: "clay" }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: tone ? "var(--clay)" : "var(--forest)", fontWeight: 800 }}>
+        {title}
+      </div>
+      <ul className="list-disc pl-5 space-y-0.5">
+        {items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </div>
   );
 }
 

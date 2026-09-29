@@ -117,6 +117,8 @@ export function ReportAssignmentPage() {
               <li>
                 Tirage non validé : {board.pendingDays.map((d) => `${centerLabel(d.center)} ${formatDay(d.date)}`).join(", ")}. Les rapports
                 de ces jours arriveront ici une fois le tirage validé (page <Link to="/tournoi" className="underline font-semibold">Génération des poules</Link>).
+                Ceux déjà attribués restent à leurs jurés d'ici là ; la validation retire ceux dont le problème est désormais défendu
+                et attribue ceux qui ne le sont plus.
               </li>
             )}
             {withoutProblem.length > 0 && (

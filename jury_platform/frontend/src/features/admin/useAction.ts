@@ -31,6 +31,9 @@ export function useAction(invalidate: string[][]) {
 // data between all three.
 export const TOURNAMENT_QUERIES = [["teams"], ["center-days"], ["pools"]];
 
+// A day's validation also takes reports back from jurors and hands others out
+export const VALIDATION_QUERIES = [...TOURNAMENT_QUERIES, ["report-assignments"], ["report-evaluations"]];
+
 // What a duo change touches: the duos, the passages carrying them, and the
 // accounts' passage counts.
 export const DUO_QUERIES = [["duos"], ["pools"], ["accounts"]];

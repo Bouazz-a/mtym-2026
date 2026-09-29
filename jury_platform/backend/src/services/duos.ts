@@ -1,11 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "../db";
-import { ConflictError } from "../utils/errors";
-import { dayName } from "./audit";
 import type { ScheduleSlot } from "./schedule";
 
-// A duo = two jurors who judge together for a whole day. Each passage of
-// that day gets one duo.
+// A duo = two or three jurors who judge together for a whole day. Each
+// passage of that day gets one duo. Its problem (JuryDuo.problemNumber) is
+// the admin's free choice: it only steers the automatic assignments.
 
 export const duoInclude = {
   members: {
@@ -21,53 +20,28 @@ export function toDuoResponse({ members, ...duo }: DuoRow) {
   return { ...duo, members: members.map((m) => m.account) };
 }
 
-// A juror has at most one specialty: the problem of their duos, all days
-// and centers together. A duo therefore only forms between jurors of the
-// same specialty (or without one yet), and takes that problem.
-//
-// Returns the problem the duo must have: `wanted` when given, otherwise
-// the jurors' specialty (null if they have none). Throws when the jurors'
-// specialties differ, or differ from `wanted`. `exceptDuoId`: the duo being
-// edited, left out of the jurors' specialties.
-export async function duoProblemFor(
-  accountIds: string[],
-  wanted: number | null | undefined,
-  exceptDuoId?: string,
-): Promise<number | null> {
-  const seats = await db.duoMember.findMany({
-    where: {
-      accountId: { in: accountIds },
-      duo: { problemNumber: { not: null }, ...(exceptDuoId ? { id: { not: exceptDuoId } } : {}) },
-    },
-    include: { account: true, duo: { include: { centerDay: true } } },
-    orderBy: { duo: { centerDay: { date: "asc" } } },
-  });
-  // Each specialty found, with who has it and where it comes from
-  const specialties = new Map<number, string>();
-  for (const { account, duo } of seats) {
-    const p = duo.problemNumber!;
-    if (!specialties.has(p)) {
-      specialties.set(p, `${account.firstName} ${account.lastName} est spécialiste du P${p} (Duo ${duo.number}, ${dayName(duo.centerDay)})`);
-    }
-  }
-  if (specialties.size > 1) {
-    throw new ConflictError(`Un juré n'a qu'une spécialité, et un duo réunit deux jurés de la même : ${[...specialties.values()].join(" ; ")}`);
-  }
-  const [specialty] = [...specialties.keys()];
-  if (wanted != null && specialty !== undefined && wanted !== specialty) {
-    throw new ConflictError(`${specialties.get(specialty)} : ce duo ne peut pas prendre le P${wanted}`);
-  }
-  return wanted === undefined ? specialty ?? null : wanted;
-}
-
 // Passages where the juror sits in the judging duo.
 export function passagesJudgedBy(accountId: string): Prisma.PassageWhereInput {
   return { duo: { members: { some: { accountId } } } };
 }
 
+// Report grades given by a duo, not by the juror the report is handed to.
+// Such a grade can sit on a defended problem: its team defends it only since
+// the pools changed, and the grade is cancelled when the day is validated
+// again (services/reportValidation.ts) — until then it freezes nothing.
+async function duoReportGrades<T extends { juryId: string; teamId: string; problemNumber: number }>(grades: T[]): Promise<T[]> {
+  if (grades.length === 0) return grades;
+  const handedOut = await db.reportAssignment.findMany({
+    where: { report: { teamId: { in: [...new Set(grades.map((g) => g.teamId))] } } },
+    select: { accountId: true, report: { select: { teamId: true, problemNumber: true } } },
+  });
+  const handedTo = new Set(handedOut.map((a) => `${a.accountId}:${a.report.teamId}:${a.report.problemNumber}`));
+  return grades.filter((g) => !handedTo.has(`${g.juryId}:${g.teamId}:${g.problemNumber}`));
+}
+
 // Which of these passages already carry a grade — the oral of the passage
-// itself, or the written report of the team defending in it. Their duo is
-// then frozen (same rule as a single assignment, in one query pair).
+// itself, or the written report of the team defending in it, graded by the
+// duo. Their duo is then frozen (same rule as a single assignment).
 export async function gradedPassageIds(passageIds: string[]): Promise<Set<string>> {
   if (passageIds.length === 0) return new Set();
   const passages = await db.passage.findMany({
@@ -78,10 +52,10 @@ export async function gradedPassageIds(passageIds: string[]): Promise<Set<string
     db.oralEvaluation.findMany({ where: { passageId: { in: passageIds } }, select: { passageId: true } }),
     db.reportEvaluation.findMany({
       where: { teamId: { in: passages.map((p) => p.defenderTeamId) } },
-      select: { teamId: true, problemNumber: true },
+      select: { juryId: true, teamId: true, problemNumber: true },
     }),
   ]);
-  const reported = new Set(reports.map((r) => `${r.teamId}:${r.problemNumber}`));
+  const reported = new Set((await duoReportGrades(reports)).map((r) => `${r.teamId}:${r.problemNumber}`));
   return new Set([
     ...orals.map((o) => o.passageId),
     ...passages.filter((p) => reported.has(`${p.defenderTeamId}:${p.problemNumber}`)).map((p) => p.id),
@@ -101,18 +75,19 @@ export async function isDuoGraded(duoId: string): Promise<boolean> {
     include: { passages: { select: { defenderTeamId: true, problemNumber: true } }, members: { select: { accountId: true } } },
   });
   if (!duo) return false;
-  const [oral, report] = await Promise.all([
+  const [oral, reports] = await Promise.all([
     db.oralEvaluation.count({ where: { passage: { duoId } } }),
     duo.passages.length === 0
-      ? 0
-      : db.reportEvaluation.count({
+      ? []
+      : db.reportEvaluation.findMany({
         where: {
           juryId: { in: duo.members.map((m) => m.accountId) },
           OR: duo.passages.map((p) => ({ teamId: p.defenderTeamId, problemNumber: p.problemNumber })),
         },
+        select: { juryId: true, teamId: true, problemNumber: true },
       }),
   ]);
-  return oral + report > 0;
+  return oral > 0 || (await duoReportGrades(reports)).length > 0;
 }
 
 // Scheduling hints for a duo's passages — never blocking:

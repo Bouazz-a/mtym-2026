@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "../db";
 import type { AuthenticatedUser } from "../types";
 import { teamsOf } from "./passages";
-import { passagesJudgedBy } from "./duos";
+import { gradedPassageIds, passagesJudgedBy } from "./duos";
 
 // Whether a list of grades is the user's own only: always for a jury
 // account; for an admin who also judges, when its juror pages ask (?mine=1)
@@ -62,12 +62,12 @@ export async function juryCanAccessReport(
   return judged + assigned > 0;
 }
 
-// Once any grade exists for a day, its pools are frozen: redrawing or
-// swapping teams would detach those grades from the lineup they were given for.
+// Once a passage of the day is graded (an oral, or the defender's report by
+// its duo), its pools are frozen: redrawing or swapping teams would detach
+// those grades from the lineup they were given for. Reports handed out to
+// jurors don't freeze it: validating the day again sorts them out
+// (services/reportValidation.ts).
 export async function isDayGraded(centerDayId: string): Promise<boolean> {
-  const [oral, report] = await Promise.all([
-    db.oralEvaluation.count({ where: { passage: { pool: { centerDayId } } } }),
-    db.reportEvaluation.count({ where: { team: { centerDayId } } }),
-  ]);
-  return oral + report > 0;
+  const passages = await db.passage.findMany({ where: { pool: { centerDayId } }, select: { id: true } });
+  return (await gradedPassageIds(passages.map((p) => p.id))).size > 0;
 }

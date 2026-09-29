@@ -9,7 +9,7 @@ import { nextPoolNumber, poolLabelPrefix } from "../services/centers";
 import { validateDraw, type DrawPool } from "../services/draw";
 import { teamsOf } from "../services/passages";
 import { clearDrawValidation, createPools, findPools, playedProblems, teamsInPools } from "../services/pools";
-import { assertNoAssignedReports } from "../services/reportPool";
+import { applyValidation, planValidation, type ValidationImpact } from "../services/reportValidation";
 import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 // Pool draws of a center day — mounted under /api/center-days. The draw
@@ -26,11 +26,12 @@ async function findDayOrThrow(id: string) {
   return day;
 }
 
+// Reports already handed out don't block: the next validation sorts them
+// out (services/reportValidation.ts)
 async function assertNotGraded(centerDayId: string) {
   if (await isDayGraded(centerDayId)) {
-    throw new ConflictError("Des notes existent déjà pour ce jour — ses poules ne peuvent plus être modifiées");
+    throw new ConflictError("Des passages de ce jour sont déjà notés — ses poules ne peuvent plus être modifiées");
   }
-  await assertNoAssignedReports({ centerDayId });
 }
 
 const drawDetails = (pools: DrawPool[]) => pools.map((p) => ({ pool: p.label, passages: p.passages.map((x) => x.label) }));
@@ -95,16 +96,38 @@ router.post("/:id/draw", asyncRoute(async (req, res) => {
   res.status(201).json(await findPools({ centerDayId: day.id }));
 }));
 
+// "BAKA P2 (Ines Uitest)"
+const reportName = (r: { team: string; problemNumber: number; juror?: string }) =>
+  `${r.team} P${r.problemNumber}${r.juror ? ` (${r.juror})` : ""}`;
+
+// " ; rapports : 1 note annulée, 2 attribués" — or nothing
+function impactSummary({ removed, assigned, unassigned }: ValidationImpact): string {
+  const graded = removed.filter((r) => r.graded).length;
+  const parts = [
+    graded > 0 && `${graded} note${graded > 1 ? "s" : ""} annulée${graded > 1 ? "s" : ""}`,
+    removed.length > graded && `${removed.length - graded} retiré${removed.length - graded > 1 ? "s" : ""} sans note`,
+    assigned.length > 0 && `${assigned.length} attribué${assigned.length > 1 ? "s" : ""}`,
+    unassigned.length > 0 && `${unassigned.length} à attribuer`,
+  ].filter(Boolean);
+  return parts.length ? ` ; rapports : ${parts.join(", ")}` : "";
+}
+
+// GET /api/center-days/:id/draw-validation — what validating the day would
+// do to the reports already handed out (services/reportValidation.ts)
+router.get("/:id/draw-validation", asyncRoute(async (req, res) => {
+  const day = await findDayOrThrow(req.params.id);
+  res.json((await planValidation(db, day.id)).impact);
+}));
+
 // PUT /api/center-days/:id/draw-validation — { validated }: the day's
 // composition is settled (or reopened). Teams may be left without a pool;
-// a pool still being composed (a draft) blocks it.
+// a pool still being composed (a draft) blocks it. Validating also sorts
+// out the reports already handed out (GET above shows how).
 router.put("/:id/draw-validation", asyncRoute(async (req, res) => {
   const { validated } = z.object({ validated: z.boolean() }).parse(req.body);
   const day = await findDayOrThrow(req.params.id);
   const pools = await db.pool.findMany({ where: { centerDayId: day.id }, include: { passages: true } });
 
-  // Reopening the day would let its pools change under the handed-out reports
-  if (!validated) await assertNoAssignedReports({ centerDayId: day.id });
   if (validated) {
     const drafts = pools.filter((p) => p.draft !== null);
     if (drafts.length > 0) {
@@ -118,21 +141,32 @@ router.put("/:id/draw-validation", asyncRoute(async (req, res) => {
   const actor = `${req.user!.firstName} ${req.user!.lastName}`;
 
   const updated = await db.$transaction(async (tx) => {
+    const plan = validated ? await planValidation(tx, day.id) : null;
+    if (plan) await applyValidation(tx, plan);
     const saved = await tx.centerDay.update({
       where: { id: day.id },
       data: validated
         ? { drawValidatedAt: new Date(), drawValidatedBy: actor }
         : { drawValidatedAt: null, drawValidatedBy: null },
     });
+    const impact = plan?.impact;
     await audit(tx, req.user!, {
       category: "Tirage",
       action: validated ? "draw.validate" : "draw.invalidate",
       summary: validated
-        ? `Tirage validé pour ${dayName(day)} : ${pools.length} poule(s), ${placed.size} équipe(s) placée(s)${leftOut > 0 ? `, ${leftOut} sans poule` : ""}`
+        ? `Tirage validé pour ${dayName(day)} : ${pools.length} poule(s), ${placed.size} équipe(s) placée(s)${leftOut > 0 ? `, ${leftOut} sans poule` : ""}${impact ? impactSummary(impact) : ""}`
         : `Validation du tirage retirée pour ${dayName(day)}`,
+      ...(impact && impact.removed.length + impact.assigned.length + impact.unassigned.length > 0 && {
+        details: {
+          "notes annulées": impact.removed.filter((r) => r.graded).map(reportName),
+          "retirés sans note": impact.removed.filter((r) => !r.graded).map(reportName),
+          attribués: impact.assigned.map(reportName),
+          "à attribuer": impact.unassigned.map(reportName),
+        },
+      }),
     });
     return saved;
-  });
+  }, { timeout: 20_000 });
   res.json(updated);
 }));
 

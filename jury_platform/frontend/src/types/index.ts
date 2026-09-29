@@ -81,6 +81,21 @@ export interface CenterDay {
   _count: { teams: number; pools: number };
 }
 
+// What validating a day does to its reports already handed out to jurors,
+// after its pools changed (backend/src/services/reportValidation.ts)
+export interface ReportChange {
+  reportId: string;
+  team: string; // quadrigram
+  problemNumber: number;
+  juror: string;
+}
+
+export interface ValidationImpact {
+  removed: (ReportChange & { graded: boolean; reason: "defended" | "withoutPool" })[];
+  assigned: ReportChange[];
+  unassigned: Omit<ReportChange, "juror">[]; // no juror has a problem yet
+}
+
 // ================== Tournament ==================
 
 export interface Pool {

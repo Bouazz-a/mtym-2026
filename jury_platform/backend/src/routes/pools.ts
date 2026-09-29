@@ -9,8 +9,6 @@ import { passagesJudgedBy, gradedPassageIds } from "../services/duos";
 import { pickProblems, QUALIFS_PROBLEMS, slotLoad } from "../algorithms/poolDraw";
 import { clearDrawValidation, findPools, playedProblems, poolInclude, teamsInPools, toPoolResponse } from "../services/pools";
 import { emptyGrid, isComplete, toDrawPool, validateGrid, type PoolGrid } from "../services/poolGrid";
-import { teamsOf } from "../services/passages";
-import { assertNoAssignedReports } from "../services/reportPool";
 import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
 const router = Router();
@@ -61,8 +59,7 @@ async function findPoolOrThrow(id: string) {
 async function assertNotGraded(poolId: string, action: string) {
   const passages = await db.passage.findMany({ where: { poolId } });
   const graded = await gradedPassageIds(passages.map((p) => p.id));
-  if (graded.size > 0) throw new ConflictError(`Des notes existent déjà pour cette poule — elle ne peut plus ${action}`);
-  await assertNoAssignedReports({ teamIds: [...new Set(passages.flatMap(teamsOf))] });
+  if (graded.size > 0) throw new ConflictError(`Des passages de cette poule sont déjà notés — elle ne peut plus ${action}`);
 }
 
 // POST /api/pools — { centerDayId, size } -> an empty pool to fill in, in the

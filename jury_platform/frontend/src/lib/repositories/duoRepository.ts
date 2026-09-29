@@ -10,12 +10,12 @@ export function getDuos(centerDayId?: string): Promise<JuryDuo[]> {
   return apiFetch<JuryDuo[]>("/duos", { params: { centerDayId } });
 }
 
-export function createDuo(centerDayId: string, accountIds: [string, string], problemNumber: number | null): Promise<DuoResult> {
+export function createDuo(centerDayId: string, accountIds: string[], problemNumber: number | null): Promise<DuoResult> {
   return apiFetch<DuoResult>("/duos", { method: "POST", body: { centerDayId, accountIds, problemNumber } });
 }
 
 // Its jurors, its problem (the problem can change at any time), or both
-export function updateDuo(id: string, changes: { accountIds?: [string, string]; problemNumber?: number | null }): Promise<DuoResult> {
+export function updateDuo(id: string, changes: { accountIds?: string[]; problemNumber?: number | null }): Promise<DuoResult> {
   return apiFetch<DuoResult>(`/duos/${id}`, { method: "PUT", body: changes });
 }
 

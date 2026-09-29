@@ -1,4 +1,4 @@
-import type { Center, CenterDay, PoolDetails, ScheduleSlot } from "@/types";
+import type { Center, CenterDay, PoolDetails, ScheduleSlot, ValidationImpact } from "@/types";
 import { apiFetch } from "@/lib/api/client";
 
 export function getCenterDays(center?: Center): Promise<CenterDay[]> {
@@ -38,8 +38,15 @@ export function completeDraw(dayId: string): Promise<PoolDetails[]> {
   return apiFetch<PoolDetails[]>(`/center-days/${dayId}/draw`, { method: "POST" });
 }
 
+// What validating the day would do to its reports already handed out:
+// grades cancelled, reports taken back or handed out
+export function getValidationImpact(dayId: string): Promise<ValidationImpact> {
+  return apiFetch<ValidationImpact>(`/center-days/${dayId}/draw-validation`);
+}
+
 // Marks the day's composition as settled (or reopens it). Teams without a
-// pool are allowed; a pool still in draft is not.
+// pool are allowed; a pool still in draft is not. Validating applies
+// getValidationImpact's changes.
 export function setDrawValidation(dayId: string, validated: boolean): Promise<CenterDay> {
   return apiFetch<CenterDay>(`/center-days/${dayId}/draw-validation`, { method: "PUT", body: { validated } });
 }

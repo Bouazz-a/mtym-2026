@@ -1,5 +1,5 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "../db";
-import { ConflictError } from "../utils/errors";
 import { teamsOf } from "./passages";
 
 // The reports handed out to jurors: every report of a team placed in a
@@ -7,8 +7,9 @@ import { teamsOf } from "./passages";
 // that one is graded by the duo of its passage.
 //
 // Only validated days count: a team's defended problem is only final once
-// its day's draw is settled, and assigned reports then freeze that draw
-// (assertNoAssignedReports).
+// its day's draw is settled. If the pools change afterwards, the reports
+// already handed out are sorted out when the day is validated again
+// (services/reportValidation.ts).
 
 export interface PoolReport {
   id: string;
@@ -67,9 +68,9 @@ export async function reportPool(): Promise<ReportPool> {
 }
 
 // Every juror (jury accounts and admins who also judge) with the problems
-// of its duos (its specialties)
-export async function jurorProblems(): Promise<{ id: string; problems: number[] }[]> {
-  const accounts = await db.account.findMany({
+// of its duos, all days together (its specialties)
+export async function jurorProblems(client: Prisma.TransactionClient = db): Promise<{ id: string; problems: number[] }[]> {
+  const accounts = await client.account.findMany({
     where: { isJuror: true },
     include: { duoSeats: { include: { duo: { select: { problemNumber: true } } } } },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -78,17 +79,4 @@ export async function jurorProblems(): Promise<{ id: string; problems: number[] 
     id: a.id,
     problems: [...new Set(a.duoSeats.flatMap((s) => (s.duo.problemNumber ? [s.duo.problemNumber] : [])))].sort(),
   }));
-}
-
-// A handed-out report depends on the lineup that left it out of the
-// defended ones: while any is assigned, the teams' pools can't change.
-export async function assertNoAssignedReports(where: { centerDayId: string } | { teamIds: string[] }) {
-  const count = await db.reportAssignment.count({
-    where: { report: { team: "centerDayId" in where ? { centerDayId: where.centerDayId } : { id: { in: where.teamIds } } } },
-  });
-  if (count > 0) {
-    throw new ConflictError(
-      `${count} rapport${count > 1 ? "s" : ""} de ces équipes ${count > 1 ? "sont attribués" : "est attribué"} à des jurés — retirez-les dans Affectation des rapports avant de modifier les poules`,
-    );
-  }
 }

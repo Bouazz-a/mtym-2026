@@ -2,17 +2,18 @@ import { useState } from "react";
 import { Alert, Badge, Btn, BrutalCard, Modal, SectionHeading, Select } from "@/features/shared/primitives";
 import { autoAssignDuos, createDuo, deleteDuo, updateDuo, type AutoAssignMode } from "@/lib/repositories/duoRepository";
 import type { Account, CenterDay, JuryDuo, PoolDetails, ScheduleSlot, Team } from "@/types";
-import { jurorSpecialties, specialtiesAgree } from "@/utils/duos";
+import { jurorSpecialties } from "@/utils/duos";
 import { formatDay, QUALIFS_PROBLEMS } from "@/utils/labels";
 import { DayTimetable } from "./JuryTimetable";
 import { ScheduleEditor } from "./ScheduleEditor";
 import { DUO_QUERIES, useAction } from "./useAction";
 
-// One center day: form its jury duos and give each one a problem (its
-// jurors become that problem's specialists, which steers the automatic
-// assignment of passages and reports), then give each passage of the day's
-// timetable one duo (from the organizers' jury plan). A duo stays together all day and should
-// judge at most one passage per pool — the platform warns but doesn't block.
+// One center day: form its jury duos (two or three jurors) and give each one
+// a problem (its jurors become that problem's specialists, which steers the
+// automatic assignment of passages and reports), then give each passage of
+// the day's timetable one duo (from the organizers' jury plan). A duo stays
+// together all day and should judge at most one passage per pool — the
+// platform warns but doesn't block.
 
 export function DayJury({
   day,
@@ -26,7 +27,7 @@ export function DayJury({
   day: CenterDay;
   dayIndex: number;
   duos: JuryDuo[]; // this day's
-  allDuos: JuryDuo[]; // every day's: a juror's specialty comes from all their duos
+  allDuos: JuryDuo[]; // every day's: shown next to each juror, the problems of their duos
   pools: PoolDetails[];
   jurors: Account[];
   teamById: Map<string, Team>;
@@ -210,27 +211,25 @@ function JurorSelect({
   jurors,
   unavailable,
   specialtyOf,
-  compatible,
   onChange,
   placeholder,
   disabled,
 }: {
   value: string;
   jurors: Account[];
-  unavailable: Set<string>; // already in another duo this day
+  unavailable: Set<string>; // already in a duo this day
   specialtyOf: (id: string) => number[];
-  compatible: (id: string) => boolean; // their specialty fits the duo
   onChange: (id: string) => void;
-  placeholder: string;
+  placeholder: string; // also the empty choice, which takes an optional juror out
   disabled?: boolean;
 }) {
   return (
-    <Select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} style={{ width: "15rem" }}>
+    <Select value={value} disabled={disabled} aria-label={placeholder} onChange={(e) => onChange(e.target.value)} style={{ width: "15rem" }}>
       <option value="">{placeholder}</option>
       {jurors.map((j) => {
         const specialty = specialtyOf(j.id);
         return (
-          <option key={j.id} value={j.id} disabled={j.id !== value && (unavailable.has(j.id) || !compatible(j.id))}>
+          <option key={j.id} value={j.id} disabled={j.id !== value && unavailable.has(j.id)}>
             {j.lastName} {j.firstName}{specialty.length > 0 ? ` · P${specialty.join(" et P")}` : ""}
           </option>
         );
@@ -239,16 +238,14 @@ function JurorSelect({
   );
 }
 
-// The duo's problem: its two jurors become its specialists. Only a problem
-// matching their specialty, if they already have one, can be picked.
+// The duo's problem, any: its jurors become its specialists for the
+// automatic assignments.
 function ProblemSelect({
   value,
-  allowed,
   onChange,
   disabled,
 }: {
   value: number | null;
-  allowed: (problem: number) => boolean;
   onChange: (problem: number | null) => void;
   disabled?: boolean;
 }) {
@@ -262,10 +259,54 @@ function ProblemSelect({
       style={{ width: "9.5rem", ...(value === null && { borderColor: "var(--saffron-dark)" }) }}
     >
       <option value="">Problème ?</option>
-      {QUALIFS_PROBLEMS.map((n) => <option key={n} value={n} disabled={n !== value && !allowed(n)}>Problème {n}</option>)}
+      {QUALIFS_PROBLEMS.map((n) => <option key={n} value={n}>Problème {n}</option>)}
     </Select>
   );
 }
+
+// A duo's jurors: two, and a third on demand (« + Juré »)
+function JurorSelects({
+  ids,
+  onChange,
+  disabled,
+  ...select
+}: {
+  ids: string[];
+  onChange: (ids: string[]) => void;
+  disabled?: boolean;
+  jurors: Account[];
+  unavailable: Set<string>;
+  specialtyOf: (id: string) => number[];
+}) {
+  const [third, setThird] = useState(false);
+  const slots = ids.length > 2 || third ? 3 : 2;
+  const change = (index: number) => (id: string) => {
+    const next = Array.from({ length: slots }, (_, i) => (i === index ? id : ids[i] ?? ""));
+    if (index === 2 && !id) setThird(false);
+    onChange(next);
+  };
+  return (
+    <>
+      {Array.from({ length: slots }, (_, i) => (
+        <JurorSelect
+          key={i} {...select} value={ids[i] ?? ""} disabled={disabled} onChange={change(i)}
+          placeholder={i < 2 ? `Juré ${i + 1}` : "Juré 3 (aucun)"}
+        />
+      ))}
+      {/* As wide as a juror's field, so the problems line up across the duos */}
+      {slots === 2 && (
+        <div style={{ width: "15rem" }}>
+          <Btn variant="ghost" size="sm" disabled={disabled} title="Un duo peut compter trois jurés" onClick={() => setThird(true)}>
+            + Juré
+          </Btn>
+        </div>
+      )}
+    </>
+  );
+}
+
+// The jurors picked, blanks left out
+const picked = (ids: string[]) => ids.filter(Boolean);
 
 function DuoRow({
   duo,
@@ -278,21 +319,22 @@ function DuoRow({
   duo: JuryDuo;
   passages: number; // passages it judges this day
   jurors: Account[];
-  allDuos: JuryDuo[]; // every day's, for the jurors' specialties
+  allDuos: JuryDuo[]; // every day's, for the problems of the jurors' other duos
   busyJurors: Set<string>;
   onWarnings: (w: string[]) => void;
 }) {
   const { run, busy, error } = useAction(DUO_QUERIES);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [a, b] = [duo.members[0]?.id ?? "", duo.members[1]?.id ?? ""];
-  // Specialties from the jurors' other duos
+  const ids = duo.members.map((m) => m.id);
+  // Problems from the jurors' other duos
   const specialtyOf = (id: string) => (id ? jurorSpecialties(allDuos, id, duo.id) : []);
-  const fitsWith = (partner: string) => (id: string) => specialtiesAgree([specialtyOf(id), specialtyOf(partner)], duo.problemNumber);
 
-  const change = async (index: 0 | 1, id: string) => {
-    const next: [string, string] = index === 0 ? [id, b] : [a, id];
-    if (!next[0] || !next[1]) return;
-    const res = await run(() => updateDuo(duo.id, { accountIds: next }));
+  // Sent once it's a whole duo again: two jurors at least, each once
+  const change = async (next: string[]) => {
+    const accountIds = picked(next);
+    if (accountIds.length < 2 || new Set(accountIds).size !== accountIds.length) return;
+    if (accountIds.join() === ids.join()) return;
+    const res = await run(() => updateDuo(duo.id, { accountIds }));
     if (res) onWarnings(res.warnings);
   };
 
@@ -300,17 +342,9 @@ function DuoRow({
     <li>
       <div className="flex items-center gap-3 flex-wrap">
         <Badge tone="dark">Duo {duo.number}</Badge>
-        <JurorSelect
-          value={a} jurors={jurors} unavailable={busyJurors} specialtyOf={specialtyOf} compatible={fitsWith(b)}
-          placeholder="Juré 1" disabled={busy} onChange={(id) => change(0, id)}
-        />
-        <JurorSelect
-          value={b} jurors={jurors} unavailable={busyJurors} specialtyOf={specialtyOf} compatible={fitsWith(a)}
-          placeholder="Juré 2" disabled={busy} onChange={(id) => change(1, id)}
-        />
+        <JurorSelects ids={ids} jurors={jurors} unavailable={busyJurors} specialtyOf={specialtyOf} disabled={busy} onChange={change} />
         <ProblemSelect
           value={duo.problemNumber}
-          allowed={(n) => specialtiesAgree([specialtyOf(a), specialtyOf(b)], n)}
           disabled={busy}
           onChange={(problemNumber) => run(() => updateDuo(duo.id, { problemNumber }))}
         />
@@ -346,27 +380,26 @@ function NewDuoRow({
   busyJurors: Set<string>;
   onWarnings: (w: string[]) => void;
 }) {
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
+  const [ids, setIds] = useState<string[]>(["", ""]);
   const [problem, setProblem] = useState<number | null>(null);
   const { run, busy, error } = useAction(DUO_QUERIES);
-  const unavailable = new Set([...busyJurors, a, b].filter(Boolean));
+  const chosen = picked(ids);
+  const unavailable = new Set([...busyJurors, ...chosen]);
   const specialtyOf = (id: string) => (id ? jurorSpecialties(allDuos, id) : []);
-  const fitsWith = (partner: string) => (id: string) => specialtiesAgree([specialtyOf(id), specialtyOf(partner)], problem);
 
-  // A specialist brings their problem to the duo
-  const pick = (set: (id: string) => void) => (id: string) => {
-    set(id);
-    const [specialty] = specialtyOf(id);
-    if (problem === null && specialty !== undefined) setProblem(specialty);
+  // A juror who only ever had one problem suggests it, while none is chosen
+  const pick = (next: string[]) => {
+    setIds(next);
+    const added = next.find((id) => id && !ids.includes(id));
+    const problems = added ? specialtyOf(added) : [];
+    if (problem === null && problems.length === 1) setProblem(problems[0]);
   };
 
   const create = async () => {
-    const res = await run(() => createDuo(dayId, [a, b], problem));
+    const res = await run(() => createDuo(dayId, chosen, problem));
     if (res) {
       onWarnings(res.warnings);
-      setA("");
-      setB("");
+      setIds(["", ""]);
       setProblem(null);
     }
   };
@@ -375,20 +408,13 @@ function NewDuoRow({
     <li className="pt-2" style={{ borderTop: "1px dashed var(--border)" }}>
       <div className="flex items-center gap-3 flex-wrap">
         <Badge tone="neutral">Nouveau</Badge>
-        <JurorSelect
-          value={a} jurors={jurors} unavailable={unavailable} specialtyOf={specialtyOf} compatible={fitsWith(b)}
-          placeholder="Juré 1" onChange={pick(setA)}
-        />
-        <JurorSelect
-          value={b} jurors={jurors} unavailable={unavailable} specialtyOf={specialtyOf} compatible={fitsWith(a)}
-          placeholder="Juré 2" onChange={pick(setB)}
-        />
-        <ProblemSelect value={problem} allowed={(n) => specialtiesAgree([specialtyOf(a), specialtyOf(b)], n)} onChange={setProblem} />
-        <Btn size="sm" disabled={!a || !b || a === b || busy} onClick={create}>Créer le duo</Btn>
+        <JurorSelects ids={ids} jurors={jurors} unavailable={unavailable} specialtyOf={specialtyOf} onChange={pick} />
+        <ProblemSelect value={problem} onChange={setProblem} />
+        <Btn size="sm" disabled={chosen.length < 2 || busy} onClick={create}>Créer le duo</Btn>
       </div>
       <p className="font-open text-xs mt-2" style={{ color: "var(--ink-soft)" }}>
-        Un juré n'a qu'une spécialité, le problème de ses duos (tous jours et centres confondus), affichée à côté de son nom :
-        un duo réunit deux jurés de la même spécialité, ou sans spécialité encore.
+        Deux ou trois jurés par duo, et le problème de votre choix. À côté de chaque juré : les problèmes de ses autres
+        duos, tous jours et centres confondus.
       </p>
       {error && <div className="mt-2"><Alert>{error}</Alert></div>}
     </li>

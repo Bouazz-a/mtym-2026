@@ -9,21 +9,13 @@ export function duoMembers(duo: JuryDuo): string {
   return duo.members.map(jurorShortName).join(" & ");
 }
 
-// A juror's specialty: the problem of their duos, all days and centers
-// together, leaving out `exceptDuoId` (the duo being edited). One at most —
-// several only happen with duos formed before that rule.
+// A juror's specialties: the problems of their duos, all days and centers
+// together, leaving out `exceptDuoId` (the duo being edited)
 export function jurorSpecialties(duos: JuryDuo[], jurorId: string, exceptDuoId?: string): number[] {
   const problems = duos
     .filter((d) => d.id !== exceptDuoId && d.problemNumber !== null && d.members.some((m) => m.id === jurorId))
     .map((d) => d.problemNumber!);
   return [...new Set(problems)].sort();
-}
-
-// Whether jurors can sit together in a duo of `problem` (null: not chosen
-// yet): together they may hold one specialty at most, the duo's if it has
-// one. Mirrors duoProblemFor on the server.
-export function specialtiesAgree(specialties: number[][], problem: number | null): boolean {
-  return new Set([...specialties.flat(), ...(problem === null ? [] : [problem])]).size <= 1;
 }
 
 // "Duo 1 · P2", or "Duo 1" while the duo has no problem

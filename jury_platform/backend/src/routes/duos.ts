@@ -5,21 +5,22 @@ import { planDuoAssignment } from "../algorithms/duoAssignment";
 import { adminOnly } from "../middleware/auth";
 import { audit, dayName } from "../services/audit";
 import {
-  duoInclude, duoPassageWarnings, duoProblemFor, gradedPassageIds, isDuoGraded, jurorDateWarnings, toDuoResponse,
+  duoInclude, duoPassageWarnings, gradedPassageIds, isDuoGraded, jurorDateWarnings, toDuoResponse,
 } from "../services/duos";
 import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../utils/errors";
 
-// Jury duos of a center day — two jurors who judge together all day.
+// Jury duos of a center day — two or three jurors who judge together all day.
 const router = Router();
 router.use(...adminOnly);
 
 const MembersSchema = z
   .array(z.string().uuid())
-  .length(2, "Un duo compte exactement deux jurés")
-  .refine((ids) => ids[0] !== ids[1], "Choisissez deux jurés différents");
+  .min(2, "Un duo compte deux ou trois jurés")
+  .max(3, "Un duo compte deux ou trois jurés")
+  .refine((ids) => new Set(ids).size === ids.length, "Choisissez des jurés différents");
 
-// The duo's problem: its jurors specialize in it (passage and report
-// assignment). A juror has one specialty at most (duoProblemFor).
+// The duo's problem, free: its jurors specialize in it for the automatic
+// assignments (passages, reports) — any jurors, whatever their other duos'.
 const ProblemSchema = z.number().int().min(1).max(4).nullable();
 const problemLabel = (n: number | null) => (n ? `problème ${n}` : "sans problème");
 
@@ -46,10 +47,11 @@ async function findDuoOrThrow(id: string) {
   return duo;
 }
 
-// "Ines Uitest et Karim Uitest"
+// "Ines Uitest et Karim Uitest", "Ines Uitest, Karim Uitest et Omar Uitest"
 async function jurorNames(accountIds: string[]): Promise<string> {
   const accounts = await db.account.findMany({ where: { id: { in: accountIds } }, orderBy: { lastName: "asc" } });
-  return accounts.map((a) => `${a.firstName} ${a.lastName}`).join(" et ");
+  const names = accounts.map((a) => `${a.firstName} ${a.lastName}`);
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} et ${names.at(-1)}` : names.join("");
 }
 
 // GET /api/duos?centerDayId=
@@ -63,8 +65,7 @@ router.get("/", asyncRoute(async (req, res) => {
   res.json(duos.map(toDuoResponse));
 }));
 
-// POST /api/duos — { centerDayId, accountIds: [a, b], problemNumber? } -> { duo, warnings }
-// Without a problem, the duo takes its jurors' specialty, if they have one.
+// POST /api/duos — { centerDayId, accountIds: [a, b(, c)], problemNumber? } -> { duo, warnings }
 router.post("/", asyncRoute(async (req, res) => {
   const body = z.object({
     centerDayId: z.string().uuid(),
@@ -76,7 +77,7 @@ router.post("/", asyncRoute(async (req, res) => {
   const day = await db.centerDay.findUnique({ where: { id: centerDayId }, include: { duos: true } });
   if (!day) throw new NotFoundError("Center day not found");
   await assertJurors(accountIds, day.id);
-  const problemNumber = await duoProblemFor(accountIds, body.problemNumber ?? undefined);
+  const problemNumber = body.problemNumber ?? null;
 
   // Lowest free number, so deleting "Duo 2" lets the next duo take it back.
   const used = new Set(day.duos.map((d) => d.number));
@@ -165,12 +166,9 @@ router.post("/auto-assign", asyncRoute(async (req, res) => {
   });
 }));
 
-// PUT /api/duos/:id — { accountIds?: [a, b], problemNumber?: n | null } -> { duo, warnings }
+// PUT /api/duos/:id — { accountIds?: [a, b(, c)], problemNumber?: n | null } -> { duo, warnings }
 // The problem only steers the automatic assignments, so it can change at
-// any time — within the jurors' specialty (duoProblemFor). New jurors bring
-// their specialty to a duo without a problem. Taking the problem away is
-// always allowed: it's how duos formed before the one-specialty rule get
-// untangled.
+// any time; the jurors, until the duo has graded.
 router.put("/:id", asyncRoute(async (req, res) => {
   const { accountIds, problemNumber } = z.object({
     accountIds: MembersSchema.optional(),
@@ -186,10 +184,7 @@ router.put("/:id", asyncRoute(async (req, res) => {
     }
     await assertJurors(accountIds, duo.centerDayId, duo.id);
   }
-  const problem =
-    problemNumber === null && !membersChange ? null
-    : problemNumber !== undefined || membersChange ? await duoProblemFor(accountIds ?? current, problemNumber ?? duo.problemNumber ?? undefined, duo.id)
-    : duo.problemNumber;
+  const problem = problemNumber !== undefined ? problemNumber : duo.problemNumber;
 
   const names = membersChange ? [await jurorNames(current), await jurorNames(accountIds)] : null;
   await db.$transaction(async (tx) => {
