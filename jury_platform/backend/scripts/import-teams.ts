@@ -5,7 +5,8 @@
 // Eligible = teams.status APPROVED + intermediate report PASS + a
 // qualification center. Re-runnable: teams are matched on the main site's
 // team id (sourceId). From `users`, only the names (Team.members) and the
-// email addresses (TeamContact, for the convocation emails) are kept.
+// email addresses of the QUALIFIED students (TeamContact, for the
+// convocation emails) are kept.
 import "dotenv/config";
 import { Center, PrismaClient } from "@prisma/client";
 import { teamsOf } from "../src/services/passages";
@@ -20,6 +21,8 @@ if (!["AUTO", "FINAL", "INTERMEDIATE"].includes(REPORT_MODE)) {
   throw new Error(`REPORT_MODE must be AUTO, FINAL or INTERMEDIATE, got "${REPORT_MODE}"`);
 }
 const CENTERS = new Set<string>(Object.values(Center));
+// The application status of the students who get the convocation emails
+const QUALIFIED = "QUALIFIED";
 
 interface SourceTeam {
   id: number;
@@ -33,6 +36,7 @@ interface SourceMember {
   firstName: string | null;
   lastName: string | null;
   email: string | null;
+  applicationStatus: string | null; // applications_status.status, e.g. "QUALIFIED"
 }
 interface SourceReport {
   teamId: number;
@@ -66,17 +70,33 @@ async function readSource(src: PrismaClient) {
     ORDER BY t.id`;
   const ids = teams.map((t) => t.id);
 
-  // The email through to_jsonb too: null on dumps that don't carry it
-  const members = await src.$queryRaw<SourceMember[]>`
-    SELECT u."teamId", u."firstName", u."lastName", to_jsonb(u) ->> 'email' AS email FROM users u
-    WHERE u."teamId" = ANY(${ids})
-    ORDER BY u."lastName", u."firstName"`;
+  // The email through to_jsonb too: null on dumps that don't carry it. The
+  // application status is read only when the dump has those tables; without
+  // it no student counts as QUALIFIED, so no email is kept.
+  const [{ hasStatuses }] = await src.$queryRaw<{ hasStatuses: boolean }[]>`
+    SELECT to_regclass('public.applications') IS NOT NULL
+       AND to_regclass('public.applications_status') IS NOT NULL AS "hasStatuses"`;
+  const members = hasStatuses
+    ? await src.$queryRaw<SourceMember[]>`
+        SELECT u."teamId", u."firstName", u."lastName", to_jsonb(u) ->> 'email' AS email,
+               s.status::text AS "applicationStatus"
+        FROM users u
+        LEFT JOIN applications a ON a."userId" = u.id
+        LEFT JOIN applications_status s ON s.id = a."statusId"
+        WHERE u."teamId" = ANY(${ids})
+        ORDER BY u."lastName", u."firstName"`
+    : await src.$queryRaw<SourceMember[]>`
+        SELECT u."teamId", u."firstName", u."lastName", to_jsonb(u) ->> 'email' AS email,
+               NULL::text AS "applicationStatus"
+        FROM users u
+        WHERE u."teamId" = ANY(${ids})
+        ORDER BY u."lastName", u."firstName"`;
 
   const reports = await src.$queryRaw<SourceReport[]>`
     SELECT "teamId", "reportType"::text AS "reportType", "problemNumber", "fileUrl" FROM team_reports
     WHERE "reportType"::text IN ('FINAL', 'INTERMEDIATE') AND "teamId" = ANY(${ids})`;
 
-  return { teams, members, reports: pickReports(reports) };
+  return { teams, members, reports: pickReports(reports), hasStatuses };
 }
 
 // The problems a team wants to defend, favorite first: each of 1–4 once, in
@@ -129,7 +149,11 @@ async function main() {
     const locked = new Set<string>([...passages.flatMap(teamsOf), ...graded.map((g) => g.teamId)]);
 
     const existing = new Map((await db.team.findMany()).map((t) => [t.sourceId, t]));
-    const stats = { created: 0, updated: 0, removed: 0, withoutReport: 0, members: 0, emails: 0, reports: { FINAL: 0, INTERMEDIATE: 0 } as Record<string, number> };
+    const stats = {
+      created: 0, updated: 0, removed: 0, withoutReport: 0,
+      members: 0, emails: 0, notQualified: 0, qualifiedWithoutEmail: 0,
+      reports: { FINAL: 0, INTERMEDIATE: 0 } as Record<string, number>,
+    };
     const kept: string[] = [];
 
     await db.$transaction(async (tx) => {
@@ -182,15 +206,24 @@ async function main() {
         for (const r of reports) stats.reports[r.reportType]++;
         if (!reports.length) stats.withoutReport++;
 
-        // The members' addresses, for the convocation emails: replaced as a whole
+        // The addresses of the QUALIFIED members, for the convocation emails:
+        // replaced as a whole. The others stay members, but get no email.
         const contacts = (membersByTeam.get(t.id) ?? []).flatMap((m) => {
+          stats.members++;
+          if (m.applicationStatus !== QUALIFIED) {
+            stats.notQualified++;
+            return [];
+          }
           const email = m.email?.trim().toLowerCase();
-          return email ? [{ teamId, firstName: m.firstName ?? "", lastName: m.lastName ?? "", email }] : [];
+          if (!email) {
+            stats.qualifiedWithoutEmail++;
+            return [];
+          }
+          return [{ teamId, firstName: m.firstName ?? "", lastName: m.lastName ?? "", email }];
         });
         await tx.teamContact.deleteMany({ where: { teamId } });
         if (contacts.length) await tx.teamContact.createMany({ data: contacts });
         stats.emails += contacts.length;
-        stats.members += (membersByTeam.get(t.id) ?? []).length;
       }
 
       // Teams that are no longer eligible on the main site
@@ -214,7 +247,13 @@ async function main() {
     console.log(`Teams: ${stats.created} created, ${stats.updated} updated, ${stats.removed} removed (no longer eligible)`);
     const { FINAL, INTERMEDIATE } = stats.reports;
     console.log(`Reports graded (mode ${REPORT_MODE.toLowerCase()}): ${FINAL + INTERMEDIATE} — ${FINAL} final, ${INTERMEDIATE} intermediate — ${stats.withoutReport} team(s) have none yet`);
-    console.log(`Emails for the convocations: ${stats.emails} of ${stats.members} members`);
+    console.log(
+      `Emails for the convocations (QUALIFIED students only): ${stats.emails} of ${stats.members} members`
+        + ` — ${stats.notQualified} not QUALIFIED left out, ${stats.qualifiedWithoutEmail} QUALIFIED without an email`,
+    );
+    if (!source.hasStatuses) {
+      warnings.push("the dump has no application statuses (tables applications / applications_status): no email imported");
+    }
     if (kept.length) {
       console.log(`Kept although no longer eligible (already drawn or graded): ${kept.join(", ")}`);
     }

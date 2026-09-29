@@ -150,7 +150,9 @@ SMTP_REPLY_TO='mtym@mathmaroc.org'  # où vont les réponses des équipes
 Sans ces lignes, la page fonctionne (aperçus) mais n'envoie rien. L'API ne
 les lit qu'au démarrage : relancer `scripts/deploy.sh` (ou
 `pm2 restart mtym_jury_api`) après les avoir ajoutées. Les adresses des
-participants arrivent avec `scripts/import-from-mainsite.sh`.
+participants arrivent avec `scripts/import-from-mainsite.sh`, et seulement
+celles des élèves au statut **QUALIFIED** sur le site principal : les autres
+restent membres de leur équipe, mais ne reçoivent pas d'email.
 
 En local, **ne pas** mettre le jeton : `MAIL_OUTBOX_DIR=./outbox` dans
 `backend/.env` écrit chaque email dans ce dossier (fichiers `.eml`, lisibles

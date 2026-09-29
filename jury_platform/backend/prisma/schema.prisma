@@ -105,8 +105,8 @@ model Team {
   mailings          TeamMailing[]
 }
 
-// A member's email, for the convocation emails only — kept out of
-// Team.members (names only) so no team route ever hands it out. Replaced
+// A QUALIFIED member's email, for the convocation emails only — kept out
+// of Team.members (names only) so no team route ever hands it out. Replaced
 // on every import.
 model TeamContact {
   id        String @id @default(uuid())

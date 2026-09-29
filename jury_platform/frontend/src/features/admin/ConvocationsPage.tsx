@@ -168,7 +168,7 @@ function DayMailings({ day, dayIndex }: { day: CenterDay; dayIndex: number }) {
               <thead>
                 <tr>
                   <th>Équipe</th>
-                  <th className="col-tight">Destinataires</th>
+                  <th className="col-tight" title="Membres au statut QUALIFIED ayant un email">Destinataires</th>
                   <th className="col-tight">Défense</th>
                   <th className="col-tight">Opposition</th>
                   <th className="col-tight">Rapport</th>
