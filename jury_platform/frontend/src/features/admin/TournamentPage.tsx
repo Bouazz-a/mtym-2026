@@ -2,8 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
-  Alert, Badge, Btn, BrutalCard, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select,
-  Stagger,
+  Alert, Badge, BrutalCard, Btn, FadeIn, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Stagger,
 } from "@/features/shared/primitives";
 import { GridIcon } from "@/features/shared/icons";
 import { ReportModal } from "@/features/shared/ReportViewer";
@@ -76,7 +75,8 @@ export function TournamentPage() {
         onChange={setCenter}
       />
 
-      <Stagger key={center} className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Sibling keys must differ: the same key twice makes React keep old copies */}
+      <Stagger key={`stats-${center}`} className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard label="Équipes" value={centerTeams.length} />
         <StatCard label="Jours" value={days.length} progressColor="var(--sage)" />
         <StatCard
@@ -89,28 +89,30 @@ export function TournamentPage() {
         <StatCard label="Poules" value={pools.length} progressColor="var(--forest-soft)" />
       </Stagger>
 
-      {centerTeams.length === 0 ? (
-        <EmptyState
-          icon={GridIcon}
-          title={`Aucune équipe à ${centerLabel(center)}`}
-          sub="Les équipes viennent de l'import du site principal (scripts/import-dump.sh)."
-        />
-      ) : (
-        <>
-          <DaysSection center={center} days={days} withoutDay={withoutDay} />
-          <TeamsSection teams={centerTeams} days={days} pools={pools} />
-          {days.map((day, i) => (
-            <DayDraw
-              key={day.id}
-              day={day}
-              dayIndex={i}
-              teams={centerTeams.filter((t) => t.centerDayId === day.id)}
-              pools={pools.filter((p) => p.centerDayId === day.id)}
-              teamById={teamById}
-            />
-          ))}
-        </>
-      )}
+      <FadeIn key={`content-${center}`} className="space-y-10">
+        {centerTeams.length === 0 ? (
+          <EmptyState
+            icon={GridIcon}
+            title={`Aucune équipe à ${centerLabel(center)}`}
+            sub="Les équipes viennent de l'import du site principal (scripts/import-dump.sh)."
+          />
+        ) : (
+          <>
+            <DaysSection center={center} days={days} withoutDay={withoutDay} />
+            <TeamsSection teams={centerTeams} days={days} pools={pools} />
+            {days.map((day, i) => (
+              <DayDraw
+                key={day.id}
+                day={day}
+                dayIndex={i}
+                teams={centerTeams.filter((t) => t.centerDayId === day.id)}
+                pools={pools.filter((p) => p.centerDayId === day.id)}
+                teamById={teamById}
+              />
+            ))}
+          </>
+        )}
+      </FadeIn>
     </PageMotion>
   );
 }

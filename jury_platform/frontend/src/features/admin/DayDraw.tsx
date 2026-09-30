@@ -189,7 +189,7 @@ export function DayDraw({
 
         {drawn ? (
           <>
-            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+            <div className="pools-grid gap-6">
               {pools.map((pool) => (
                 <PoolCard
                   key={pool.id}

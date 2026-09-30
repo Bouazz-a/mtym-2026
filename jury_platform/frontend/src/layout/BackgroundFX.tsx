@@ -1,18 +1,35 @@
 import { useEffect, useRef } from "react";
 
-// BackgroundFX — self-contained interactive particle canvas. Golden particles
-// drift slowly, repulse from the cursor, reconnect with thin lines, and ease
-// back to their drifting anchor when the pointer leaves. Zero dependencies;
+// BackgroundFX — self-contained interactive particle canvas. Forest-ink
+// particles drift slowly, repulse from the cursor, reconnect with thin lines,
+// and ease back to their drifting anchor when the pointer leaves. Zero dependencies;
 // all lifecycle lives in one effect so React StrictMode double-mounts stay
 // clean (the cleanup fully tears down the RAF loop and every listener).
 
-const PARTICLE_COUNT = 110;
+// One particle per this much screen (px²): 110 on a 1440×900 screen, and
+// as sparse on a phone (about 28) instead of four times denser
+const AREA_PER_PARTICLE = 11_800;
+const MIN_PARTICLES = 20;
+const MAX_PARTICLES = 160;
 const REPULSE_RADIUS = 110;
 const REPULSE_FORCE = 5;
 const RETURN_LERP = 0.06;
 const LINE_DIST = 130;
-const SAFFRON = "212, 175, 55"; // --saffron, golden — used over the paper canvas
-const PAPER = "244, 236, 216";  // --paper, cream — used when a particle is currently within a registered dark region (the footer)
+// Each surface gets the other one's color: forest ink on the paper (like the
+// top bar and footer), cream on the forest footer. Dark on light shows more
+// than light on dark, so on paper the dots and lines are fainter.
+const SURFACES = {
+  paper: { rgb: "18, 32, 25", dot: 0.65, line: 0.16 }, // --forest
+  dark: { rgb: "244, 236, 216", dot: 1, line: 0.4 }, // --paper, inside a registered dark region (the footer)
+} as const;
+const dotColor = (dark: boolean, opacity: number) => {
+  const s = dark ? SURFACES.dark : SURFACES.paper;
+  return `rgba(${s.rgb}, ${opacity * s.dot})`;
+};
+const lineColor = (dark: boolean, alpha: number) => {
+  const s = dark ? SURFACES.dark : SURFACES.paper;
+  return `rgba(${s.rgb}, ${alpha * s.line})`;
+};
 
 // Dark regions act as a "color filter" — when a particle's viewport
 // position falls inside one, the canvas draws it (and any link touching
@@ -80,7 +97,8 @@ export function BackgroundFX() {
     const buildParticles = () => {
       const { width, height } = particleState;
       const arr: Particle[] = [];
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const count = Math.min(MAX_PARTICLES, Math.max(MIN_PARTICLES, Math.round((width * height) / AREA_PER_PARTICLE)));
+      for (let i = 0; i < count; i++) {
         const x = Math.random() * width;
         const y = Math.random() * height;
         arr.push({
@@ -169,10 +187,9 @@ export function BackgroundFX() {
           p.y += (p.baseY - p.y) * RETURN_LERP;
         }
 
-        const col = inRegion(p.x, p.y, dark) ? PAPER : SAFFRON;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${col}, ${p.opacity})`;
+        ctx.fillStyle = dotColor(inRegion(p.x, p.y, dark), p.opacity);
         ctx.fill();
       }
 
@@ -196,11 +213,11 @@ export function BackgroundFX() {
               // Line straddles the seam — gradient between the two colors
               // so the transition is smooth.
               const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-              grad.addColorStop(0, `rgba(${aIn ? PAPER : SAFFRON}, ${alpha * 0.40})`);
-              grad.addColorStop(1, `rgba(${bIn ? PAPER : SAFFRON}, ${alpha * 0.40})`);
+              grad.addColorStop(0, lineColor(aIn, alpha));
+              grad.addColorStop(1, lineColor(bIn, alpha));
               ctx.strokeStyle = grad;
             } else {
-              ctx.strokeStyle = `rgba(${aIn ? PAPER : SAFFRON}, ${alpha * 0.40})`;
+              ctx.strokeStyle = lineColor(aIn, alpha);
             }
             ctx.lineWidth = 1;
             ctx.stroke();

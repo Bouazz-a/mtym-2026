@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Alert, Badge, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented,
+  Alert, Badge, BrutalCard, FadeIn, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented,
 } from "@/features/shared/primitives";
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
@@ -58,15 +58,17 @@ export function EvaluationsPage() {
       ) : (
         <>
           <Segmented options={centers} value={selected} onChange={setCenter} />
-          {daysOfCenter(results, selected).map(([date, dayResults]) => (
-            <DayTable
-              key={`${selected}-${date}`}
-              title={`${centerLabel(selected)} · ${formatDay(date)}`}
-              results={dayResults}
-              quadById={quadById}
-              nameById={nameById}
-            />
-          ))}
+          <FadeIn key={selected} className="space-y-10">
+            {daysOfCenter(results, selected).map(([date, dayResults]) => (
+              <DayTable
+                key={`${selected}-${date}`}
+                title={`${centerLabel(selected)} · ${formatDay(date)}`}
+                results={dayResults}
+                quadById={quadById}
+                nameById={nameById}
+              />
+            ))}
+          </FadeIn>
         </>
       )}
     </PageMotion>

@@ -91,7 +91,7 @@ export function PoolCard({
         />
       ) : (
       <div className="table-scroll">
-        <table className="brutal-table">
+        <table className="brutal-table pool-table">
           <thead>
             <tr>
               <th>#</th>
@@ -123,7 +123,8 @@ export function PoolCard({
                     </span>
                   </td>
                   <td>
-                    <span className="inline-flex items-center gap-1.5">
+                    {/* The badges go under the team when the column is narrow */}
+                    <span className="flex flex-wrap items-center gap-1">
                       <TeamCell quad={defender?.quadrigram} role="defender" />
                       {rank !== null && (
                         <span title={`${ordinal(rank)} choix de ${defender?.quadrigram} parmi les problèmes à défendre`}>

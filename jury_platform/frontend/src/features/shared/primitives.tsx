@@ -3,6 +3,7 @@ import { motion, useReducedMotion, type Transition } from "framer-motion";
 import { FIELD_STYLE } from "./fieldStyle";
 import { usePageTitle } from "./usePageTitle";
 import { CloseIcon } from "./icons";
+import { useSlide } from "./motion";
 
 // Primitives — visual building blocks aligned with the MTYM aesthetic:
 // editorial typography (Montserrat display + Open Sans body), saturated
@@ -14,13 +15,17 @@ import { CloseIcon } from "./icons";
 type BtnVariant = "primary" | "forest" | "sage" | "ghost" | "ghostDark" | "danger";
 type BtnSize = "sm" | "md";
 
-const BTN_VARIANTS: Record<BtnVariant, { bg: string; fg: string; bd: string }> = {
-  primary:    { bg: "var(--saffron)", fg: "var(--forest)", bd: "var(--saffron)" },
-  forest:     { bg: "var(--forest)", fg: "var(--paper)", bd: "var(--forest)" },
-  sage:       { bg: "var(--sage-dark)", fg: "var(--paper)", bd: "var(--sage-dark)" },
-  ghost:      { bg: "transparent", fg: "var(--forest)", bd: "var(--border)" },
-  ghostDark:  { bg: "transparent", fg: "var(--paper)", bd: "rgba(244,236,216,0.3)" },
-  danger:     { bg: "transparent", fg: "var(--clay)", bd: "var(--clay)" },
+// Every button stands out from the page: the secondary ones (ghost,
+// danger) are white with a dark outline, never see-through. Under the
+// pointer a button lifts onto its hard shadow (`shadow`), and sinks back
+// when pressed (.btn-fx in index.css).
+const BTN_VARIANTS: Record<BtnVariant, { bg: string; fg: string; bd: string; shadow: string }> = {
+  primary:    { bg: "var(--saffron)", fg: "var(--forest)", bd: "var(--forest)", shadow: "var(--forest)" },
+  forest:     { bg: "var(--forest)", fg: "var(--paper)", bd: "var(--forest)", shadow: "var(--saffron)" },
+  sage:       { bg: "var(--sage-dark)", fg: "var(--paper)", bd: "var(--sage-dark)", shadow: "var(--forest)" },
+  ghost:      { bg: "var(--surface)", fg: "var(--forest)", bd: "var(--forest)", shadow: "var(--forest)" },
+  ghostDark:  { bg: "transparent", fg: "var(--paper)", bd: "rgba(244,236,216,0.45)", shadow: "var(--saffron)" },
+  danger:     { bg: "var(--surface)", fg: "var(--clay)", bd: "var(--clay)", shadow: "var(--clay)" },
 };
 
 interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -45,9 +50,10 @@ export function Btn({
       style={{
         background: v.bg,
         color: v.fg,
-        border: `1px solid ${v.bd}`,
-        fontWeight: 600,
+        border: `1.5px solid ${v.bd}`,
+        fontWeight: 700,
         borderRadius: 2,
+        ["--btn-shadow" as string]: v.shadow,
       }}
     >
       {children}
@@ -265,7 +271,9 @@ type BadgeTone = "neutral" | "saffron" | "sage" | "danger" | "dark";
 
 // ─── Page transition wrapper ──────────────────────────────────────────
 
-const PAGE_TRANSITION: Transition = { duration: 0.2, ease: [0.16, 1, 0.3, 1] };
+// A page arrives with a short fade and rise; the page it replaces leaves at
+// once (no exit to wait for), so moving between pages never stalls.
+const PAGE_TRANSITION: Transition = { duration: 0.24, ease: [0.16, 1, 0.3, 1] };
 
 export function PageMotion({
   children,
@@ -277,9 +285,8 @@ export function PageMotion({
   const reduce = useReducedMotion();
   return (
     <motion.div
-      initial={reduce ? false : { opacity: 0, y: 12 }}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={reduce ? undefined : { opacity: 0, y: -8 }}
       transition={PAGE_TRANSITION}
       className={className}
     >
@@ -287,6 +294,23 @@ export function PageMotion({
     </motion.div>
   );
 }
+
+// Content replaced in place (another day, another center): it fades in
+// instead of snapping. Give it a `key` that changes with what it shows.
+export function FadeIn({ children, className }: { children: ReactNode; className?: string }) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 
 // Staggered entrance container — each direct child fades up
 // (opacity 0→1, y 12→0) with a 40ms cascade. Put the layout classes
@@ -602,6 +626,8 @@ export function Badge({
 
 // ─── Segmented control (brutal tab strip) ─────────────────────────────
 
+// The active option's dark block slides to the one picked. The weight
+// stays the same across states, so picking never shifts the others.
 export function Segmented<T extends string | number>({
   options,
   value,
@@ -611,6 +637,8 @@ export function Segmented<T extends string | number>({
   value: T;
   onChange: (v: T) => void;
 }) {
+  const id = useId();
+  const slide = useSlide();
   return (
     <div
       className="inline-flex p-0.5 flex-wrap"
@@ -625,15 +653,16 @@ export function Segmented<T extends string | number>({
         return (
           <button
             key={String(opt.value)}
+            type="button"
+            aria-pressed={active}
             onClick={() => onChange(opt.value)}
-            className="px-4 py-1.5 font-mont text-micro uppercase tracking-widest transition-colors"
-            style={{
-              background: active ? "var(--forest)" : "transparent",
-              color: active ? "var(--saffron)" : "var(--ink-soft)",
-              fontWeight: active ? 900 : 700,
-            }}
+            className="segmented-option relative px-4 py-1.5 font-mont text-micro uppercase tracking-widest focus-ring"
+            style={{ color: active ? "var(--saffron)" : "var(--ink-soft)", fontWeight: 800 }}
           >
-            {opt.label}
+            {active && (
+              <motion.span layoutId={`segmented-${id}`} aria-hidden className="absolute inset-0" style={{ background: "var(--forest)" }} transition={slide} />
+            )}
+            <span className="relative">{opt.label}</span>
           </button>
         );
       })}

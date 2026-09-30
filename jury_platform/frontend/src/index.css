@@ -19,6 +19,7 @@
   --ink-soft: #4a5550;
   --ink-faint: #69716e; /* ≥ 4.5:1 on paper, white and zebra rows (WCAG AA) */
   --border: #e1dcc9;
+  --field-border: #8f8974; /* a field's outline: ≥ 3:1 on white (WCAG non-text) */
   --row-alt: #f2f3f2; /* zebra stripe */
   --row-hover: #e7eae8; /* clickable row under the pointer */
 
@@ -116,15 +117,21 @@ body::before {
 }
 
 /* Button hover effect */
+/* Buttons lift onto their hard shadow under the pointer and sink back when
+   pressed — the cards' brutal depth, on the controls (--btn-shadow is set
+   per variant by Btn) */
 .btn-fx {
-  transition: all 150ms;
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out, background-color 150ms, color 150ms;
+  touch-action: manipulation;
 }
 .btn-fx:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(18, 32, 25, 0.08);
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 0 var(--btn-shadow, var(--forest));
 }
 .btn-fx:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translate(0, 0);
+  box-shadow: 0 0 0 0 var(--btn-shadow, var(--forest));
+  transition-duration: 60ms;
 }
 .btn-fx:focus-visible {
   outline: 2px solid var(--forest);
@@ -603,4 +610,74 @@ body::before {
   .mtym-tour .driver-popover-footer button {
     padding: 0.7rem 0.875rem; /* bigger touch targets on phones */
   }
+}
+
+/* ─── Dashboard (features/admin/dashboard) ─────────────────────────── */
+/* Bars grow from their base on arrival (transform only: no layout shift) */
+@keyframes dash-grow-x { from { transform: scaleX(0); } }
+@keyframes dash-grow-y { from { transform: scaleY(0); } }
+.dash-grow-x { animation: dash-grow-x 600ms cubic-bezier(0.22, 1, 0.36, 1) both; transition: transform 300ms ease-out; }
+.dash-grow-y { animation: dash-grow-y 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.dash-arc { transition: stroke-width 150ms ease-out, opacity 150ms ease-out; cursor: default; }
+.dash-chip { transition: border-color 150ms, color 150ms; cursor: pointer; }
+/* A bar's or slice's values, over it */
+.dash-tip {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  min-width: 10rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--forest);
+  color: var(--paper);
+  font-family: "Open Sans", sans-serif;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  box-shadow: 3px 3px 0 0 var(--saffron);
+  pointer-events: none;
+  white-space: nowrap;
+}
+/* A clickable line of a widget: its hover says so */
+.dash-row { transition: background-color 150ms; }
+.dash-row:hover { background: var(--row-hover); }
+@keyframes dash-shimmer { 50% { opacity: 0.45; } }
+.dash-skeleton { background: var(--paper-2); animation: dash-shimmer 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .dash-grow-x, .dash-grow-y, .dash-skeleton { animation: none; }
+  .dash-grow-x, .dash-arc, .dash-chip, .dash-row { transition: none; }
+}
+
+/* Segmented control: an option not picked darkens under the pointer */
+.segmented-option { transition: color 150ms; cursor: pointer; touch-action: manipulation; }
+.segmented-option[aria-pressed="false"]:hover { color: var(--forest) !important; }
+/* The top bar's pages brighten under the pointer */
+.nav-link:hover, .nav-menu-trigger:hover { color: var(--paper) !important; }
+.nav-link[aria-current="page"]:hover { color: var(--saffron) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-fx, .segmented-option { transition: none; }
+  .btn-fx:hover:not(:disabled), .btn-fx:active:not(:disabled) { transform: none; }
+}
+
+/* A tab's panel kept mounted (hidden): shown again, it fades in */
+@keyframes tab-panel-in { from { opacity: 0; } }
+.tab-panel:not([hidden]) { animation: tab-panel-in 200ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .tab-panel:not([hidden]) { animation: none; } }
+
+/* A day's pools: as many side by side as fit whole (two on most laptops),
+   one per row below that, never a table cut off. --pool-min is a pool
+   table's narrowest width (measured, compact cells below) */
+.pools-grid {
+  --pool-min: 39rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--pool-min)), 1fr));
+}
+/* A pool's table: tighter cells, so two pools fit side by side */
+.pool-table th,
+.pool-table td {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+.pool-table th {
+  letter-spacing: 0.06em;
 }

@@ -30,6 +30,8 @@ function Icon({ size = "0.875rem", style, children }: IconProps & { children: Re
 export const ChevronDownIcon = (p: IconProps) => <Icon {...p}><polyline points="6 9 12 15 18 9" /></Icon>;
 
 export const ChevronLeftIcon = (p: IconProps) => <Icon {...p}><polyline points="15 18 9 12 15 6" /></Icon>;
+export const ChevronRightIcon = (p: IconProps) => <Icon {...p}><polyline points="9 18 15 12 9 6" /></Icon>;
+export const CheckIcon = (p: IconProps) => <Icon {...p}><polyline points="20 6 9 17 4 12" /></Icon>;
 
 export const InfoIcon = (p: IconProps) => (
   <Icon {...p}><circle cx="12" cy="12" r="9.5" /><line x1="12" y1="11" x2="12" y2="16.5" /><line x1="12" y1="7.5" x2="12.01" y2="7.5" /></Icon>

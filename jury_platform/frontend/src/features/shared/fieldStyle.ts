@@ -1,10 +1,11 @@
 import type { CSSProperties } from "react";
 
 // The look of every text field, list and number input: white, hairline
-// border, square corners. The focus ring comes from the .focus-ring class.
+// border dark enough to see (3:1 on white), square corners. The focus ring
+// comes from the .focus-ring class.
 export const FIELD_STYLE: CSSProperties = {
   background: "var(--surface)",
-  border: "1px solid var(--border)",
+  border: "1px solid var(--field-border)",
   color: "var(--ink)",
   borderRadius: 2,
 };

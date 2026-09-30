@@ -104,8 +104,9 @@ export function PassageView({ data, coJurors, banner }: { data: PassageData; coJ
         />
       </div>
 
-      <div hidden={tab !== "oral"}><OralGrading {...data} /></div>
-      <div hidden={tab !== "rapport"}><ReportGrading {...data} /></div>
+      {/* Both stay mounted (hidden), so nothing typed is lost; the one shown fades in */}
+      <div hidden={tab !== "oral"} className="tab-panel"><OralGrading {...data} /></div>
+      <div hidden={tab !== "rapport"} className="tab-panel"><ReportGrading {...data} /></div>
     </PageMotion>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Alert, Badge, Btn, BrutalCard, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Textarea,
+  Alert, Badge, BrutalCard, Btn, FadeIn, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Textarea,
 } from "@/features/shared/primitives";
 import { LoadError } from "@/features/shared/widgets";
 import {
@@ -64,7 +64,7 @@ export function CriteriaPage() {
           />
           <CopyGrid from={problem} all={all} onCopied={setProblem} />
         </div>
-        <div className="mt-5">
+        <FadeIn key={problem} className="mt-5">
           <CriterionGroup
             criteria={reportCriteria}
             outOf20
@@ -72,20 +72,20 @@ export function CriteriaPage() {
               label: "Nouveau critère", coefficient: 1, type: "report", problemNumber: problem, order: nextOrder(reportCriteria),
             }))}
           />
-        </div>
+        </FadeIn>
       </section>
 
       <section>
         <SectionHeading title="Passages oraux" />
         <Segmented options={ORAL_ROLES} value={role} onChange={setRole} />
-        <div className="mt-5">
+        <FadeIn key={role} className="mt-5">
           <CriterionGroup
             criteria={oralCriteria}
             onAdd={() => run(() => createCriterion({
               label: "Nouveau critère", coefficient: 1, type: "oral", role, theme: "Débat", order: nextOrder(oralCriteria),
             }))}
           />
-        </div>
+        </FadeIn>
       </section>
     </PageMotion>
   );

@@ -1,14 +1,25 @@
+import { Suspense, useLayoutEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { AnimatePresence } from "framer-motion";
+import { PageLoading } from "@/features/shared/primitives";
 import { TopNav } from "./TopNav";
 import { BackgroundFX } from "./BackgroundFX";
 import { SiteFooter } from "./SiteFooter";
 
 // AppLayout — fixed top nav over a full-width canvas. The page atmosphere
 // (paper tone + grain overlay) is provided by the app shell in index.css.
+//
+// Moving between pages: the new page opens at its top and fades in
+// (PageMotion) while the old one leaves at once. Its code is usually
+// already there (App.tsx fetches every page's in the background); if not,
+// the page area alone waits (Suspense), never the top bar and footer.
 
 export function AppLayout() {
-  const location = useLocation();
+  const { pathname } = useLocation();
+  // A new page starts at its top; a filter changing the URL's query stays put
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [pathname]);
+
   return (
     <div
       className="min-h-screen flex flex-col app-shell"
@@ -19,13 +30,12 @@ export function AppLayout() {
       <BackgroundFX />
       <TopNav />
       <main id="contenu" tabIndex={-1} className="flex-1 pt-16 shell py-10 relative" style={{ outline: "none" }}>
-        <AnimatePresence mode="wait" initial={false}>
-          {/* The route's pathname keys the outlet so framer-motion can
-              animate the page in/out across navigations. */}
-          <div key={location.pathname}>
+        <Suspense fallback={<PageLoading />}>
+          {/* Keyed by the page: a new page mounts afresh and plays its entrance */}
+          <div key={pathname}>
             <Outlet />
           </div>
-        </AnimatePresence>
+        </Suspense>
       </main>
       <SiteFooter />
     </div>

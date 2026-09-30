@@ -1,7 +1,9 @@
 import { Fragment } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Btn, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Stagger } from "@/features/shared/primitives";
+import {
+  Badge, BrutalCard, Btn, FadeIn, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Stagger,
+} from "@/features/shared/primitives";
 import { CalendarIcon } from "@/features/shared/icons";
 import { EmptyState, LoadError, RoleLine, StatCard } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
@@ -102,53 +104,55 @@ export function JuryDashboard() {
           )}
 
           {day && (
-            <section>
-              <SectionHeading
-                title={`Mon planning · ${centerLabel(day.center)} · ${formatDay(day.date)}`}
-                right={coJurors.length > 0 && (
-                  <Badge tone="dark">
-                    Duo {dayPassages[0].duo?.number} · avec {coJurors.map((j) => `${j.firstName} ${j.lastName}`).join(", ")}
-                  </Badge>
-                )}
-              />
-              <BrutalCard className="overflow-hidden" data-tour="planning">
-                {(day.schedule ?? DEFAULT_SCHEDULE).map((slot, i, schedule) => {
-                  const here = dayPassages.filter((p) => p.slot === i + 1);
-                  return (
-                    <Fragment key={i}>
-                      {i > 0 && <PauseBand minutes={breakMinutes(schedule, i)} />}
-                      <div className="flex" style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}>
-                        <div
-                          className="shrink-0 px-3 py-4 flex flex-col"
-                          style={{ width: "5.25rem", background: "var(--paper-2)", borderRight: "2px solid var(--forest)" }}
-                        >
-                          <span className="font-mont tabular-nums" style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.05rem" }}>{slot.start}</span>
-                          <span className="font-mont text-xs tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>{slotEnd(slot)}</span>
+            <FadeIn key={day.id}>
+              <section>
+                <SectionHeading
+                  title={`Mon planning · ${centerLabel(day.center)} · ${formatDay(day.date)}`}
+                  right={coJurors.length > 0 && (
+                    <Badge tone="dark">
+                      Duo {dayPassages[0].duo?.number} · avec {coJurors.map((j) => `${j.firstName} ${j.lastName}`).join(", ")}
+                    </Badge>
+                  )}
+                />
+                <BrutalCard className="overflow-hidden" data-tour="planning">
+                  {(day.schedule ?? DEFAULT_SCHEDULE).map((slot, i, schedule) => {
+                    const here = dayPassages.filter((p) => p.slot === i + 1);
+                    return (
+                      <Fragment key={i}>
+                        {i > 0 && <PauseBand minutes={breakMinutes(schedule, i)} />}
+                        <div className="flex" style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}>
+                          <div
+                            className="shrink-0 px-3 py-4 flex flex-col"
+                            style={{ width: "5.25rem", background: "var(--paper-2)", borderRight: "2px solid var(--forest)" }}
+                          >
+                            <span className="font-mont tabular-nums" style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.05rem" }}>{slot.start}</span>
+                            <span className="font-mont text-xs tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>{slotEnd(slot)}</span>
+                          </div>
+                          <div className="flex-1 min-w-0 p-4 space-y-4">
+                            {here.length === 0 ? (
+                              <p className="font-mont text-micro uppercase tracking-widest py-2" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+                                Libre
+                              </p>
+                            ) : (
+                              here.map((p) => (
+                                <PassageSlot
+                                  key={p.id}
+                                  passage={p}
+                                  quad={(id) => teamById.get(id)?.quadrigram ?? "—"}
+                                  oral={oralDone(p)}
+                                  report={reportDone(p)}
+                                  tourAnchors={p.id === firstPassageId}
+                                />
+                              ))
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0 p-4 space-y-4">
-                          {here.length === 0 ? (
-                            <p className="font-mont text-micro uppercase tracking-widest py-2" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-                              Libre
-                            </p>
-                          ) : (
-                            here.map((p) => (
-                              <PassageSlot
-                                key={p.id}
-                                passage={p}
-                                quad={(id) => teamById.get(id)?.quadrigram ?? "—"}
-                                oral={oralDone(p)}
-                                report={reportDone(p)}
-                                tourAnchors={p.id === firstPassageId}
-                              />
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </Fragment>
-                  );
-                })}
-              </BrutalCard>
-            </section>
+                      </Fragment>
+                    );
+                  })}
+                </BrutalCard>
+              </section>
+            </FadeIn>
           )}
         </>
       )}

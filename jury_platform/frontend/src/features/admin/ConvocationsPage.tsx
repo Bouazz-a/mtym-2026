@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  Alert, Badge, Btn, BrutalCard, Field, Input, Modal, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Stagger, Textarea,
+  Alert, Badge, Btn, BrutalCard, FadeIn, Field, Input, Modal, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Stagger, Textarea,
 } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import { CalendarIcon } from "@/features/shared/icons";
@@ -26,7 +26,14 @@ import { CENTERS, formatDay } from "@/utils/labels";
 
 export function ConvocationsPage() {
   const [params, setParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const daysQ = useQuery({ queryKey: ["center-days"], queryFn: () => getCenterDays() });
+  // Every day's table loads in the background: switching days shows it at once
+  useEffect(() => {
+    for (const d of daysQ.data ?? []) {
+      void queryClient.prefetchQuery({ queryKey: ["mailings", d.id], queryFn: () => getMailings(d.id) });
+    }
+  }, [daysQ.data, queryClient]);
 
   if (daysQ.isLoading) return <PageLoading />;
   if (daysQ.isError) return <LoadError onRetry={() => daysQ.refetch()} />;
@@ -147,7 +154,8 @@ function DayMailings({
           </Picker>
         )}
       </div>
-      <section className="space-y-6">
+      {/* A pool picked, or the whole day again: the section fades in */}
+      <FadeIn key={pool ?? "all"} className="space-y-6">
         <SectionHeading
           title={`Jour ${dayIndex + 1} · ${formatDay(day.date)}${pool ? ` · ${pool}` : ""}`}
           right={
@@ -271,7 +279,7 @@ function DayMailings({
           <PreviewModal row={preview} canSend={canSend} onClose={() => setPreview(null)} />
         )}
         {editing && <TemplateModal teams={teams.filter((t) => t.inPool)} onClose={() => setEditing(false)} />}
-      </section>
+      </FadeIn>
     </>
   );
 }
@@ -420,7 +428,7 @@ function TemplateEditor({ info, teams, onClose }: { info: MailTemplateInfo; team
                   onMouseDown={(e) => e.preventDefault()} // the field keeps its cursor
                   onClick={() => insert(name)}
                   className="px-2 py-1 font-mono text-xs focus-ring"
-                  style={{ border: "1px solid var(--border)", background: "var(--paper-2)", color: "var(--forest)" }}
+                  style={{ border: "1px solid var(--field-border)", background: "var(--paper-2)", color: "var(--forest)" }}
                 >
                   {`{${name}}`}
                 </button>

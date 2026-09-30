@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { Alert, PageHeader, PageLoading, PageMotion, Segmented, Stagger } from "@/features/shared/primitives";
+import { Alert, FadeIn, PageHeader, PageLoading, PageMotion, Segmented, Stagger } from "@/features/shared/primitives";
 import { CalendarIcon } from "@/features/shared/icons";
 import { EmptyState, LoadError, Picker, StatCard } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
@@ -100,16 +100,17 @@ export function JuryPage() {
             </Picker>
           </div>
 
-          <DayJury
-            key={day.id}
-            day={day}
-            dayIndex={dayIndex}
-            duos={duos.filter((d) => d.centerDayId === day.id).sort((a, b) => a.number - b.number)}
-            allDuos={duos}
-            pools={pools.filter((p) => p.centerDayId === day.id)}
-            jurors={jurors}
-            teamById={teamById}
-          />
+          <FadeIn key={day.id}>
+            <DayJury
+              day={day}
+              dayIndex={dayIndex}
+              duos={duos.filter((d) => d.centerDayId === day.id).sort((a, b) => a.number - b.number)}
+              allDuos={duos}
+              pools={pools.filter((p) => p.centerDayId === day.id)}
+              jurors={jurors}
+              teamById={teamById}
+            />
+          </FadeIn>
         </>
       )}
     </PageMotion>

@@ -1,8 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { useSession } from "@/features/shared/SessionContext";
 import { MtymLogo } from "@/features/shared/widgets";
 import { Popover } from "@/features/shared/primitives";
+import { useSlide } from "@/features/shared/motion";
 import { ChangePasswordModal } from "@/features/shared/ChangePasswordModal";
 import { ChevronDownIcon } from "@/features/shared/icons";
 import { isCurrentPage, isNavMenu, navFor, navPages, planningPath, roleLabel, type NavItem, type NavMenu } from "./navigation";
@@ -49,7 +51,7 @@ export function TopNav() {
         </button>
 
         {/* Inline from lg; below that the links live in the account menu */}
-        <div className="hidden lg:flex items-center gap-6">
+        <div className="hidden lg:flex items-stretch gap-6 self-stretch">
           {items.map((entry) =>
             isNavMenu(entry) ? (
               <NavMenuButton
@@ -156,18 +158,38 @@ export function TopNav() {
   );
 }
 
+// The current page's saffron bar, at the bottom of the top bar: it slides
+// from the page left to the one opened
+function ActiveBar() {
+  const slide = useSlide();
+  return (
+    <motion.span
+      layoutId="nav-active-bar"
+      aria-hidden
+      className="absolute left-0 right-0 bottom-0"
+      style={{ height: 3, background: "var(--saffron)" }}
+      transition={slide}
+    />
+  );
+}
+
 function NavItemLink({ item }: { item: NavItem }) {
   return (
     <NavLink
       to={item.to}
       end={item.to === "/"}
-      className="font-mont text-tiny uppercase tracking-[0.14em] whitespace-nowrap transition-colors"
+      className="nav-link relative flex items-center font-mont text-tiny uppercase tracking-[0.14em] whitespace-nowrap transition-colors"
       style={({ isActive }) => ({
         color: isActive ? "var(--saffron)" : "rgba(244,236,216,0.62)",
-        fontWeight: isActive ? 800 : 600,
+        fontWeight: 800,
       })}
     >
-      {item.label}
+      {({ isActive }) => (
+        <>
+          {item.label}
+          {isActive && <ActiveBar />}
+        </>
+      )}
     </NavLink>
   );
 }
@@ -263,16 +285,17 @@ function NavMenuButton({ menu, open, onOpenChange }: { menu: NavMenu; open: bool
             onOpenChange(true);
           }
         }}
-        className="nav-menu-trigger flex items-center gap-1.5 font-mont text-tiny uppercase tracking-[0.14em] whitespace-nowrap transition-colors"
+        className="nav-menu-trigger relative flex items-center gap-1.5 font-mont text-tiny uppercase tracking-[0.14em] whitespace-nowrap transition-colors"
         style={{
           color: active ? "var(--saffron)" : open ? "var(--paper)" : "rgba(244,236,216,0.62)",
-          fontWeight: active ? 800 : 600,
+          fontWeight: 800,
         }}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
       >
         {menu.label}
         <ChevronDownIcon size="0.75rem" style={{ transition: "transform 180ms", transform: open ? "rotate(180deg)" : "none" }} />
+        {active && <ActiveBar />}
       </button>
       <Popover open={open} onClose={() => onOpenChange(false)} anchorRef={buttonRef} align="left" width={18}>
         <div
