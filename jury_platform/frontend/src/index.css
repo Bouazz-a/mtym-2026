@@ -647,6 +647,36 @@ body::before {
   .dash-grow-x, .dash-arc, .dash-chip, .dash-row { transition: none; }
 }
 
+/* Grading scale (0 · 0,25 · 0,5 · 0,75 · 1): one mark per button, the
+   picked one filled (forest, clay for a malus — set inline) */
+.score-step {
+  min-width: 2.75rem;
+  padding: 0.55rem 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 120ms, color 120ms;
+}
+.score-step[aria-checked="false"]:not(:disabled):hover {
+  background: var(--row-hover);
+}
+.score-step:focus-visible {
+  outline: 2px solid var(--saffron);
+  outline-offset: -2px;
+  position: relative;
+}
+.score-step:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .score-step { transition: none; }
+}
+
 /* Segmented control: an option not picked darkens under the pointer */
 .segmented-option { transition: color 150ms; cursor: pointer; touch-action: manipulation; }
 .segmented-option[aria-pressed="false"]:hover { color: var(--forest) !important; }

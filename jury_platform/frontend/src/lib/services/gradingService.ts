@@ -41,3 +41,18 @@ export function oralCriteria(criteria: Criterion[], role: PassageRole): Criterio
 export function fmtNote(n: number): string {
   return (Math.round(n * 100) / 100).toString();
 }
+
+/** A note as the jurors read it: French decimal comma, true minus sign ("−1,25"). */
+export function frNote(n: number): string {
+  return fmtNote(n).replace(".", ",").replace(/^-/, "−");
+}
+
+/** A success rate as typed ("0,1", "0.1", ".5"): between 0 and 1, to the
+ *  hundredth; null while it isn't a number yet. */
+export function parseRate(raw: string): number | null {
+  const text = raw.trim().replace(",", ".");
+  if (text === "" || text === ".") return null;
+  const v = Number(text);
+  if (Number.isNaN(v)) return null;
+  return Math.round(Math.max(0, Math.min(1, v)) * 100) / 100;
+}

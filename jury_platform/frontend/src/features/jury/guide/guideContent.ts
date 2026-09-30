@@ -101,12 +101,12 @@ export const PRACTICE_STEPS: GuideStep[] = [
   {
     anchor: "score",
     title: "Le taux de réussite",
-    text: "Pour chaque critère, un nombre de 0 à 1. Repères : 0 · 0,25 · 0,5 · 0,75 · 1 (leur sens est dans l'aide-mémoire). La note du critère = taux × coefficient.",
+    text: "Pour chaque critère, touchez le taux : 0 · 0,25 · 0,5 · 0,75 · 1 (leur sens s'affiche au survol, et dans l'aide-mémoire). Une valeur entre deux ? Tapez-la dans « autre ».",
   },
   {
     anchor: "coef",
-    title: "Coefficients et malus",
-    text: "Chaque critère a son coefficient. Un coefficient négatif, en rouge, est un malus : 0 s'il ne s'applique pas, jusqu'à 1 s'il s'applique pleinement.",
+    title: "Les points du critère",
+    text: "Chaque critère vaut un nombre de points : le taux en donne sa part (0,75 sur un critère à 3 points : 2,25 / 3). Un malus, en rouge, retire des points : taux 0 s'il ne s'applique pas, jusqu'à 1 s'il s'applique pleinement.",
   },
   {
     anchor: "comment",

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BrutalCard } from "@/features/shared/primitives";
 import { ChevronDownIcon } from "@/features/shared/icons";
 import { BOARD_RULE, POOLS_NOTE, PRINCIPLES, QUESTIONS, REPORT_RULES, ROLES, SCALE, TIMELINE } from "./guide/guideContent";
+import { QuarterMeter } from "./gradingWidgets";
 
 // Aide-mémoire of a passage page: the grading scale, how a passage runs, the
 // roles and room rules, the questions to ask and how the written report is
@@ -33,11 +34,16 @@ export function Memo() {
         <div className="px-5 pb-5 grid grid-cols-1 lg:grid-cols-2 gap-6" style={{ borderTop: "1px solid var(--border)" }}>
           <section className="pt-4">
             <Heading>Taux de réussite</Heading>
-            <ul className="space-y-1.5">
+            {/* Each mark, drawn as quarters filled (its percentage for screen
+                readers), then what it means */}
+            <ul className="space-y-2">
               {SCALE.map((s) => (
-                <li key={s.value} className="flex gap-3 text-sm font-open">
-                  <span className="font-mont tabular-nums shrink-0" style={{ color: "var(--saffron-dark)", fontWeight: 900, width: "4rem" }}>
-                    {s.value} <span className="text-micro" style={{ color: "var(--ink-faint)" }}>{s.percent}</span>
+                <li key={s.value} className="flex items-baseline gap-3 text-sm font-open">
+                  <span className="shrink-0 inline-flex items-center gap-2.5" style={{ width: "5.5rem" }}>
+                    <span className="font-mont tabular-nums whitespace-nowrap" style={{ color: "var(--saffron-dark)", fontWeight: 900, width: "2.4rem" }}>
+                      {s.value}
+                    </span>
+                    <QuarterMeter value={Number(s.value.replace(",", "."))} label={s.percent} />
                   </span>
                   <span style={{ color: "var(--ink)" }}>{s.meaning}</span>
                 </li>

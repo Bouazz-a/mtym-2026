@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Alert, Btn, BrutalCard, Textarea } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import { errorMessage } from "@/lib/services/errors";
-import { weightedNote } from "@/lib/services/gradingService";
+import { frNote, weightedNote } from "@/lib/services/gradingService";
 import type { Criterion, Grade } from "@/types";
 import { clearDraft, draftBase, readDraft, writeDraft } from "./gradingDraft";
 import { CriterionGradingTable, NotePill, type GradeDraft, type GradeDrafts } from "./gradingWidgets";
@@ -88,6 +88,7 @@ export function GradingCard({
     setDirty(true);
   };
 
+  const malus = criteria.some((c) => c.coefficient < 0); // the note can go below 0
   const note = weightedNote(
     criteria.map((c) => ({ criterionId: c.id, score: drafts[c.id]?.score ?? 0 })),
     criteria,
@@ -135,10 +136,18 @@ export function GradingCard({
     <BrutalCard className="flex flex-col overflow-hidden" data-tour={tourAnchors ? "grading-card" : undefined}>
       <div className="px-5 py-4 flex items-start justify-between gap-3" style={{ borderBottom: "2px solid var(--forest)" }}>
         <div className="min-w-0">{header}</div>
-        <span data-tour={tourAnchors ? "note" : undefined}>
-          {outOf && note.maxTotal > 0
-            ? <NotePill note={(note.total / note.maxTotal) * outOf} label={`Note / ${outOf}`} />
-            : <NotePill note={note.total} label={`Note / ${note.maxTotal}`} />}
+        <span data-tour={tourAnchors ? "note" : undefined} className="shrink-0 text-right">
+          {outOf && note.maxTotal > 0 ? (
+            <>
+              <NotePill note={(note.total / note.maxTotal) * outOf} label={`Note / ${outOf}`} max={outOf} negative={malus} />
+              {/* The criteria's points, which the note brings back to 20 */}
+              <span className="block mt-1 font-mont text-xs tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>
+                {frNote(note.total)} / {frNote(note.maxTotal)} pts de la grille
+              </span>
+            </>
+          ) : (
+            <NotePill note={note.total} label={`Note / ${frNote(note.maxTotal)}`} max={note.maxTotal} negative={malus} />
+          )}
         </span>
       </div>
 
