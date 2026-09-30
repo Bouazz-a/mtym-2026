@@ -150,7 +150,7 @@ export const SCALE: { value: string; percent: string; meaning: string }[] = [
 export const PRINCIPLES: string[] = [
   "Le fond prime sur la forme : c'est le contenu mathématique et méthodologique qui est noté, pas la mise en page ni le LaTeX.",
   "Honnêteté scientifique : les phases de questions servent aussi à vérifier que les élèves maîtrisent ce qu'ils présentent ; toute aide extérieure à la résolution est interdite.",
-  "Climat d'échange sain : le jury fait la police de la salle — agressivité, ton hautain, critique non constructive ou opposition excessive sont sanctionnés.",
+  "Climat d'échange sain : le jury fait la police de la salle ; agressivité, ton hautain, critique non constructive ou opposition excessive sont sanctionnés.",
   "Évaluation bienveillante et formative : le MTYM est une initiation à la recherche ; accompagnez chaque note de commentaires précis.",
   "Un doute, un imprévu ? Prévenez l'organisation.",
 ];
@@ -173,7 +173,7 @@ export const TIMELINE: { step: string; duration: string }[] = [
 export const ROLES: { role: string; text: string }[] = [
   {
     role: "Défenseur · 10 min",
-    text: "Présente une synthèse des résultats de son équipe — exemples, schémas, figures plutôt que longues démonstrations — puis répond aux questions. Il doit rester fidèle au rapport écrit : présenter des résultats majeurs non rédigés est interdit (seules de légères corrections signalées sont admises). À sanctionner : dépassement de temps significatif, résultats inédits, réponses évasives.",
+    text: "Présente une synthèse des résultats de son équipe, avec des exemples, schémas et figures plutôt que de longues démonstrations, puis répond aux questions. Il doit rester fidèle au rapport écrit : présenter des résultats majeurs non rédigés est interdit (seules de légères corrections signalées sont admises). À sanctionner : dépassement de temps significatif, résultats inédits, réponses évasives.",
   },
   {
     role: "Opposant · 8 min",
