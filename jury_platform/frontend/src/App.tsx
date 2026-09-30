@@ -24,6 +24,7 @@ const pages = {
   ReportAssignmentPage: () => import("@/features/admin/ReportAssignmentPage"),
   MyReportsPage: () => import("@/features/jury/MyReportsPage"),
   AssignedReportPage: () => import("@/features/jury/AssignedReportPage"),
+  ResetPasswordPage: () => import("@/features/shared/ResetPasswordPage"),
 };
 const AdminDashboard = lazy(() => pages.AdminDashboard().then((m) => ({ default: m.AdminDashboard })));
 const TournamentPage = lazy(() => pages.TournamentPage().then((m) => ({ default: m.TournamentPage })));
@@ -41,6 +42,7 @@ const ConvocationsPage = lazy(() => pages.ConvocationsPage().then((m) => ({ defa
 const ReportAssignmentPage = lazy(() => pages.ReportAssignmentPage().then((m) => ({ default: m.ReportAssignmentPage })));
 const MyReportsPage = lazy(() => pages.MyReportsPage().then((m) => ({ default: m.MyReportsPage })));
 const AssignedReportPage = lazy(() => pages.AssignedReportPage().then((m) => ({ default: m.AssignedReportPage })));
+const ResetPasswordPage = lazy(() => pages.ResetPasswordPage().then((m) => ({ default: m.ResetPasswordPage })));
 
 // Once signed in, the other pages' code is fetched in the background (when
 // the browser is idle): moving to a page then never waits for a download.
@@ -68,6 +70,8 @@ export default function App() {
         <Suspense fallback={<PageLoading />}>
           <Routes>
             <Route element={<AppLayout />}>
+              {/* The « Mot de passe oublié » link: no session needed */}
+              <Route path="mot-de-passe" element={<ResetPasswordPage />} />
               <Route element={<RequireSession />}>
                 <Route index element={<HomeByRole />} />
                 <Route element={<RoleGuard allow={["admin"]} />}>

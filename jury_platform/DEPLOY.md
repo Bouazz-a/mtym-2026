@@ -159,6 +159,21 @@ En local, **ne pas** mettre le jeton : `MAIL_OUTBOX_DIR=./outbox` dans
 par n'importe quel client mail) au lieu de l'envoyer — une base locale
 contient de vraies adresses.
 
+### Identifiants et « Mot de passe oublié » (emails aux jurés)
+
+Le même envoi sert aux comptes : la page **Comptes** envoie leurs
+identifiants aux jurés (« Envoyer les identifiants », et chaque « Nouveau
+mot de passe »), et la page de connexion propose un lien « Mot de passe
+oublié ? », valable une heure. Les liens de ces emails pointent vers
+l'interface ; son adresse, si elle change, va dans `backend/.env` :
+
+```
+APP_URL='https://mtym-jury.mathmaroc.org'   # la valeur par défaut
+```
+
+En local : `APP_URL='http://localhost:5173'`. L'adresse ne vient jamais de
+la requête, pour qu'un lien de réinitialisation ne puisse pas être détourné.
+
 ## 5. Premier démarrage
 
 ```bash

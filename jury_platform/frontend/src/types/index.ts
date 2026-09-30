@@ -28,6 +28,7 @@ export interface AuthUser {
 export interface Account extends AuthUser {
   phone: string | null;
   createdAt: string;
+  credentialsSentAt: string | null; // when a password was last emailed to it
 }
 
 // How a juror appears in a duo

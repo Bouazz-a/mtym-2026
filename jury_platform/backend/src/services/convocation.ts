@@ -11,6 +11,8 @@
 // The subject, the title and the opening (up to the day's details) are the
 // admin's words (MailTemplate), with {variables}; the rest is built here.
 
+import { BODY, CLAY, emailPage, esc, FOREST, HEADING, INK_SOFT, LINK, SAFFRON } from "./emailLayout";
+
 export interface ConvocationTeam {
   id: string;
   name: string;
@@ -84,10 +86,6 @@ export interface Convocation {
   attachments: { teamId: string; problemNumber: number; filename: string }[];
 }
 
-// The logo in the header: an inline attachment of the email (services/
-// mailings.ts attaches assets/mtym-logo.png under this id)
-export const LOGO_CID = "mtym-logo";
-
 type Role = "defense" | "opposition" | "rapport" | "pause";
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -123,19 +121,6 @@ export function recipientsOf(contacts: { email: string }[]): string[] {
 
 // "Rapport P3 - AXIO.pdf"
 export const reportFilename = (quadrigram: string, problemNumber: number) => `Rapport P${problemNumber} - ${quadrigram}.pdf`;
-
-const esc = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-// ── The look: the platform's colors and fonts (inline styles, since mail
-// clients drop stylesheets; Gmail ignores web fonts and falls back to Arial)
-const FOREST = "#122019";
-const SAFFRON = "#f6a806";
-const INK_SOFT = "#4a5550";
-const CLAY = "#b23b1b";
-const LINK = "#1a5fb4";
-const HEADING = "'Montserrat', Arial, Helvetica, sans-serif";
-const BODY = "'Open Sans', Arial, Helvetica, sans-serif";
 
 // A paragraph: plain text (escaped in the HTML), or with its own HTML
 type Paragraph = string | { text: string; html: string };
@@ -284,20 +269,9 @@ export function buildConvocation(input: ConvocationInput): Convocation {
     .join("");
   const label = (s: string) => `<td style="padding:3px 16px 3px 0;font-family:${BODY};color:${INK_SOFT}">${esc(s)}</td>`;
   const value = (s: string) => `<td style="padding:3px 0;font-family:${HEADING};font-weight:700">${esc(s)}</td>`;
-  const html = `<!doctype html>
-<html lang="fr"><head>
-  <meta charset="utf-8">
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&amp;family=Open+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet">
-</head>
-<body style="margin:0;padding:24px;background:#faf7ee;font-family:${BODY};color:${FOREST}">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#ffffff;border:2px solid ${FOREST}">
-    <tr><td style="background:${FOREST};padding:16px 24px">
-      <img src="cid:${LOGO_CID}" alt="MTYM" width="117" height="24" style="display:inline-block;vertical-align:middle;border:0;height:24px;width:117px">
-      <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:${HEADING};font-weight:800;font-size:19px;line-height:24px;color:${SAFFRON}">2026</span>
-      <span style="display:inline-block;vertical-align:middle;margin-left:6px;font-family:${HEADING};font-weight:700;font-size:19px;line-height:24px;color:#faf7ee">Qualifications</span>
-    </td></tr>
-    <tr><td style="padding:22px 24px">
-      <h1 style="margin:0 0 18px;font-family:${HEADING};font-weight:900;font-size:24px;line-height:1.25;color:${FOREST}">${esc(title)}</h1>
+  const html = emailPage({
+    tagline: "Qualifications",
+    inner: `<h1 style="margin:0 0 18px;font-family:${HEADING};font-weight:900;font-size:24px;line-height:1.25;color:${FOREST}">${esc(title)}</h1>
       ${opening.map(p).join("\n      ")}
       <table role="presentation" cellspacing="0" cellpadding="0" style="margin:6px 0 18px;font-size:15px">
         <tr>${label("Date")}${value(day)}</tr>
@@ -315,10 +289,8 @@ export function buildConvocation(input: ConvocationInput): Convocation {
       <div style="margin-top:24px">
         ${signoff.map(p).join("")}
         <p style="margin:14px 0 0;font-family:${BODY};font-size:13px;color:${INK_SOFT}">${esc(help)}</p>
-      </div>
-    </td></tr>
-  </table>
-</body></html>`;
+      </div>`,
+  });
 
   return { subject, html, text, attachments };
 }

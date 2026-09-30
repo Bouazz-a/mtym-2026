@@ -52,12 +52,31 @@ model Account {
   // on request for an admin — who then has both spaces with one account
   isJuror      Boolean  @default(false)
   createdAt    DateTime @default(now())
+  // When a password was last emailed to the account (page Comptes); null
+  // while its credentials were only ever handed over by hand
+  credentialsSentAt DateTime?
 
   duoSeats          DuoMember[]
   reportAssignments ReportAssignment[]
   reportEvaluations ReportEvaluation[]
   oralEvaluations   OralEvaluation[]
   auditEntries      AuditLog[]
+  resetTokens       PasswordResetToken[]
+}
+
+// A « Mot de passe oublié » link: the token itself is only in the email,
+// only its SHA-256 is kept. Valid once, for an hour.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  accountId String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
 }
 
 // ─── Teams (imported from the main site's dump) ──────────────────────────────

@@ -4,8 +4,9 @@ import { db } from "../db";
 import { AppError, BadRequestError, NotFoundError } from "../utils/errors";
 import { centerName } from "./centers";
 import {
-  buildConvocation, DEFAULT_TEMPLATE, LOGO_CID, recipientsOf, reportFilename, type Convocation, type MailTemplate, type ReportState,
+  buildConvocation, DEFAULT_TEMPLATE, recipientsOf, reportFilename, type Convocation, type MailTemplate, type ReportState,
 } from "./convocation";
+import { LOGO_CID } from "./emailLayout";
 import { reportFile, reportFileSize } from "./reportFiles";
 
 // Loads what a team's convocation email is made of — its day, passages,

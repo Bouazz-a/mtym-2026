@@ -62,6 +62,10 @@ export const config = {
   jwtSecret: requiredEnv("JWT_SECRET"),
   s3: s3Config(),
   mail: mailConfig(),
+  // The interface's address, for the links in emails (login, « Mot de passe
+  // oublié »). Never taken from a request: a forged Host would point a
+  // reset link elsewhere.
+  appUrl: (process.env.APP_URL || "https://mtym-jury.mathmaroc.org").replace(/\/+$/, ""),
 };
 
 if (config.jwtSecret.length < 32) {

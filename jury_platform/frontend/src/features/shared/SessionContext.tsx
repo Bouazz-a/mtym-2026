@@ -14,6 +14,8 @@ interface SessionContextValue {
   role: Role | null;
   status: SessionStatus;
   login: (email: string, password: string) => Promise<void>;
+  // Open a session the server already granted (a « Mot de passe oublié » link)
+  signIn: (token: string, user: AuthUser) => void;
   logout: () => void;
 }
 
@@ -47,18 +49,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, logout);
   }, [logout]);
 
+  const signIn = useCallback((token: string, me: AuthUser) => {
+    queryClient.clear(); // another account may have been signed in here
+    setAuthToken(token);
+    setUser(me);
+    setStatus("authenticated");
+  }, [queryClient]);
+
   const login = useCallback(async (email: string, password: string) => {
     const { token, user: me } = await apiFetch<{ token: string; user: AuthUser }>("/auth/login", {
       method: "POST",
       body: { email, password },
     });
-    setAuthToken(token);
-    setUser(me);
-    setStatus("authenticated");
-  }, []);
+    signIn(token, me);
+  }, [signIn]);
 
   return (
-    <SessionContext.Provider value={{ user, role: user?.role ?? null, status, login, logout }}>
+    <SessionContext.Provider value={{ user, role: user?.role ?? null, status, login, signIn, logout }}>
       {children}
     </SessionContext.Provider>
   );

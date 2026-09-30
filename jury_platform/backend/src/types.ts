@@ -39,4 +39,5 @@ export const publicAccountSelect = {
   role: true,
   isJuror: true,
   createdAt: true,
+  credentialsSentAt: true,
 } as const;
