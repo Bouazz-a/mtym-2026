@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Alert, Badge, Btn, BrutalCard, Field, Input, Modal, PageHeader, PageLoading, PageMotion, Select, Stagger,
+  Alert, Badge, Btn, BrutalCard, Field, Input, Modal, PageHeader, PageLoading, PageMotion, SectionHeading, Select, Stagger,
 } from "@/features/shared/primitives";
+import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
+import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { LoadError, StatCard } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
 import { useSession } from "@/features/shared/SessionContext";
@@ -11,23 +13,96 @@ import {
   type AccountInput, type EmailOutcome,
 } from "@/lib/repositories/accountRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
+import type { FilterColumn } from "@/lib/services/columnFilters";
 import { errorMessage } from "@/lib/services/errors";
-import type { Account } from "@/types";
+import type { Account, PoolDetails } from "@/types";
+import { centerLabel, formatDay } from "@/utils/labels";
 import { useAction } from "./useAction";
 
 // AccountsPage — the jury and admin accounts: create one (its password is
 // shown once, and emailed when asked), edit it, issue a new password (shown,
 // and emailed), delete it. « Envoyer les identifiants » emails a new
-// password to every juror who never got one by email, one account per
-// request like the convocations; the Identifiants column says who did.
+// password to the jurors the table's filters leave (all by default) who
+// never got one by email — or, when asked, to those who did too — one
+// account per request like the convocations; the Identifiants column says
+// who got one. Spreadsheet-style filters pick them: role, days judged,
+// passages, credentials sent or not.
 
 const ACCOUNT_QUERIES = [["accounts"], ["pools"], ["duos"]];
 
 // A password the admin is shown once, and what became of its email
 type Revealed = { email: string; password: string } & EmailOutcome;
 
+const sentOn = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
 const sentAt = (iso: string) =>
   new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+// What the table knows of an account besides the account: the days it
+// judges (one line each) and its passages — none for an admin who doesn't
+// judge
+interface AccountRow {
+  account: Account;
+  days: string[]; // "Casablanca · sam. 24 oct.", in date order
+  firstDate: string | null; // the first of them, for the sort
+  passages: number | null;
+}
+
+function accountRows(accounts: Account[], pools: PoolDetails[]): AccountRow[] {
+  const judged = new Map<string, { passages: number; days: Map<string, { date: string; label: string }> }>();
+  for (const pool of pools) {
+    for (const passage of pool.passages) {
+      for (const member of passage.duo?.members ?? []) {
+        const entry = judged.get(member.id) ?? { passages: 0, days: new Map() };
+        entry.passages += 1;
+        const day = pool.centerDay;
+        if (day) entry.days.set(day.id, { date: day.date, label: `${centerLabel(day.center)} · ${formatDay(day.date)}` });
+        judged.set(member.id, entry);
+      }
+    }
+  }
+  return [...accounts]
+    .sort((a, b) => a.role.localeCompare(b.role) || a.lastName.localeCompare(b.lastName))
+    .map((account) => {
+      const entry = judged.get(account.id);
+      const days = [...(entry?.days.values() ?? [])].sort((x, y) => x.date.localeCompare(y.date));
+      return {
+        account,
+        days: days.map((d) => d.label),
+        firstDate: days[0]?.date ?? null,
+        passages: account.isJuror ? entry?.passages ?? 0 : null,
+      };
+    });
+}
+
+const roleText = (a: Account) => (a.role === "jury" ? "Jury" : a.isJuror ? "Admin · juré" : "Admin");
+
+const COLUMNS: FilterColumn<AccountRow>[] = [
+  {
+    key: "name",
+    label: "Nom",
+    value: ({ account: a }) => `${a.lastName} ${a.firstName}`,
+    text: ({ account: a }) => `${a.firstName} ${a.lastName}`,
+  },
+  { key: "role", label: "Rôle", value: ({ account }) => roleText(account), text: ({ account }) => roleText(account) },
+  { key: "days", label: "Jours", value: (r) => r.firstDate, text: (r) => r.days.join(", ") },
+  {
+    key: "passages",
+    label: "Passages",
+    value: (r) => r.passages,
+    text: (r) => (r.passages === null ? "" : String(r.passages)),
+  },
+  {
+    key: "credentials",
+    label: "Identifiants",
+    value: ({ account }) => account.credentialsSentAt,
+    text: ({ account }) => (account.credentialsSentAt ? "Envoyés" : "Jamais envoyés"),
+  },
+];
+const [NAME, ROLE, DAYS, PASSAGES, CREDENTIALS] = COLUMNS;
+
+// Who « Envoyer les identifiants » is about to reach: the jurors shown who
+// never got theirs, and those shown who did (sent to only when asked)
+type SendChoice = { fresh: Account[]; again: Account[] };
 
 export function AccountsPage() {
   const { user } = useSession();
@@ -40,24 +115,34 @@ export function AccountsPage() {
   const [revealed, setRevealed] = useState<Revealed | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState<string | null>(null);
-  const [confirmSend, setConfirmSend] = useState<Account[] | null>(null); // jurors about to get their credentials
+  const [confirmSend, setConfirmSend] = useState<SendChoice | null>(null);
+  const [sendAgain, setSendAgain] = useState(false); // the modal's « also those who got theirs »
   const [progress, setProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  const accounts = accountsQ.data ?? [];
+  const rows = accountRows(accounts, poolsQ.data ?? []);
+  const { shown, narrowed, clear, menuProps } = useColumnFilters(rows, COLUMNS);
 
   if (accountsQ.isLoading || poolsQ.isLoading) return <PageLoading />;
   const load = queryState(accountsQ, poolsQ);
   if (load.failed) return <LoadError onRetry={load.retry} />;
 
-  const accounts = accountsQ.data ?? [];
-  const passages = (poolsQ.data ?? []).flatMap((p) => p.passages);
-  const passageCount = (id: string) => passages.filter((p) => p.duo?.members.some((m) => m.id === id)).length;
-  const sorted = [...accounts].sort((a, b) => a.role.localeCompare(b.role) || a.lastName.localeCompare(b.lastName));
-  const jurors = accounts.filter((a) => a.isJuror); // admins who also judge included
+  const jurors = rows.filter((r) => r.account.isJuror); // admins who also judge included
   // Unknown until the status arrives: the buttons wait, no warning flashes
   const mailConfigured = mailQ.data?.configured ?? false;
-  // Your own password is changed from your account menu, never emailed from here
-  const unsent = jurors.filter((j) => !j.credentialsSentAt && j.id !== user?.id);
-  const canSend = mailConfigured && !progress;
+  // The send button follows the filters: the jurors shown, but never you
+  // (your own password is changed from your account menu)
+  const filtered = shown.length < rows.length;
+  const recipients = shown.map((r) => r.account).filter((a) => a.isJuror && a.id !== user?.id);
+  const fresh = recipients.filter((a) => !a.credentialsSentAt);
+  const again = recipients.filter((a) => a.credentialsSentAt);
+  const canSend = mailConfigured && !progress && recipients.length > 0;
+  // With nobody new among them, the button offers to send again
+  const sendLabel = fresh.length > 0 || again.length === 0
+    ? `${filtered ? "Envoyer aux jurés affichés" : "Envoyer les identifiants"} (${fresh.length})`
+    : `${filtered ? "Renvoyer aux jurés affichés" : "Renvoyer les identifiants"} (${again.length})`;
+  const toSend = confirmSend ? [...confirmSend.fresh, ...(sendAgain || confirmSend.fresh.length === 0 ? confirmSend.again : [])] : [];
 
   const reset = async (account: Account) => {
     setConfirmReset(null);
@@ -66,15 +151,15 @@ export function AccountsPage() {
   };
 
   // One account per request; stops on the first failure
-  const sendAll = async (rows: Account[]) => {
+  const sendAll = async (list: Account[]) => {
     setConfirmSend(null);
     setSendError(null);
-    for (const [i, row] of rows.entries()) {
-      setProgress({ done: i, total: rows.length, current: `${row.firstName} ${row.lastName}` });
+    for (const [i, row] of list.entries()) {
+      setProgress({ done: i, total: list.length, current: `${row.firstName} ${row.lastName}` });
       try {
         await sendCredentials(row.id);
       } catch (err) {
-        setSendError(`${row.firstName} ${row.lastName} : ${errorMessage(err)} — envoi arrêté (${i}/${rows.length} envoyés).`);
+        setSendError(`${row.firstName} ${row.lastName} : ${errorMessage(err)} — envoi arrêté (${i}/${list.length} envoyés).`);
         break;
       }
     }
@@ -90,8 +175,13 @@ export function AccountsPage() {
         sub="Les comptes des jurés et des administrateurs. Un mot de passe n'est affiché qu'une fois : il part aussi par email quand l'envoi est configuré, sinon transmettez-le à la personne."
         right={
           <div className="flex gap-2 flex-wrap">
-            <Btn variant="ghost" disabled={!canSend || unsent.length === 0} onClick={() => setConfirmSend(unsent)}>
-              Envoyer les identifiants ({unsent.length})
+            <Btn
+              variant="ghost"
+              disabled={!canSend}
+              onClick={() => { setSendAgain(false); setConfirmSend({ fresh, again }); }}
+              title={filtered ? "Seulement les jurés que les filtres du tableau laissent affichés" : undefined}
+            >
+              {sendLabel}
             </Btn>
             <Btn onClick={() => setEditing("new")}>Nouveau compte</Btn>
           </div>
@@ -102,7 +192,7 @@ export function AccountsPage() {
         <StatCard label="Jurés" value={jurors.length} />
         <StatCard
           label="Jurés avec un passage"
-          value={jurors.filter((j) => passageCount(j.id) > 0).length}
+          value={jurors.filter((j) => (j.passages ?? 0) > 0).length}
           denom={jurors.length || undefined}
           progressColor="var(--sage)"
         />
@@ -128,90 +218,111 @@ export function AccountsPage() {
           </div>
         </BrutalCard>
       )}
-      <BrutalCard className="overflow-hidden">
-        <div className="table-scroll">
-          <table className="brutal-table">
-            <thead>
-              <tr>
-                <th className="col-tight">Nom</th>
-                <th>Email</th>
-                <th className="col-tight">Rôle</th>
-                <th className="col-tight" style={{ textAlign: "center" }}>Passages</th>
-                <th className="col-tight" title="Le dernier mot de passe envoyé par email">Identifiants</th>
-                <th className="col-tight" style={{ borderRight: "none" }} />
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((a) => (
-                <tr key={a.id}>
-                  <td className="col-tight">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="flex items-center justify-center font-mont shrink-0"
-                        style={{ width: "2.125rem", height: "2.125rem", background: "var(--paper-2)", color: "var(--forest)", fontWeight: 900, border: "1px solid var(--forest)", fontSize: "0.75rem" }}
-                      >
-                        {`${a.firstName[0] ?? ""}${a.lastName[0] ?? ""}`.toUpperCase()}
-                      </span>
-                      <span className="font-mont" style={{ color: "var(--forest)", fontWeight: 800 }}>
-                        {a.firstName} {a.lastName}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="font-open text-sm" style={{ color: "var(--ink-soft)" }}>{a.email}</td>
-                  <td className="col-tight">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Badge tone={a.role === "admin" ? "dark" : "sage"}>{a.role === "admin" ? "Admin" : "Jury"}</Badge>
-                      {a.role === "admin" && a.isJuror && (
-                        <span title="Administrateur qui fait aussi partie du jury">
-                          <Badge tone="sage">Juré</Badge>
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: "center" }} className="font-mont col-tight">{a.isJuror ? passageCount(a.id) : "—"}</td>
-                  <td className="col-tight">
-                    {a.credentialsSentAt
-                      ? <Badge tone="sage">Envoyés · {sentAt(a.credentialsSentAt)}</Badge>
-                      : <Badge tone="neutral">Jamais envoyés</Badge>}
-                  </td>
-                  <td className="col-tight" style={{ borderRight: "none" }}>
-                    {/* No wrapping: the column hugs the buttons instead of
-                        stacking them, and the table scrolls if too narrow */}
-                    <div className="flex gap-1.5 justify-end flex-nowrap">
-                      <Btn variant="ghost" size="sm" onClick={() => setEditing(a)}>Modifier</Btn>
-                      {/* The old password stops working at once: asked first */}
-                      {confirmReset === a.id ? (
-                        <>
-                          <Btn
-                            variant="forest"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() => reset(a)}
-                            title={mailConfigured ? "Générer un nouveau mot de passe et l'envoyer par email" : "Générer un nouveau mot de passe"}
-                          >
-                            Confirmer
-                          </Btn>
-                          <Btn variant="ghost" size="sm" onClick={() => setConfirmReset(null)}>Annuler</Btn>
-                        </>
-                      ) : (
-                        <Btn variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmReset(a.id)}>Nouveau mot de passe</Btn>
-                      )}
-                      {a.id !== user?.id && (confirmDelete === a.id ? (
-                        <>
-                          <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(null); run(() => deleteAccount(a.id)); }}>Confirmer</Btn>
-                          <Btn variant="ghost" size="sm" onClick={() => setConfirmDelete(null)}>Annuler</Btn>
-                        </>
-                      ) : (
-                        <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(a.id)}>Supprimer</Btn>
-                      ))}
-                    </div>
-                  </td>
+      <section>
+        <SectionHeading
+          title="Tous les comptes"
+          right={narrowed
+            ? <div className="flex items-center gap-2 flex-wrap"><FilterSummary shown={shown.length} total={rows.length} unit="comptes" onClear={clear} /></div>
+            : <Badge tone="neutral">{rows.length} comptes</Badge>}
+        />
+        <BrutalCard className="overflow-hidden">
+          <div className="table-scroll">
+            <table className="brutal-table">
+              <thead>
+                <tr>
+                  <th><FilterHeader column={NAME} menu={menuProps(NAME)} sortKind="text" /></th>
+                  <th className="col-tight"><FilterHeader column={ROLE} menu={menuProps(ROLE)} sortKind="text" /></th>
+                  <th className="col-tight"><FilterHeader column={DAYS} menu={menuProps(DAYS)} sortKind="date" emptyLabel="(Aucun)" /></th>
+                  <th className="col-tight"><FilterHeader column={PASSAGES} menu={menuProps(PASSAGES)} emptyLabel="(Pas juré)" /></th>
+                  <th className="col-tight" title="Le dernier mot de passe envoyé par email">
+                    <FilterHeader column={CREDENTIALS} menu={menuProps(CREDENTIALS)} sortKind="date" align="right" />
+                  </th>
+                  <th className="col-tight" style={{ borderRight: "none" }} />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </BrutalCard>
+              </thead>
+              <tbody>
+                {shown.map(({ account: a, days, passages }) => (
+                  <tr key={a.id}>
+                    <td>
+                      {/* The name, and the address the emails go to under it */}
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="flex items-center justify-center font-mont shrink-0"
+                          style={{ width: "2.125rem", height: "2.125rem", background: "var(--paper-2)", color: "var(--forest)", fontWeight: 900, border: "1px solid var(--forest)", fontSize: "0.75rem" }}
+                        >
+                          {`${a.firstName[0] ?? ""}${a.lastName[0] ?? ""}`.toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="font-mont" style={{ color: "var(--forest)", fontWeight: 800 }}>
+                            {a.firstName} {a.lastName}
+                          </div>
+                          {/* Too long for the column, it wraps after the @ */}
+                          <div className="font-open text-xs" style={{ color: "var(--ink-soft)", overflowWrap: "anywhere" }}>
+                            {a.email.split("@")[0]}<wbr />@{a.email.split("@").slice(1).join("@")}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="col-tight">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Badge tone={a.role === "admin" ? "dark" : "sage"}>{a.role === "admin" ? "Admin" : "Jury"}</Badge>
+                        {a.role === "admin" && a.isJuror && (
+                          <span title="Administrateur qui fait aussi partie du jury">
+                            <Badge tone="sage">Juré</Badge>
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="col-tight font-open text-xs" style={{ color: "var(--ink-soft)" }}>
+                      {days.length === 0 ? <span style={{ color: "var(--ink-faint)" }}>—</span> : days.map((d) => <div key={d}>{d}</div>)}
+                    </td>
+                    <td style={{ textAlign: "center" }} className="font-mont col-tight">{passages ?? "—"}</td>
+                    <td className="col-tight">
+                      {/* The day; the time under the pointer */}
+                      {a.credentialsSentAt
+                        ? <span title={`Envoyés le ${sentAt(a.credentialsSentAt)}`}><Badge tone="sage">Envoyés · {sentOn(a.credentialsSentAt)}</Badge></span>
+                        : <Badge tone="neutral">Jamais envoyés</Badge>}
+                    </td>
+                    <td className="col-tight" style={{ borderRight: "none" }}>
+                      {/* No wrapping: the column hugs the buttons instead of
+                          stacking them, and the table scrolls if too narrow */}
+                      <div className="flex gap-1.5 justify-end flex-nowrap">
+                        <Btn variant="ghost" size="sm" onClick={() => setEditing(a)}>Modifier</Btn>
+                        {/* The old password stops working at once: asked first */}
+                        {confirmReset === a.id ? (
+                          <>
+                            <Btn
+                              variant="forest"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => reset(a)}
+                              title={mailConfigured ? "Générer un nouveau mot de passe et l'envoyer par email" : "Générer un nouveau mot de passe"}
+                            >
+                              Confirmer
+                            </Btn>
+                            <Btn variant="ghost" size="sm" onClick={() => setConfirmReset(null)}>Annuler</Btn>
+                          </>
+                        ) : (
+                          <Btn variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmReset(a.id)}>Nouveau mot de passe</Btn>
+                        )}
+                        {a.id !== user?.id && (confirmDelete === a.id ? (
+                          <>
+                            <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(null); run(() => deleteAccount(a.id)); }}>Confirmer</Btn>
+                            <Btn variant="ghost" size="sm" onClick={() => setConfirmDelete(null)}>Annuler</Btn>
+                          </>
+                        ) : (
+                          <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(a.id)}>Supprimer</Btn>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {shown.length === 0 && <NoMatchRow colSpan={6} label="Aucun compte ne correspond aux filtres." onClear={clear} />}
+              </tbody>
+            </table>
+          </div>
+        </BrutalCard>
+      </section>
 
       {editing && (
         <AccountModal
@@ -225,31 +336,77 @@ export function AccountsPage() {
       {confirmSend && (
         <Modal
           open
-          title="Envoyer les identifiants"
+          title={confirmSend.fresh.length > 0 ? "Envoyer les identifiants" : "Renvoyer les identifiants"}
           onClose={() => setConfirmSend(null)}
-          width={500}
+          width={520}
           footer={
             <>
               <Btn variant="ghost" onClick={() => setConfirmSend(null)}>Annuler</Btn>
-              <Btn onClick={() => sendAll(confirmSend)}>Envoyer</Btn>
+              <Btn onClick={() => sendAll(toSend)}>Envoyer ({toSend.length})</Btn>
             </>
           }
         >
-          <div className="space-y-3 font-open text-sm" style={{ color: "var(--ink)" }}>
-            <p>
-              {confirmSend.length > 1
-                ? `${confirmSend.length} jurés vont recevoir leurs identifiants par email`
-                : "1 juré va recevoir ses identifiants par email"}{" "}
-              : {confirmSend.map((j) => `${j.firstName} ${j.lastName}`).join(", ")}.
-            </p>
+          <div className="space-y-4 font-open text-sm" style={{ color: "var(--ink)" }}>
+            {confirmSend.fresh.length > 0 ? (
+              <p>
+                {confirmSend.fresh.length > 1
+                  ? `${confirmSend.fresh.length} jurés${filtered ? " affichés" : ""} n'ont jamais reçu leurs identifiants par email`
+                  : `1 juré${filtered ? " affiché" : ""} n'a jamais reçu ses identifiants par email`}{" "}
+                : <Names list={confirmSend.fresh} />.
+              </p>
+            ) : (
+              <p>
+                {confirmSend.again.length > 1
+                  ? `Les ${confirmSend.again.length} jurés${filtered ? " affichés" : ""} ont déjà reçu leurs identifiants ; ils vont en recevoir de nouveaux`
+                  : `Le juré${filtered ? " affiché" : ""} a déjà reçu ses identifiants ; il va en recevoir de nouveaux`}{" "}
+                : <Names list={confirmSend.again} />.
+              </p>
+            )}
+            {confirmSend.fresh.length > 0 && confirmSend.again.length > 0 && (
+              <Checkbox
+                checked={sendAgain}
+                onChange={setSendAgain}
+                label={`Renvoyer aussi aux ${confirmSend.again.length} qui les ont déjà reçus`}
+                hint={confirmSend.again.map((a) => `${a.firstName} ${a.lastName}`).join(", ")}
+              />
+            )}
+            {filtered && (
+              <p className="text-xs" style={{ color: "var(--ink-soft)" }}>
+                Seuls les jurés que les filtres du tableau laissent affichés sont concernés.
+              </p>
+            )}
             <Alert tone="warning">
-              Un nouveau mot de passe est généré pour chacun : un mot de passe déjà transmis à la main ne fonctionnera plus.
+              Un nouveau mot de passe est généré pour chacun : celui qu'il avait ne fonctionnera plus.
             </Alert>
           </div>
         </Modal>
       )}
     </PageMotion>
   );
+}
+
+// A header cell's label and its spreadsheet-style menu
+function FilterHeader({
+  column,
+  menu,
+  ...options
+}: {
+  column: FilterColumn<AccountRow>;
+  menu: ReturnType<ReturnType<typeof useColumnFilters<AccountRow>>["menuProps"]>;
+  sortKind?: "number" | "text" | "date";
+  emptyLabel?: string;
+  align?: "left" | "right";
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span>{column.label}</span>
+      <ColumnFilterMenu {...menu} {...options} />
+    </div>
+  );
+}
+
+function Names({ list }: { list: Account[] }) {
+  return <strong className="font-semibold">{list.map((a) => `${a.firstName} ${a.lastName}`).join(", ")}</strong>;
 }
 
 function AccountModal({
