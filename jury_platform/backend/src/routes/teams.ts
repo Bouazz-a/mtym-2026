@@ -10,10 +10,15 @@ import { asyncRoute, BadRequestError, ConflictError, NotFoundError } from "../ut
 
 const router = Router();
 
-// Report ids + problem numbers only — the file itself is reached through
-// GET /api/reports/:id/url, which checks access per report.
+// Report and presentation ids + problem numbers only — a file itself is
+// reached through GET /api/reports/:id/url or /api/presentations/:id/url,
+// which check access per file.
 const teamInclude = {
   reports: {
+    select: { id: true, problemNumber: true },
+    orderBy: { problemNumber: "asc" },
+  },
+  presentations: {
     select: { id: true, problemNumber: true },
     orderBy: { problemNumber: "asc" },
   },

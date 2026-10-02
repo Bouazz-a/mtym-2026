@@ -60,6 +60,7 @@ export interface Team {
   members: TeamMember[];
   centerDayId: string | null;
   reports: { id: string; problemNumber: number }[]; // FINAL reports submitted
+  presentations: { id: string; problemNumber: number }[]; // what it shows when it defends that problem
   problemRanking: number[]; // the problems it wants to defend, favorite first; empty = none given
 }
 

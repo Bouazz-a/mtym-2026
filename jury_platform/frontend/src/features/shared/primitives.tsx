@@ -12,7 +12,7 @@ import { useSlide } from "./motion";
 
 // ─── Buttons ───────────────────────────────────────────────────────────
 
-type BtnVariant = "primary" | "forest" | "sage" | "ghost" | "ghostDark" | "danger";
+type BtnVariant = "primary" | "forest" | "sage" | "rose" | "ghost" | "ghostDark" | "danger";
 type BtnSize = "sm" | "md";
 
 // Every button stands out from the page: the secondary ones (ghost,
@@ -23,6 +23,7 @@ const BTN_VARIANTS: Record<BtnVariant, { bg: string; fg: string; bd: string; sha
   primary:    { bg: "var(--saffron)", fg: "var(--forest)", bd: "var(--forest)", shadow: "var(--forest)" },
   forest:     { bg: "var(--forest)", fg: "var(--paper)", bd: "var(--forest)", shadow: "var(--saffron)" },
   sage:       { bg: "var(--sage-dark)", fg: "var(--paper)", bd: "var(--sage-dark)", shadow: "var(--forest)" },
+  rose:       { bg: "var(--rose)", fg: "var(--forest)", bd: "var(--forest)", shadow: "var(--forest)" },
   ghost:      { bg: "var(--surface)", fg: "var(--forest)", bd: "var(--forest)", shadow: "var(--forest)" },
   ghostDark:  { bg: "transparent", fg: "var(--paper)", bd: "rgba(244,236,216,0.45)", shadow: "var(--saffron)" },
   danger:     { bg: "var(--surface)", fg: "var(--clay)", bd: "var(--clay)", shadow: "var(--clay)" },

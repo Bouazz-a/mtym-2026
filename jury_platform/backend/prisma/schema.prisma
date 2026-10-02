@@ -115,6 +115,7 @@ model Team {
 
   centerDay         CenterDay?         @relation(fields: [centerDayId], references: [id], onDelete: SetNull)
   reports           TeamReport[]
+  presentations     TeamPresentation[]
   defended          Passage[]          @relation("PassageDefender")
   opposed           Passage[]          @relation("PassageOpponent")
   reported          Passage[]          @relation("PassageReporter")
@@ -172,6 +173,20 @@ model TeamReport {
 
   team       Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
   assignment ReportAssignment?
+
+  @@unique([teamId, problemNumber])
+}
+
+// What a team shows when it defends a problem: the presentation it filed on
+// the main site (team_reports of type PRESENTATION), kept in the same bucket
+// as the reports. Never graded: the duo judging that defense opens it.
+model TeamPresentation {
+  id            String @id @default(uuid())
+  teamId        String
+  problemNumber Int
+  fileUrl       String
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, problemNumber])
 }

@@ -5,3 +5,9 @@ import { apiFetch } from "@/lib/api/client";
 export function getReportUrl(reportId: string): Promise<{ url: string; expiresIn: number }> {
   return apiFetch(`/reports/${reportId}/url`);
 }
+
+// The same, for the presentation a team shows when it defends: only for the
+// duo judging that passage (and the admins).
+export function getPresentationUrl(presentationId: string): Promise<{ url: string; expiresIn: number }> {
+  return apiFetch(`/presentations/${presentationId}/url`);
+}

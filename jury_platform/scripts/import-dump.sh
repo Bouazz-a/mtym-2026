@@ -11,7 +11,8 @@
 # The dump is loaded into a throwaway database (mainsite_import) next to
 # the platform's own, the teams are copied over by backend/scripts/
 # import-teams.ts, and the throwaway database is dropped again — the only
-# data kept is what the import copies (teams, member names, report keys).
+# data kept is what the import copies (teams, member names, report and
+# presentation keys).
 set -euo pipefail
 
 DUMP="${1:?usage: scripts/import-dump.sh <dump.sql|dump.dump> [--reports auto|final|intermediate]}"

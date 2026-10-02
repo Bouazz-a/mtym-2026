@@ -4,7 +4,7 @@ import {
 } from "./dashboard";
 
 const team = (id: string, center: Team["center"], extra: Partial<Team> = {}): Team => ({
-  id, sourceId: 0, name: id, quadrigram: id, center, members: [], centerDayId: `${center}-d1`, reports: [], problemRanking: [], ...extra,
+  id, sourceId: 0, name: id, quadrigram: id, center, members: [], centerDayId: `${center}-d1`, reports: [], presentations: [], problemRanking: [], ...extra,
 });
 const day = (center: CenterDay["center"], date: string, validated = false): CenterDay => ({
   id: `${center}-d1`, center, date, schedule: [], drawValidatedAt: validated ? "2026-09-20T10:00:00Z" : null, drawValidatedBy: validated ? "Ines" : null, _count: { teams: 0, pools: 0 },

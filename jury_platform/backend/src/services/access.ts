@@ -62,6 +62,16 @@ export async function juryCanAccessReport(
   return judged + assigned > 0;
 }
 
+// A juror may open a team's presentation of a problem when their duo judges
+// the passage where the team defends it: it's what the team shows there.
+export async function juryCanAccessPresentation(
+  accountId: string,
+  teamId: string,
+  problemNumber: number,
+): Promise<boolean> {
+  return (await db.passage.count({ where: { defenderTeamId: teamId, problemNumber, ...passagesJudgedBy(accountId) } })) > 0;
+}
+
 // Once a passage of the day is graded (an oral, or the defender's report by
 // its duo), its pools are frozen: redrawing or swapping teams would detach
 // those grades from the lineup they were given for. Reports handed out to

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, BrutalCard, Btn, Modal } from "./primitives";
-import { getReportUrl } from "@/lib/repositories/reportRepository";
+import { getPresentationUrl, getReportUrl } from "@/lib/repositories/reportRepository";
 import { errorMessage } from "@/lib/services/errors";
 
 // A team's report PDF from the main site's bucket, in three shapes:
@@ -12,6 +12,9 @@ import { errorMessage } from "@/lib/services/errors";
 //   where there's no room for two columns;
 // - ReportModal: just the modal, for a table of many reports — the page
 //   keeps which one is open, so it holds a single modal.
+//
+// PresentationViewer is the ReportViewer of the presentation a team shows
+// when it defends: the same button and modal, in rose.
 //
 // The signed link expires after ten minutes; an already-loaded PDF keeps
 // showing, and both shapes can hand it over to a new tab (phone browsers
@@ -105,6 +108,44 @@ export function ReportViewer({
   title: string;
   label?: string; // the button's text (short in tables)
 }) {
+  return (
+    <PdfButton
+      load={async () => src ?? (await getReportUrl(reportId)).url}
+      title={title}
+      label={label}
+      variant="forest"
+      notFound="Rapport introuvable."
+    />
+  );
+}
+
+export function PresentationViewer({ presentationId, title }: { presentationId: string; title: string }) {
+  return (
+    <PdfButton
+      load={async () => (await getPresentationUrl(presentationId)).url}
+      title={title}
+      label="Voir la présentation (PDF)"
+      variant="rose"
+      notFound="Présentation introuvable."
+    />
+  );
+}
+
+// A button opening one of the bucket's PDFs in a modal. `load` gets its link
+// when the button is pressed, so the link is a fresh one every time.
+function PdfButton({
+  load,
+  title,
+  label,
+  variant,
+  notFound,
+}: {
+  load: () => Promise<string>;
+  title: string;
+  label: string;
+  variant: "forest" | "rose";
+  notFound: string; // said when the link can't be had
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,9 +154,9 @@ export function ReportViewer({
     setBusy(true);
     setError(null);
     try {
-      setUrl(src ?? (await getReportUrl(reportId)).url);
+      setUrl(await load());
     } catch (err) {
-      setError(errorMessage(err, "Rapport introuvable."));
+      setError(errorMessage(err, notFound));
     } finally {
       setBusy(false);
     }
@@ -123,7 +164,7 @@ export function ReportViewer({
 
   return (
     <>
-      <Btn variant="forest" size="sm" onClick={open} disabled={busy}>
+      <Btn variant={variant} size="sm" onClick={open} disabled={busy}>
         {busy ? "Ouverture…" : label}
       </Btn>
       {error && <div className="mt-3"><Alert>{error}</Alert></div>}

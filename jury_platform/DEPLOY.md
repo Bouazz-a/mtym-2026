@@ -192,7 +192,7 @@ cd /root/mtym-jury/jury_platform/backend
 npm run db:seed                                          # grilles de notation par défaut
 npm run create-admin -- vous@exemple.com Prénom Nom     # affiche le mot de passe UNE fois : le noter
 cd ..
-scripts/import-from-mainsite.sh                          # équipes et rapports, directement depuis la base du site principal
+scripts/import-from-mainsite.sh                          # équipes, rapports et présentations, directement depuis la base du site principal
 ```
 
 Les autres comptes (jurés, admins) se créent ensuite dans la page **Comptes**.
@@ -325,6 +325,11 @@ que personne ne soit noté sur un rapport intermédiaire :
 ```bash
 cd /root/mtym-jury/jury_platform && scripts/import-from-mainsite.sh --reports final
 ```
+
+Le même import apporte les présentations des équipes (bouton « Voir la
+présentation » du jury, sur la grille du défenseur). Le lancer après la date
+limite de dépôt : une présentation déposée ou remplacée ensuite sur le site
+principal n'apparaît qu'à l'import suivant.
 
 **Commandes utiles**
 

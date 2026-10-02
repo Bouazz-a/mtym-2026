@@ -60,6 +60,12 @@ are submitted — a plain re-import then switches to them). Force one type with
 `--reports final` (e.g. on competition day, so nobody is graded on an
 intermediate report) or `--reports intermediate`.
 
+Presentations: the `PRESENTATION` rows of `team_reports` are imported too,
+whatever `--reports` says. They are never graded: the duo judging a passage
+opens the defender's presentation for that problem from the Oral tab. One
+filed (or replaced) on the main site after an import only appears after the
+next one.
+
 It imports the teams that are `APPROVED`, whose intermediate report is `PASS`
 and that have a qualification center, with their members' names and their
 reports (which one is graded: see above). Re-run it with a newer dump at any

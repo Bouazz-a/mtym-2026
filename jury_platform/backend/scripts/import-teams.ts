@@ -6,7 +6,8 @@
 // qualification center. Re-runnable: teams are matched on the main site's
 // team id (sourceId). From `users`, only the names (Team.members) and the
 // email addresses of the QUALIFIED students (TeamContact, for the
-// convocation emails) are kept.
+// convocation emails) are kept. From `team_reports`: the reports the jury
+// grades, and the presentations the teams show when they defend.
 import "dotenv/config";
 import { Center, PrismaClient } from "@prisma/client";
 import { teamsOf } from "../src/services/passages";
@@ -20,6 +21,9 @@ const REPORT_MODE = (process.env.REPORT_MODE ?? "AUTO").toUpperCase();
 if (!["AUTO", "FINAL", "INTERMEDIATE"].includes(REPORT_MODE)) {
   throw new Error(`REPORT_MODE must be AUTO, FINAL or INTERMEDIATE, got "${REPORT_MODE}"`);
 }
+// What a team shows when it defends a problem: always imported, whatever
+// REPORT_MODE says (it isn't graded)
+const PRESENTATION = "PRESENTATION";
 const CENTERS = new Set<string>(Object.values(Center));
 // The application status of the students who get the convocation emails
 const QUALIFIED = "QUALIFIED";
@@ -92,11 +96,17 @@ async function readSource(src: PrismaClient) {
         WHERE u."teamId" = ANY(${ids})
         ORDER BY u."lastName", u."firstName"`;
 
-  const reports = await src.$queryRaw<SourceReport[]>`
+  const files = await src.$queryRaw<SourceReport[]>`
     SELECT "teamId", "reportType"::text AS "reportType", "problemNumber", "fileUrl" FROM team_reports
-    WHERE "reportType"::text IN ('FINAL', 'INTERMEDIATE') AND "teamId" = ANY(${ids})`;
+    WHERE "reportType"::text IN ('FINAL', 'INTERMEDIATE', 'PRESENTATION') AND "teamId" = ANY(${ids})`;
 
-  return { teams, members, reports: pickReports(reports), hasStatuses };
+  return {
+    teams,
+    members,
+    reports: pickReports(files.filter((f) => f.reportType !== PRESENTATION)),
+    presentations: files.filter((f) => f.reportType === PRESENTATION),
+    hasStatuses,
+  };
 }
 
 // The problems a team wants to defend, favorite first: each of 1–4 once, in
@@ -133,6 +143,7 @@ async function main() {
     const source = await readSource(src);
     const membersByTeam = groupBy(source.members, (m) => m.teamId);
     const reportsByTeam = groupBy(source.reports, (r) => r.teamId);
+    const presentationsByTeam = groupBy(source.presentations, (p) => p.teamId);
 
     const teams = source.teams.filter((t) => {
       if (CENTERS.has(t.qualifCenter)) return true;
@@ -150,7 +161,7 @@ async function main() {
 
     const existing = new Map((await db.team.findMany()).map((t) => [t.sourceId, t]));
     const stats = {
-      created: 0, updated: 0, removed: 0, withoutReport: 0,
+      created: 0, updated: 0, removed: 0, withoutReport: 0, presentations: 0,
       members: 0, emails: 0, notQualified: 0, qualifiedWithoutEmail: 0,
       reports: { FINAL: 0, INTERMEDIATE: 0 } as Record<string, number>,
     };
@@ -188,11 +199,13 @@ async function main() {
           stats.updated++;
         }
 
-        const reports = (reportsByTeam.get(t.id) ?? []).filter((r) => {
+        // A file the platform can open: one of the four problems, and a key
+        const usable = (r: SourceReport) => {
           if (r.problemNumber && r.problemNumber >= 1 && r.problemNumber <= 4 && r.fileUrl) return true;
           warnings.push(`${data.quadrigram}: ${r.reportType} report with problem ${r.problemNumber} / file "${r.fileUrl}" — skipped`);
           return false;
-        });
+        };
+        const reports = (reportsByTeam.get(t.id) ?? []).filter(usable);
         for (const r of reports) {
           await tx.teamReport.upsert({
             where: { teamId_problemNumber: { teamId, problemNumber: r.problemNumber! } },
@@ -205,6 +218,20 @@ async function main() {
         });
         for (const r of reports) stats.reports[r.reportType]++;
         if (!reports.length) stats.withoutReport++;
+
+        // Its presentations, mirrored the same way: one per problem
+        const presentations = (presentationsByTeam.get(t.id) ?? []).filter(usable);
+        for (const p of presentations) {
+          await tx.teamPresentation.upsert({
+            where: { teamId_problemNumber: { teamId, problemNumber: p.problemNumber! } },
+            create: { teamId, problemNumber: p.problemNumber!, fileUrl: p.fileUrl! },
+            update: { fileUrl: p.fileUrl! },
+          });
+        }
+        await tx.teamPresentation.deleteMany({
+          where: { teamId, problemNumber: { notIn: presentations.map((p) => p.problemNumber!) } },
+        });
+        stats.presentations += presentations.length;
 
         // The addresses of the QUALIFIED members, for the convocation emails:
         // replaced as a whole. The others stay members, but get no email.
@@ -247,6 +274,7 @@ async function main() {
     console.log(`Teams: ${stats.created} created, ${stats.updated} updated, ${stats.removed} removed (no longer eligible)`);
     const { FINAL, INTERMEDIATE } = stats.reports;
     console.log(`Reports graded (mode ${REPORT_MODE.toLowerCase()}): ${FINAL + INTERMEDIATE} — ${FINAL} final, ${INTERMEDIATE} intermediate — ${stats.withoutReport} team(s) have none yet`);
+    console.log(`Presentations (for the duo judging the defense): ${stats.presentations}`);
     console.log(
       `Emails for the convocations (QUALIFIED students only): ${stats.emails} of ${stats.members} members`
         + ` — ${stats.notQualified} not QUALIFIED left out, ${stats.qualifiedWithoutEmail} QUALIFIED without an email`,
