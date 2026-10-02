@@ -19,7 +19,8 @@ import { errorMessage } from "@/lib/services/errors";
 // The signed link expires after ten minutes; an already-loaded PDF keeps
 // showing, and both shapes can hand it over to a new tab (phone browsers
 // often can't embed a PDF at all).
-// `src` shows a given file instead (the guide's sample report).
+// `src` shows a given file instead (the guide's sample report and
+// presentation).
 
 const REPORT_URL_FRESH_MS = 8 * 60 * 1000;
 
@@ -119,10 +120,10 @@ export function ReportViewer({
   );
 }
 
-export function PresentationViewer({ presentationId, title }: { presentationId: string; title: string }) {
+export function PresentationViewer({ presentationId, src, title }: { presentationId: string; src?: string; title: string }) {
   return (
     <PdfButton
-      load={async () => (await getPresentationUrl(presentationId)).url}
+      load={async () => src ?? (await getPresentationUrl(presentationId)).url}
       title={title}
       label="Voir la présentation (PDF)"
       variant="rose"

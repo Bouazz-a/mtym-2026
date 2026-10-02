@@ -16,7 +16,7 @@ const selector = (anchor: string) => `[data-tour="${anchor}"]`;
 
 // Practice steps living in the Rapport écrit tab; every other one is in Oral
 const REPORT_TAB_ANCHORS = new Set(["report-viewer"]);
-const ORAL_TAB_ANCHORS = new Set(["grading-card", "score", "coef", "comment", "note", "save"]);
+const ORAL_TAB_ANCHORS = new Set(["grading-card", "presentation", "score", "coef", "comment", "note", "save"]);
 
 // Shows the tab a step lives in (a hidden tab's elements can't be
 // highlighted). Returns whether it had to switch.

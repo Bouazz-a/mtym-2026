@@ -99,6 +99,11 @@ export const PRACTICE_STEPS: GuideStep[] = [
     text: "Défenseur, opposant, rapporteur : chaque équipe est notée sur la grille de son rôle.",
   },
   {
+    anchor: "presentation",
+    title: "La présentation du défenseur",
+    text: "Les diapositives que l'équipe a déposées pour sa défense. Ouvrez-les pour suivre l'exposé ou revenir sur un point ; « Ouvrir dans un onglet » les garde ouvertes pendant que vous notez. Si l'équipe n'en a pas déposé, la grille l'indique.",
+  },
+  {
     anchor: "score",
     title: "Le taux de réussite",
     text: "Pour chaque critère, touchez le taux : 0 · 0,25 · 0,5 · 0,75 · 1 (leur sens s'affiche au survol, et dans l'aide-mémoire). Une valeur entre deux ? Tapez-la dans « autre ».",

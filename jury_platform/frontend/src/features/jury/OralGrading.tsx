@@ -14,6 +14,9 @@ import type { PassageData } from "./passageContext";
 
 const GRADED_ROLES = ["defender", "opponent", "reporter"] as const;
 
+// In practice, the presentation is a bundled sample PDF.
+const SAMPLE_PRESENTATION = "/presentation-exemple.pdf";
+
 export function OralGrading({ passage, teamById, criteria, refresh, practice = false }: PassageData) {
   const oralQ = useQuery({
     // The juror's own grades, even for an admin who also judges ("mine")
@@ -43,7 +46,7 @@ export function OralGrading({ passage, teamById, criteria, refresh, practice = f
               await refresh();
             }}
           >
-            {role === "defender" && !practice && <DefensePresentation team={team} problemNumber={passage.problemNumber} />}
+            {role === "defender" && <DefensePresentation team={team} problemNumber={passage.problemNumber} practice={practice} />}
           </GradingCard>
         );
       })}
@@ -53,7 +56,7 @@ export function OralGrading({ passage, teamById, criteria, refresh, practice = f
 
 // The presentation the defender filed on the main site for the problem it
 // defends here, when it filed one.
-function DefensePresentation({ team, problemNumber }: { team: Team | undefined; problemNumber: number }) {
+function DefensePresentation({ team, problemNumber, practice }: { team: Team | undefined; problemNumber: number; practice: boolean }) {
   const presentation = team?.presentations.find((p) => p.problemNumber === problemNumber);
   if (!team || !presentation) {
     return (
@@ -63,8 +66,12 @@ function DefensePresentation({ team, problemNumber }: { team: Team | undefined; 
     );
   }
   return (
-    <div>
-      <PresentationViewer presentationId={presentation.id} title={`${team.quadrigram} · Présentation du problème ${problemNumber}`} />
+    <div data-tour="presentation" className="w-fit">
+      <PresentationViewer
+        presentationId={presentation.id}
+        src={practice ? SAMPLE_PRESENTATION : undefined}
+        title={`${team.quadrigram} · Présentation du problème ${problemNumber}`}
+      />
     </div>
   );
 }

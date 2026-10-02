@@ -17,7 +17,7 @@ import type { PassageData } from "./passageContext";
 
 const DAY = { id: "practice-day", center: "casablanca" as const, date: new Date().toISOString().slice(0, 10), schedule: DEFAULT_SCHEDULE };
 
-const team = (id: string, quadrigram: string, name: string, reports: Team["reports"] = []): Team => ({
+const team = (id: string, quadrigram: string, name: string, reports: Team["reports"] = [], presentations: Team["presentations"] = []): Team => ({
   id,
   sourceId: 0,
   name,
@@ -26,12 +26,14 @@ const team = (id: string, quadrigram: string, name: string, reports: Team["repor
   members: [],
   centerDayId: DAY.id,
   reports,
-  presentations: [],
+  presentations,
   problemRanking: [],
 });
 
+// ALFA defends problem 2: its report and its presentation are the bundled
+// sample PDFs (public/rapport-exemple.pdf, public/presentation-exemple.pdf)
 const TEAMS = [
-  team("practice-alfa", "ALFA", "Équipe Alfa (fictive)", [{ id: "practice-report", problemNumber: 2 }]),
+  team("practice-alfa", "ALFA", "Équipe Alfa (fictive)", [{ id: "practice-report", problemNumber: 2 }], [{ id: "practice-presentation", problemNumber: 2 }]),
   team("practice-beta", "BETA", "Équipe Beta (fictive)"),
   team("practice-gama", "GAMA", "Équipe Gama (fictive)"),
   team("practice-delt", "DELT", "Équipe Delta (fictive)"),
