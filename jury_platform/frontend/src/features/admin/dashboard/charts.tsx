@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { BrutalCard } from "@/features/shared/primitives";
+import { niceMax } from "@/lib/services/stats";
 import { hatch } from "./hatch";
 
 // The dashboard's building blocks, drawn with CSS and SVG in the app's
@@ -76,12 +77,6 @@ export interface Series {
   label: string;
   color: string;
   hatched?: boolean;
-}
-
-// A round top for the axis: 7 -> 8, 13 -> 15, 42 -> 50
-function niceMax(n: number): number {
-  const step = 10 ** Math.floor(Math.log10(Math.max(1, n)));
-  return [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map((m) => m * step).find((v) => v >= n) ?? n;
 }
 
 export function GroupedBars({

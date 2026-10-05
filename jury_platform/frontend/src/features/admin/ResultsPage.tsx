@@ -10,13 +10,15 @@ import { FINAL_PART_LABELS, FINAL_PARTS, percent, teamResults, type TeamResult, 
 import type { Team } from "@/types";
 import { CENTERS, centerLabel } from "@/utils/labels";
 import { ExportButton } from "./ExportButton";
+import { ResultsStats } from "./results/ResultsStats";
 import { useExport } from "./useExport";
 import { useGradedPassages } from "./useGradedPassages";
 
-// ResultsPage — one table of every drawn team, all centers together: its
-// notes as defender, opponent and reporter and for its written reports,
-// each as a % of its grid, and its final grade (weighted average, weights
-// set on the Critères page). Filters per column, the center included.
+// ResultsPage — the statistics of the final grades (results/ResultsStats),
+// then one table of every drawn team, all centers together: its notes as
+// defender, opponent and reporter and for its written reports, each as a %
+// of its grid, and its final grade (weighted average, weights set on the
+// Critères page). Filters per column, the center included.
 
 const pctText = (p: number | null) => (p === null ? "" : fmtNote(Math.round(p * 10) / 10));
 const centerText = (t: TeamResult) => (t.pool.centerDay ? centerLabel(t.pool.centerDay.center) : "");
@@ -45,22 +47,19 @@ export function ResultsPage() {
 
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const rows = teamResults(results, weights, written);
-  const problemWeights = Object.entries(weights.problemWeights).map(([p, w]) => `P${p} ${w} %`).join(", ");
 
   return (
     <PageMotion className="space-y-10">
-      <PageHeader
-        eyebrow="Administration"
-        title="Résultats"
-        sub={`Notes en % de leur grille. Note finale : moyenne pondérée (${FINAL_PARTS.map((k) => `${FINAL_PART_LABELS[k]} ${weights[k]}`).join(", ")}, coefficients réglables dans Critères), calculée quand les quatre notes sont saisies. Rapport écrit : moyenne pondérée des rapports de l'équipe, chacun sur 20 (${problemWeights}) ; il compte dès qu'un rapport est noté, et un rapport non déposé vaut 0.`}
-        right={<ExportButton {...exporter} />}
-      />
+      <PageHeader eyebrow="Administration" title="Résultats" right={<ExportButton {...exporter} />} />
       {exporter.error && <Alert>{exporter.error}</Alert>}
 
       {rows.length === 0 ? (
         <EmptyState icon={GridIcon} title="Aucune poule" sub="Les résultats apparaîtront une fois les poules tirées et notées." />
       ) : (
-        <ResultsTable teams={rows} teamById={teamById} written={written} />
+        <>
+          <ResultsStats rows={rows} teamById={teamById} />
+          <ResultsTable teams={rows} teamById={teamById} written={written} />
+        </>
       )}
     </PageMotion>
   );
@@ -79,7 +78,7 @@ function ResultsTable({
   const quad = (t: TeamResult) => teamById.get(t.teamId)?.quadrigram ?? "";
   const teamText = (t: TeamResult) => {
     const team = teamById.get(t.teamId);
-    return team ? `${team.quadrigram} · ${team.name}` : "";
+    return team ? `${team.quadrigram} (${team.name})` : "";
   };
   const teamColumn: FilterColumn<TeamResult> = { key: "team", label: "Équipe", value: teamText, text: teamText };
   const ordered = [...teams].sort((a, b) =>
@@ -144,7 +143,7 @@ function ResultsTable({
                       <div className="font-mont" style={{ color: "var(--forest)", fontWeight: 900, letterSpacing: "0.05em" }}>{team?.quadrigram ?? "?"}</div>
                       <div className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>{team?.name}</div>
                     </td>
-                    <td className="font-open text-xs">{centerText(t) || "—"}</td>
+                    <td className="font-open text-xs">{centerText(t)}</td>
                     <td className="font-mont text-xs" style={{ color: "var(--ink-soft)", fontWeight: 800 }}>{t.pool.label}</td>
                     {FINAL_PARTS.map((key) => {
                       const set = t.notes[key];
@@ -155,7 +154,7 @@ function ResultsTable({
                           className="font-mont tabular-nums"
                           title={set?.average != null ? `${fmtNote(set.average)} / ${set.max}` : undefined}
                         >
-                          {p === null ? <span style={{ color: "var(--ink-faint)" }}>—</span> : (
+                          {p === null ? <Pending /> : (
                             <span style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
                               {pctText(p)}<span className="text-micro" style={{ color: "var(--ink-faint)" }}> %</span>
                             </span>
@@ -165,7 +164,7 @@ function ResultsTable({
                       );
                     })}
                     <td className="final-cell font-mont tabular-nums" style={{ borderRight: "none" }}>
-                      {t.final === null ? <span style={{ color: "var(--ink-faint)" }}>—</span> : (
+                      {t.final === null ? <Pending /> : (
                         <span style={{ color: "var(--forest)", fontWeight: 900, fontSize: "0.95rem" }}>
                           {pctText(t.final)}<span className="text-micro"> %</span>
                         </span>
@@ -183,6 +182,11 @@ function ResultsTable({
   );
 }
 
+// A note that isn't there yet
+function Pending() {
+  return <span className="font-open text-micro" style={{ color: "var(--ink-faint)", fontWeight: 400 }}>en attente</span>;
+}
+
 // Under the written-report note: once grading has started, how many of the
 // team's reports are graded (the note moves until they all are), and which
 // ones it never submitted (counted 0)
@@ -195,7 +199,7 @@ function WrittenProgress({ note }: { note: WrittenNote | undefined }) {
   if (parts.length === 0) return null;
   return (
     <div className="font-open text-micro mt-0.5" style={{ color: "var(--ink-faint)" }}>
-      {parts.join(" · ")}
+      {parts.join(", ")}
     </div>
   );
 }
