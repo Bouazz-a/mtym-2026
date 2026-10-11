@@ -186,6 +186,7 @@ export function StripPlot({
   label,
   idle,
   legend,
+  compact = false,
 }: {
   rows: StripRow[];
   domain: [number, number];
@@ -195,6 +196,7 @@ export function StripPlot({
   label: string; // what the chart shows, for screen readers
   idle: string; // the line under the chart while nothing is pointed at
   legend?: ReactNode;
+  compact?: boolean; // a plot that never gets wide: one axis label in two
 }) {
   const [pointed, setPointed] = useState<string | null>(null);
   const [row, setRow] = useState<string | null>(null);
@@ -270,7 +272,7 @@ export function StripPlot({
         <div className="relative" style={{ height: "1.25rem" }}>
           <div className="absolute inset-y-0" style={{ left: "0.5rem", right: "0.5rem" }}>
             {/* On a narrow screen, one label in two: side by side they would touch */}
-            {tens.filter((v) => roomy || v % 20 === 0).map((v) => (
+            {tens.filter((v) => (roomy && !compact) || v % 20 === 0).map((v) => (
               <span key={v} className="absolute top-1 font-mont text-micro tabular-nums" style={{ left: x(v), translate: "-50% 0", color: "var(--ink-faint)", fontWeight: 700 }}>{v}</span>
             ))}
           </div>

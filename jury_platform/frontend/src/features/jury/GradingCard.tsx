@@ -41,6 +41,7 @@ export function GradingCard({
   outOf,
   draftKey,
   onSave,
+  onDirtyChange,
   children,
 }: {
   header: ReactNode;
@@ -53,6 +54,7 @@ export function GradingCard({
   outOf?: number; // show the note rescaled out of this (written reports: 20) instead of the grid's total
   draftKey?: string; // names this grid's unsaved grades in the browser (none: they aren't kept)
   onSave: (input: GradingInput) => Promise<unknown>;
+  onDirtyChange?: (dirty: boolean) => void; // told when grades are changed, and when they are saved
   children?: ReactNode; // extra content above the grid (e.g. the report viewer)
 }) {
   const { user } = useSession();
@@ -74,6 +76,10 @@ export function GradingCard({
   useEffect(() => {
     if (storageId && dirty) writeDraft(storageId, { base, drafts, remark });
   }, [storageId, dirty, base, drafts, remark]);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   // Closing or reloading the page with unsaved grades asks first
   useEffect(() => {

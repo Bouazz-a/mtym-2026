@@ -9,7 +9,8 @@ import { DEFAULT_WEIGHTS, passageResults, writtenReportNotes } from "@/lib/servi
 // What the Notes and Résultats pages share: the pools, the teams, every
 // evaluation and the final grade's weights, turned into per-passage results
 // and each team's written-report note (all its reports together). The
-// queries come along so a page can add its own to its loading state.
+// queries come along so a page can add its own to its loading state, and the
+// evaluations themselves for the pages that go down to one juror's note.
 export function useGradedPassages() {
   const poolsQ = useQuery({ queryKey: ["pools"], queryFn: () => getPools() });
   const teamsQ = useQuery({ queryKey: ["teams"], queryFn: () => getTeams() });
@@ -21,12 +22,18 @@ export function useGradedPassages() {
   const pools = poolsQ.data ?? [];
   const teams = teamsQ.data ?? [];
   const weights = weightsQ.data ?? DEFAULT_WEIGHTS;
+  const criteria = criteriaQ.data ?? [];
+  const oral = oralQ.data ?? [];
+  const report = reportQ.data ?? [];
   return {
     queries: [poolsQ, teamsQ, criteriaQ, oralQ, reportQ, weightsQ],
     pools,
     teams,
     weights,
-    results: passageResults(pools, criteriaQ.data ?? [], oralQ.data ?? [], reportQ.data ?? []),
-    written: writtenReportNotes(teams, criteriaQ.data ?? [], reportQ.data ?? [], weights.problemWeights),
+    criteria,
+    oral,
+    report,
+    results: passageResults(pools, criteria, oral, report),
+    written: writtenReportNotes(teams, criteria, report, weights.problemWeights),
   };
 }

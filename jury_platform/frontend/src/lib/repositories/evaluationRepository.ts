@@ -36,3 +36,24 @@ export function saveReportEvaluation(input: {
 }): Promise<ReportEvaluation> {
   return apiFetch<ReportEvaluation>("/report-evaluations", { method: "POST", body: input });
 }
+
+// ─── Admins: a juror's note, corrected or removed ─────────────────────
+// The whole grid is sent again; the change goes to the journal.
+
+type NoteEdit = { globalRemark?: string; grades: GradeInput[] };
+
+export function updateOralEvaluation(id: string, input: NoteEdit): Promise<OralEvaluation> {
+  return apiFetch<OralEvaluation>(`/oral-evaluations/${id}`, { method: "PUT", body: input });
+}
+
+export function deleteOralEvaluation(id: string): Promise<void> {
+  return apiFetch<void>(`/oral-evaluations/${id}`, { method: "DELETE" });
+}
+
+export function updateReportEvaluation(id: string, input: NoteEdit): Promise<ReportEvaluation> {
+  return apiFetch<ReportEvaluation>(`/report-evaluations/${id}`, { method: "PUT", body: input });
+}
+
+export function deleteReportEvaluation(id: string): Promise<void> {
+  return apiFetch<void>(`/report-evaluations/${id}`, { method: "DELETE" });
+}

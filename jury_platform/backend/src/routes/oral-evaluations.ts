@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { authenticate, jurorOnly } from "../middleware/auth";
+import { adminOnly, authenticate, jurorOnly } from "../middleware/auth";
 import { isPassageJuror, ownGradesOnly } from "../services/access";
-import { GradesSchema, assertCriteriaApply } from "../services/grading";
+import { audit } from "../services/audit";
+import { GradesSchema, NoteEditSchema, assertCriteriaApply, frNumber, noteDetails, noteOf } from "../services/grading";
 import { roleOf } from "../services/passages";
 import { asyncRoute, BadRequestError, ForbiddenError, NotFoundError } from "../utils/errors";
 
@@ -68,6 +69,72 @@ router.post("/", ...jurorOnly, asyncRoute(async (req, res) => {
   });
 
   res.json(evaluation);
+}));
+
+// ─── An admin corrects or removes a juror's note ──────────────────────
+// Whatever the note was goes to the journal, criterion by criterion.
+
+const ROLE_NAMES: Record<string, string> = { defender: "défenseur", opponent: "opposant", reporter: "rapporteur" };
+
+// The note with what the journal says about it: its juror, team, passage and grid
+async function findNoteOrThrow(id: string) {
+  const evaluation = await db.oralEvaluation.findUnique({
+    where: { id: z.string().uuid().parse(id) },
+    include: { grades: true, jury: { select: { firstName: true, lastName: true } }, passage: { select: { label: true } } },
+  });
+  if (!evaluation) throw new NotFoundError("Note introuvable");
+  const [team, criteria] = await Promise.all([
+    db.team.findUnique({ where: { id: evaluation.teamId }, select: { quadrigram: true } }),
+    db.criterion.findMany({ where: { type: "oral", role: evaluation.role }, orderBy: { order: "asc" } }),
+  ]);
+  const juror = `${evaluation.jury.firstName} ${evaluation.jury.lastName}`;
+  const subject = `${team?.quadrigram ?? "?"} ${ROLE_NAMES[evaluation.role] ?? evaluation.role} dans ${evaluation.passage.label}`;
+  return { evaluation, criteria, juror, subject };
+}
+
+// PUT /api/oral-evaluations/:id — { globalRemark, grades }: the note as the
+// admin corrects it (the whole grid; an empty remark clears it)
+router.put("/:id", ...adminOnly, asyncRoute(async (req, res) => {
+  const { grades = [], globalRemark } = NoteEditSchema.parse(req.body);
+  const { evaluation, criteria, juror, subject } = await findNoteOrThrow(req.params.id);
+
+  const updated = await db.$transaction(async (tx) => {
+    await assertCriteriaApply(tx, grades.map((g) => g.criterionId), { type: "oral", role: evaluation.role });
+    await tx.oralEvaluation.update({ where: { id: evaluation.id }, data: { globalRemark: globalRemark?.trim() || null } });
+    for (const g of grades) {
+      await tx.oralGrade.upsert({
+        where: { oralEvaluationId_criterionId: { oralEvaluationId: evaluation.id, criterionId: g.criterionId } },
+        create: { oralEvaluationId: evaluation.id, criterionId: g.criterionId, score: g.score, remark: g.remark?.trim() || null },
+        update: { score: g.score, remark: g.remark?.trim() || null },
+      });
+    }
+    const saved = await tx.oralEvaluation.findUniqueOrThrow({ where: { id: evaluation.id }, include: { grades: true } });
+    const [before, after] = [noteOf(evaluation.grades, criteria), noteOf(saved.grades, criteria)];
+    await audit(tx, req.user!, {
+      category: "Notes",
+      action: "oral.update",
+      summary: `Note d'oral de ${juror} modifiée : ${subject}, ${frNumber(before.total)} devient ${frNumber(after.total)} sur ${frNumber(after.max)}`,
+      details: { avant: noteDetails(evaluation, criteria), après: noteDetails(saved, criteria) },
+    });
+    return saved;
+  });
+  res.json(updated);
+}));
+
+// DELETE /api/oral-evaluations/:id — the note is gone: the juror may grade again
+router.delete("/:id", ...adminOnly, asyncRoute(async (req, res) => {
+  const { evaluation, criteria, juror, subject } = await findNoteOrThrow(req.params.id);
+  const { total, max } = noteOf(evaluation.grades, criteria);
+  await db.$transaction(async (tx) => {
+    await tx.oralEvaluation.delete({ where: { id: evaluation.id } });
+    await audit(tx, req.user!, {
+      category: "Notes",
+      action: "oral.delete",
+      summary: `Note d'oral de ${juror} supprimée : ${subject} (${frNumber(total)} sur ${frNumber(max)})`,
+      details: { supprimée: noteDetails(evaluation, criteria) },
+    });
+  });
+  res.status(204).send();
 }));
 
 export default router;

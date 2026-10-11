@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Alert, Badge, BrutalCard, FadeIn, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented,
@@ -6,36 +7,61 @@ import {
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { GridIcon } from "@/features/shared/icons";
-import { EmptyState, LoadError, ROLE_PALETTE } from "@/features/shared/widgets";
+import { EmptyState, LoadError, Picker, ROLE_PALETTE } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
 import { getAccounts } from "@/lib/repositories/accountRepository";
+import { getReportAssignments } from "@/lib/repositories/reportAssignmentRepository";
 import type { FilterColumn } from "@/lib/services/columnFilters";
-import { fmtNote } from "@/lib/services/gradingService";
+import { fmtNote, oralCriteria, reportCriteria } from "@/lib/services/gradingService";
+import { jurorSheets } from "@/lib/services/jurorNotes";
 import {
   centersWithPools, daysOfCenter, FINAL_PART_LABELS, GRADED_ROLES, type NoteSet, type PassageResult,
 } from "@/lib/services/results";
-import type { Center } from "@/types";
+import type { Center, Criterion, OralEvaluation, ReportEvaluation } from "@/types";
 import { centerLabel, formatDay } from "@/utils/labels";
 import { slotTime } from "@/utils/schedule";
 import { ExportButton } from "./ExportButton";
+import { JurorsView } from "./notes/JurorsView";
+import { NoteActions, type EditableNote } from "./notes/NoteEditor";
 import { useExport } from "./useExport";
 import { useGradedPassages } from "./useGradedPassages";
 
-// EvaluationsPage — the jury's notes, by center, day and pool: for each
-// passage the duo's average per graded role and for the defender's report,
-// what is still missing, and each juror's note and remark on demand.
+// EvaluationsPage — the jury's notes, read two ways:
+//   · « Par passage »: by center, day and pool, the duo's average per graded
+//     role and for the defender's report, what is still missing, and each
+//     juror's note and remark on demand;
+//   · « Par juré » (notes/JurorsView): what each juror owes and graded.
+// Either way an admin can correct or remove a juror's note (notes/NoteEditor).
+
+// What a passage's row needs to hand a note to the editor
+interface NoteSource {
+  criteria: Criterion[];
+  oral: OralEvaluation[];
+  report: ReportEvaluation[];
+}
+
+const VIEWS = [{ value: "passages", label: "Par passage" }, { value: "jures", label: "Par juré" }] as const;
+type View = (typeof VIEWS)[number]["value"];
 
 export function EvaluationsPage() {
-  const { queries, pools, teams, results } = useGradedPassages();
+  const { queries, pools, teams, results, criteria, oral, report } = useGradedPassages();
   const accountsQ = useQuery({ queryKey: ["accounts"], queryFn: () => getAccounts() });
+  const boardQ = useQuery({ queryKey: ["report-assignments"], queryFn: getReportAssignments });
+  const [params, setParams] = useSearchParams();
+  const view: View = params.get("vue") === "jures" ? "jures" : "passages";
+  // The view and the juror unrolled live in the address, without piling up history
+  const show = (next: View, juror: string | null = null) =>
+    setParams(next === "jures" ? { vue: "jures", ...(juror ? { jure: juror } : {}) } : {}, { replace: true });
   const [center, setCenter] = useState<Center | null>(null);
   // Loaded on demand: the xlsx writer is heavy and only needed here.
   const exporter = useExport(async () => (await import("@/lib/services/exportService")).exportGradesXlsx());
 
-  const load = queryState(...queries, accountsQ);
+  const load = queryState(...queries, accountsQ, boardQ);
   if (load.loading) return <PageLoading />;
   if (load.failed) return <LoadError onRetry={load.retry} />;
 
+  const teamById = new Map(teams.map((t) => [t.id, t]));
+  const source: NoteSource = { criteria, oral, report };
   const quadById = new Map(teams.map((t) => [t.id, t.quadrigram]));
   const nameById = new Map((accountsQ.data ?? []).map((a) => [a.id, `${a.firstName} ${a.lastName}`]));
   const centers = centersWithPools(pools);
@@ -53,7 +79,21 @@ export function EvaluationsPage() {
       />
       {exporter.error && <Alert>{exporter.error}</Alert>}
 
-      {!selected ? (
+      <Picker label="Lecture">
+        <Segmented options={[...VIEWS]} value={view} onChange={(v) => show(v)} />
+      </Picker>
+
+      {view === "jures" ? (
+        <FadeIn key="jures">
+          <JurorsView
+            sheets={jurorSheets(accountsQ.data ?? [], pools, criteria, oral, report, boardQ.data?.reports ?? [])}
+            teamById={teamById}
+            criteria={criteria}
+            opened={params.get("jure")}
+            onOpen={(id) => show("jures", id)}
+          />
+        </FadeIn>
+      ) : !selected ? (
         <EmptyState icon={GridIcon} title="Aucune poule" sub="Les notes apparaîtront une fois les poules tirées et notées." />
       ) : (
         <>
@@ -66,6 +106,7 @@ export function EvaluationsPage() {
                 results={dayResults}
                 quadById={quadById}
                 nameById={nameById}
+                source={source}
               />
             ))}
           </FadeIn>
@@ -96,11 +137,13 @@ function DayTable({
   results,
   quadById,
   nameById,
+  source,
 }: {
   title: string;
   results: PassageResult[];
   quadById: Map<string, string>;
   nameById: Map<string, string>;
+  source: NoteSource;
 }) {
   const { shown, narrowed, clear, menuProps } = useColumnFilters(results, FILTER_COLUMNS);
 
@@ -137,7 +180,7 @@ function DayTable({
             </thead>
             <tbody>
               {shown.map((r, i) => (
-                <ResultRow key={r.passage.id} result={r} alt={i % 2 === 1} quadById={quadById} nameById={nameById} />
+                <ResultRow key={r.passage.id} result={r} alt={i % 2 === 1} quadById={quadById} nameById={nameById} source={source} />
               ))}
               {shown.length === 0 && <NoMatchRow colSpan={7} label="Aucun passage ne correspond aux filtres." onClear={clear} />}
             </tbody>
@@ -155,18 +198,39 @@ function ResultRow({
   alt,
   quadById,
   nameById,
+  source,
 }: {
   result: PassageResult;
   alt: boolean;
   quadById: Map<string, string>;
   nameById: Map<string, string>;
+  source: NoteSource;
 }) {
   const [open, setOpen] = useState(false);
   const { passage, oral, report, done, expected } = result;
-  const sets: [string, NoteSet][] = [
-    ...GRADED_ROLES.map((role) => [ROLE_PALETTE[role].label, oral[role]] as [string, NoteSet]),
-    ["Rapport écrit", report],
+  const sets: [string, NoteSet, (typeof GRADED_ROLES)[number] | null][] = [
+    ...GRADED_ROLES.map((role) => [ROLE_PALETTE[role].label, oral[role], role] as [string, NoteSet, typeof role]),
+    ["Rapport écrit", report, null],
   ];
+  const inDuo = new Set(passage.duo?.members.map((m) => m.id));
+  // A juror's note of this passage, as the editor takes it
+  const editable = (set: NoteSet, role: (typeof GRADED_ROLES)[number] | null, juryId: string, total: number): EditableNote | null => {
+    const evaluation = role
+      ? source.oral.find((e) => e.passageId === passage.id && e.teamId === set.teamId && e.juryId === juryId)
+      : source.report.find((e) => e.teamId === set.teamId && e.problemNumber === passage.problemNumber && e.juryId === juryId);
+    const quad = quadById.get(set.teamId) ?? "?";
+    return evaluation
+      ? {
+        kind: role ? "oral" : "report",
+        evaluation,
+        juror: nameById.get(juryId) ?? "?",
+        subject: role ? `${quad}, ${ROLE_PALETTE[role].label.toLowerCase()} dans ${passage.label}` : `${quad}, rapport du problème ${passage.problemNumber}`,
+        criteria: role ? oralCriteria(source.criteria, role) : reportCriteria(source.criteria, passage.problemNumber),
+        total,
+        max: set.max,
+      }
+      : null;
+  };
 
   return (
     <>
@@ -211,7 +275,7 @@ function ResultRow({
         <tr>
           <td colSpan={7} style={{ borderRight: "none", background: "var(--paper-2)" }}>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 py-2">
-              {sets.map(([label, set]) => (
+              {sets.map(([label, set, role]) => (
                 <div key={label}>
                   <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
                     {label} · {quadById.get(set.teamId) ?? "—"}
@@ -219,12 +283,21 @@ function ResultRow({
                   {set.notes.length === 0 ? (
                     <p className="font-open text-xs italic" style={{ color: "var(--ink-faint)" }}>Pas encore noté.</p>
                   ) : (
-                    set.notes.map((n) => (
-                      <div key={n.juryId} className="font-open text-xs mb-1.5" style={{ color: "var(--ink)" }}>
-                        <strong className="font-mont">{nameById.get(n.juryId) ?? "?"}</strong> · {fmtNote(n.total)} / {set.max}
-                        {n.globalRemark && <span className="block italic" style={{ color: "var(--ink-soft)" }}>« {n.globalRemark} »</span>}
-                      </div>
-                    ))
+                    set.notes.map((n) => {
+                      const note = editable(set, role, n.juryId, n.total);
+                      return (
+                        <div key={n.juryId} className="font-open text-xs mb-2.5" style={{ color: "var(--ink)" }}>
+                          <strong className="font-mont">{nameById.get(n.juryId) ?? "?"}</strong> · {fmtNote(n.total)} / {set.max}
+                          {passage.duo && !inDuo.has(n.juryId) && (
+                            <span className="ml-2" title="Ce juré n'est pas, ou plus, dans le duo qui juge ce passage : sa note compte toujours">
+                              <Badge tone="neutral">Hors duo</Badge>
+                            </span>
+                          )}
+                          {n.globalRemark && <span className="block italic" style={{ color: "var(--ink-soft)" }}>« {n.globalRemark} »</span>}
+                          {note && <span className="block"><NoteActions note={note} /></span>}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               ))}

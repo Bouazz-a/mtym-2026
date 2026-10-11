@@ -10,15 +10,17 @@ import { FINAL_PART_LABELS, FINAL_PARTS, percent, teamResults, type TeamResult, 
 import type { Team } from "@/types";
 import { CENTERS, centerLabel } from "@/utils/labels";
 import { ExportButton } from "./ExportButton";
+import { ProblemStats } from "./results/ProblemStats";
 import { ResultsStats } from "./results/ResultsStats";
 import { useExport } from "./useExport";
 import { useGradedPassages } from "./useGradedPassages";
 
-// ResultsPage — the statistics of the final grades (results/ResultsStats),
-// then one table of every drawn team, all centers together: its notes as
-// defender, opponent and reporter and for its written reports, each as a %
-// of its grid, and its final grade (weighted average, weights set on the
-// Critères page). Filters per column, the center included.
+// ResultsPage — the statistics of the final grades (results/ResultsStats)
+// and of each problem (results/ProblemStats), then one table of every drawn
+// team, all centers together: its notes as defender, opponent and reporter
+// and for its written reports, each as a % of its grid, and its final grade
+// (weighted average, weights set on the Critères page). Filters per column,
+// the center included.
 
 const pctText = (p: number | null) => (p === null ? "" : fmtNote(Math.round(p * 10) / 10));
 const centerText = (t: TeamResult) => (t.pool.centerDay ? centerLabel(t.pool.centerDay.center) : "");
@@ -38,7 +40,7 @@ const COLUMNS: FilterColumn<TeamResult>[] = [
 ];
 
 export function ResultsPage() {
-  const { queries, teams, weights, results, written } = useGradedPassages();
+  const { queries, teams, weights, results, written, criteria, report } = useGradedPassages();
   const exporter = useExport(async () => (await import("@/lib/services/exportService")).exportGradesXlsx());
 
   const load = queryState(...queries);
@@ -58,6 +60,7 @@ export function ResultsPage() {
       ) : (
         <>
           <ResultsStats rows={rows} teamById={teamById} />
+          <ProblemStats results={results} teams={teams} criteria={criteria} report={report} />
           <ResultsTable teams={rows} teamById={teamById} written={written} />
         </>
       )}

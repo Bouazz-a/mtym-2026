@@ -26,3 +26,46 @@ export async function assertCriteriaApply(
     throw new BadRequestError("Certains critères ne correspondent pas à cette grille");
   }
 }
+
+// ─── A juror's note, as the journal writes it ─────────────────────────
+// Admins may correct or remove a juror's note (routes/oral-evaluations.ts,
+// routes/report-evaluations.ts): the journal keeps what the note was.
+
+type GridCriterion = { id: string; label: string; coefficient: number };
+type SavedGrade = { criterionId: string; score: number; remark?: string | null };
+
+// "12,5": French decimal comma, two decimals at most
+export const frNumber = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
+
+// Σ score × coefficient over the grid, out of the grid's maximum (Σ positive
+// coefficients), or brought back to `outOf` (written reports: 20)
+export function noteOf(grades: SavedGrade[], criteria: GridCriterion[], outOf?: number): { total: number; max: number } {
+  const coefficient = new Map(criteria.map((c) => [c.id, c.coefficient]));
+  const total = grades.reduce((s, g) => s + g.score * (coefficient.get(g.criterionId) ?? 0), 0);
+  const max = criteria.reduce((s, c) => s + Math.max(c.coefficient, 0), 0);
+  return outOf && max > 0 ? { total: (total / max) * outOf, max: outOf } : { total, max };
+}
+
+// The whole note, for the journal's details: enough to type it again
+export function noteDetails(
+  evaluation: { globalRemark: string | null; grades: SavedGrade[] },
+  criteria: GridCriterion[],
+  outOf?: number,
+) {
+  const { total, max } = noteOf(evaluation.grades, criteria, outOf);
+  const grade = new Map(evaluation.grades.map((g) => [g.criterionId, g]));
+  return {
+    note: `${frNumber(total)} sur ${frNumber(max)}`,
+    remarque: evaluation.globalRemark ?? "",
+    critères: criteria.map((c) => {
+      const g = grade.get(c.id);
+      return { critère: c.label, taux: g ? g.score : null, ...(g?.remark ? { remarque: g.remark } : {}) };
+    }),
+  };
+}
+
+// What an admin sends to correct a note: the whole grid and the remark
+export const NoteEditSchema = z.object({
+  globalRemark: z.string().optional(),
+  grades: GradesSchema,
+});
