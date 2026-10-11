@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { BrutalCard } from "@/features/shared/primitives";
 import { ChevronDownIcon } from "@/features/shared/icons";
+import { CHEVRON_TURN, unrollFrame, unrollPart } from "@/features/shared/motion";
 import { BOARD_RULE, POOLS_NOTE, PRINCIPLES, QUESTIONS, REPORT_RULES, ROLES, SCALE, TIMELINE } from "./guide/guideContent";
 import { QuarterMeter } from "./gradingWidgets";
 
@@ -10,26 +11,8 @@ import { QuarterMeter } from "./gradingWidgets";
 // marked — for a quick look during the passage, on a phone. Closed by
 // default. Texts: guide/guideContent.ts (from the organizers' 2026 guide).
 //
-// Opening, the frame unrolls and its sections settle into place one after
-// the other, in reading order, each dropping a few pixels as it appears;
-// closing, the sections fade together and the frame rolls back up, faster.
-// All at once with reduced motion.
-
-const EASE_OUT = [0.22, 1, 0.36, 1] as const;
-const EASE_IN = [0.4, 0, 1, 1] as const;
-
-const frame = (reduce: boolean): Variants => ({
-  closed: { height: 0, transition: reduce ? { duration: 0 } : { duration: 0.26, ease: EASE_IN } },
-  open: {
-    height: "auto",
-    transition: reduce ? { duration: 0 } : { duration: 0.46, ease: EASE_OUT, staggerChildren: 0.055, delayChildren: 0.05 },
-  },
-});
-
-const part = (reduce: boolean): Variants => ({
-  closed: { opacity: 0, y: reduce ? 0 : -10, transition: { duration: reduce ? 0 : 0.1 } },
-  open: { opacity: 1, y: 0, transition: reduce ? { duration: 0 } : { duration: 0.36, ease: EASE_OUT } },
-});
+// It unrolls and its sections settle into place one after the other, the
+// way the detail of a table row does (shared/motion.ts).
 
 export function Memo() {
   const [open, setOpen] = useState(false);
@@ -48,7 +31,7 @@ export function Memo() {
             notation, déroulé, rôles, règles de salle, rapport écrit
           </span>
         </span>
-        <span style={{ color: "var(--forest)", transition: reduce ? undefined : "transform 260ms cubic-bezier(0.16, 1, 0.3, 1)", transform: open ? "rotate(180deg)" : "none" }}>
+        <span style={{ color: "var(--forest)", transition: reduce ? undefined : CHEVRON_TURN, transform: open ? "rotate(180deg)" : "none" }}>
           <ChevronDownIcon size="1rem" />
         </span>
       </button>
@@ -57,7 +40,7 @@ export function Memo() {
         {open && (
           <motion.div
             key="memo"
-            variants={frame(reduce)}
+            variants={unrollFrame(reduce)}
             initial="closed"
             animate="open"
             exit="closed"
@@ -142,7 +125,7 @@ export function Memo() {
 // One of the aide-mémoire's sections, settling into place as it opens
 function Part({ className, children }: { className?: string; children: React.ReactNode }) {
   const reduce = useReducedMotion() ?? false;
-  return <motion.section variants={part(reduce)} className={className}>{children}</motion.section>;
+  return <motion.section variants={unrollPart(reduce)} className={className}>{children}</motion.section>;
 }
 
 function Heading({ children }: { children: React.ReactNode }) {

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Alert, Badge, BrutalCard, FadeIn, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented,
 } from "@/features/shared/primitives";
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
+import { DetailPart, DetailRow, ExpandChevron } from "@/features/shared/DetailRow";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { GridIcon } from "@/features/shared/icons";
 import { EmptyState, LoadError, Picker, ROLE_PALETTE } from "@/features/shared/widgets";
@@ -49,10 +50,18 @@ export function EvaluationsPage() {
   const boardQ = useQuery({ queryKey: ["report-assignments"], queryFn: getReportAssignments });
   const [params, setParams] = useSearchParams();
   const view: View = params.get("vue") === "jures" ? "jures" : "passages";
-  // The view and the juror unrolled live in the address, without piling up history
+  // The view and the juror unrolled last live in the address, without piling up history
   const show = (next: View, juror: string | null = null) =>
     setParams(next === "jures" ? { vue: "jures", ...(juror ? { jure: juror } : {}) } : {}, { replace: true });
   const [center, setCenter] = useState<Center | null>(null);
+  const accounts = accountsQ.data;
+  const assigned = boardQ.data?.reports;
+  // Every juror's notes, gathered once per change of the data rather than at each render
+  const sheets = useMemo(
+    () => jurorSheets(accounts ?? [], pools, criteria, oral, report, assigned ?? []),
+    [accounts, pools, criteria, oral, report, assigned],
+  );
+  const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   // Loaded on demand: the xlsx writer is heavy and only needed here.
   const exporter = useExport(async () => (await import("@/lib/services/exportService")).exportGradesXlsx());
 
@@ -60,7 +69,6 @@ export function EvaluationsPage() {
   if (load.loading) return <PageLoading />;
   if (load.failed) return <LoadError onRetry={load.retry} />;
 
-  const teamById = new Map(teams.map((t) => [t.id, t]));
   const source: NoteSource = { criteria, oral, report };
   const quadById = new Map(teams.map((t) => [t.id, t.quadrigram]));
   const nameById = new Map((accountsQ.data ?? []).map((a) => [a.id, `${a.firstName} ${a.lastName}`]));
@@ -86,11 +94,16 @@ export function EvaluationsPage() {
       {view === "jures" ? (
         <FadeIn key="jures">
           <JurorsView
-            sheets={jurorSheets(accountsQ.data ?? [], pools, criteria, oral, report, boardQ.data?.reports ?? [])}
+            sheets={sheets}
             teamById={teamById}
             criteria={criteria}
-            opened={params.get("jure")}
-            onOpen={(id) => show("jures", id)}
+            linked={params.get("jure")}
+            onOpen={(id) => {
+              // Told once the row has settled, so a moment late: only if the
+              // address still shows this reading. The window's address, not
+              // the router's: it changes at the click, before the page follows.
+              if (new URLSearchParams(window.location.search).get("vue") === "jures") show("jures", id);
+            }}
           />
         </FadeIn>
       ) : !selected ? (
@@ -247,9 +260,14 @@ function ResultRow({
         }}
       >
         <td>
-          <div className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900 }}>{passage.label}</div>
-          <div className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-            P{passage.problemNumber} · {slotTime(result.pool.centerDay, passage.slot)?.start}
+          <div className="flex items-center gap-2.5">
+            <ExpandChevron open={open} />
+            <div>
+              <div className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900 }}>{passage.label}</div>
+              <div className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+                P{passage.problemNumber} · {slotTime(result.pool.centerDay, passage.slot)?.start}
+              </div>
+            </div>
           </div>
         </td>
         <td>
@@ -271,40 +289,36 @@ function ResultRow({
           <Badge tone={done === expected ? "sage" : done > 0 ? "saffron" : "neutral"}>{done}/{expected}</Badge>
         </td>
       </tr>
-      {open && (
-        <tr>
-          <td colSpan={7} style={{ borderRight: "none", background: "var(--paper-2)" }}>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 py-2">
-              {sets.map(([label, set, role]) => (
-                <div key={label}>
-                  <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
-                    {label} · {quadById.get(set.teamId) ?? "—"}
-                  </div>
-                  {set.notes.length === 0 ? (
-                    <p className="font-open text-xs italic" style={{ color: "var(--ink-faint)" }}>Pas encore noté.</p>
-                  ) : (
-                    set.notes.map((n) => {
-                      const note = editable(set, role, n.juryId, n.total);
-                      return (
-                        <div key={n.juryId} className="font-open text-xs mb-2.5" style={{ color: "var(--ink)" }}>
-                          <strong className="font-mont">{nameById.get(n.juryId) ?? "?"}</strong> · {fmtNote(n.total)} / {set.max}
-                          {passage.duo && !inDuo.has(n.juryId) && (
-                            <span className="ml-2" title="Ce juré n'est pas, ou plus, dans le duo qui juge ce passage : sa note compte toujours">
-                              <Badge tone="neutral">Hors duo</Badge>
-                            </span>
-                          )}
-                          {n.globalRemark && <span className="block italic" style={{ color: "var(--ink-soft)" }}>« {n.globalRemark} »</span>}
-                          {note && <span className="block"><NoteActions note={note} /></span>}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              ))}
-            </div>
-          </td>
-        </tr>
-      )}
+      <DetailRow open={open} colSpan={7}>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 px-3 py-5">
+          {sets.map(([label, set, role]) => (
+            <DetailPart key={label}>
+              <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
+                {label} · {quadById.get(set.teamId) ?? "—"}
+              </div>
+              {set.notes.length === 0 ? (
+                <p className="font-open text-xs italic" style={{ color: "var(--ink-faint)" }}>Pas encore noté.</p>
+              ) : (
+                set.notes.map((n) => {
+                  const note = editable(set, role, n.juryId, n.total);
+                  return (
+                    <div key={n.juryId} className="font-open text-xs mb-2.5" style={{ color: "var(--ink)" }}>
+                      <strong className="font-mont">{nameById.get(n.juryId) ?? "?"}</strong> · {fmtNote(n.total)} / {set.max}
+                      {passage.duo && !inDuo.has(n.juryId) && (
+                        <span className="ml-2" title="Ce juré n'est pas, ou plus, dans le duo qui juge ce passage : sa note compte toujours">
+                          <Badge tone="neutral">Hors duo</Badge>
+                        </span>
+                      )}
+                      {n.globalRemark && <span className="block italic" style={{ color: "var(--ink-soft)" }}>« {n.globalRemark} »</span>}
+                      {note && <span className="block"><NoteActions note={note} /></span>}
+                    </div>
+                  );
+                })
+              )}
+            </DetailPart>
+          ))}
+        </div>
+      </DetailRow>
     </>
   );
 }
