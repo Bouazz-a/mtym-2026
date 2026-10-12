@@ -5,8 +5,9 @@ import {
   Badge, BrutalCard, Btn, FadeIn, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Stagger,
 } from "@/features/shared/primitives";
 import { CalendarIcon } from "@/features/shared/icons";
-import { EmptyState, LoadError, RoleLine, StatCard } from "@/features/shared/widgets";
+import { EmptyState, LoadError, RoleLine, StatCard, StatStrip, type Stat } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
+import { useMediaQuery } from "@/features/shared/useMediaQuery";
 import { useSession } from "@/features/shared/SessionContext";
 import { getOralEvaluations, getReportEvaluations } from "@/lib/repositories/evaluationRepository";
 import { getPools } from "@/lib/repositories/poolRepository";
@@ -35,6 +36,9 @@ export function JuryDashboard() {
   const oralQ = useQuery({ queryKey: ["oral-evaluations", "mine"], queryFn: () => getOralEvaluations({ mine: true }) });
   const reportQ = useQuery({ queryKey: ["report-evaluations", "mine"], queryFn: () => getReportEvaluations({ mine: true }) });
   const loading = poolsQ.isLoading || teamsQ.isLoading || oralQ.isLoading || reportQ.isLoading;
+  // On a phone the three figures share one compact card: the planning,
+  // which is what the page is opened for, stays on the first screen
+  const roomy = useMediaQuery("(min-width: 640px)");
   const guideWanted = params.get("guide") === "1" || (user ? !hasSeenGuide(user.id) : false);
   useJuryGuide("planning", !loading && guideWanted, user?.id);
 
@@ -59,6 +63,11 @@ export function JuryDashboard() {
   const dayPassages = mine.filter((p) => p.pool.centerDay?.id === day?.id);
   const firstPassageId = [...dayPassages].sort((a, b) => a.slot - b.slot)[0]?.id; // the guide points at it
   const coJurors = dayPassages[0]?.duo?.members.filter((m) => m.id !== user?.id) ?? [];
+  const stats: Stat[] = [
+    { label: "Passages", value: mine.length },
+    { label: "Oraux notés", value: mine.reduce((s, p) => s + oralDone(p), 0), denom: mine.length * 3, progressColor: "var(--sage)" },
+    { label: "Rapports notés", value: mine.filter(reportDone).length, denom: mine.length, progressColor: "var(--forest-soft)" },
+  ];
 
   return (
     <PageMotion className="space-y-10">
@@ -77,26 +86,18 @@ export function JuryDashboard() {
         <EmptyState icon={CalendarIcon} title="Aucun passage pour l'instant" sub="Les organisateurs ne vous ont pas encore attribué de passage." />
       ) : (
         <>
-          <Stagger className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <StatCard label="Passages" value={mine.length} />
-            <StatCard
-              label="Oraux notés"
-              value={mine.reduce((s, p) => s + oralDone(p), 0)}
-              denom={mine.length * 3}
-              progressColor="var(--sage)"
-            />
-            <StatCard
-              label="Rapports notés"
-              value={mine.filter(reportDone).length}
-              denom={mine.length}
-              progressColor="var(--forest-soft)"
-            />
-          </Stagger>
+          {roomy ? (
+            <Stagger className="grid grid-cols-3 gap-6">
+              {stats.map((s) => <StatCard key={s.label} {...s} />)}
+            </Stagger>
+          ) : (
+            <StatStrip stats={stats} />
+          )}
 
           {days.length > 1 && day && (
             <div data-tour="day-picker" className="inline-block">
               <Segmented
-                options={days.map((d) => ({ value: d.id, label: `${centerLabel(d.center)} · ${formatDay(d.date)}` }))}
+                options={days.map((d) => ({ value: d.id, label: `${centerLabel(d.center)}, ${formatDay(d.date)}` }))}
                 value={day.id}
                 onChange={(id) => setParams({ jour: id }, { replace: true })}
               />
@@ -107,11 +108,16 @@ export function JuryDashboard() {
             <FadeIn key={day.id}>
               <section>
                 <SectionHeading
-                  title={`Mon planning · ${centerLabel(day.center)} · ${formatDay(day.date)}`}
+                  title={`Mon planning, ${centerLabel(day.center)}, ${formatDay(day.date)}`}
                   right={coJurors.length > 0 && (
-                    <Badge tone="dark">
-                      Duo {dayPassages[0].duo?.number} · avec {coJurors.map((j) => `${j.firstName} ${j.lastName}`).join(", ")}
-                    </Badge>
+                    // The duo in its badge, its jurors beside it in plain text:
+                    // on a phone the names wrap, where a badge would run off the screen
+                    <span className="inline-flex items-baseline flex-wrap gap-x-2 gap-y-1 min-w-0">
+                      <Badge tone="dark">Duo {dayPassages[0].duo?.number}</Badge>
+                      <span className="font-open text-sm" style={{ color: "var(--ink-soft)" }}>
+                        avec {coJurors.map((j) => `${j.firstName} ${j.lastName}`).join(", ")}
+                      </span>
+                    </span>
                   )}
                 />
                 <BrutalCard className="overflow-hidden" data-tour="planning">
@@ -138,7 +144,7 @@ export function JuryDashboard() {
                                 <PassageSlot
                                   key={p.id}
                                   passage={p}
-                                  quad={(id) => teamById.get(id)?.quadrigram ?? "—"}
+                                  quad={(id) => teamById.get(id)?.quadrigram ?? "?"}
                                   oral={oralDone(p)}
                                   report={reportDone(p)}
                                   tourAnchors={p.id === firstPassageId}
@@ -172,7 +178,7 @@ function PauseBand({ minutes }: { minutes: number }) {
         background: "repeating-linear-gradient(135deg, var(--paper) 0 0.375rem, var(--paper-2) 0.375rem 0.75rem)",
       }}
     >
-      {minutes > 0 ? `Pause · ${minutes} min` : "Sans pause"}
+      {minutes > 0 ? `Pause de ${minutes} min` : "Sans pause"}
     </div>
   );
 }
@@ -201,7 +207,7 @@ function PassageSlot({
             Problème {passage.problemNumber}
           </span>
           <span className="font-mont text-micro" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-            {passage.label}{passage.room ? ` · Salle ${passage.room}` : ""}
+            {passage.label}{passage.room ? `, salle ${passage.room}` : ""}
           </span>
         </div>
         <div className="space-y-1">
@@ -212,10 +218,10 @@ function PassageSlot({
       </div>
       <div className="flex items-center gap-2 ml-auto flex-wrap">
         <Link to={`/passages/${passage.id}`} data-tour={anchor("oral-button")}>
-          <Btn size="sm" variant={oral === 3 ? "ghost" : "primary"}>Oral · {oral}/3</Btn>
+          <Btn size="sm" variant={oral === 3 ? "ghost" : "primary"}>Oral {oral}/3</Btn>
         </Link>
         <Link to={`/passages/${passage.id}?onglet=rapport`} data-tour={anchor("report-button")}>
-          <Btn size="sm" variant={report ? "ghost" : "forest"}>Rapport · {report ? "noté" : "à noter"}</Btn>
+          <Btn size="sm" variant={report ? "ghost" : "forest"}>Rapport {report ? "noté" : "à noter"}</Btn>
         </Link>
       </div>
     </div>

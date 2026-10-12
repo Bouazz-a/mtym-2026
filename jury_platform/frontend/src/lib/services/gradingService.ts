@@ -37,14 +37,10 @@ export function oralCriteria(criteria: Criterion[], role: PassageRole): Criterio
   return criteria.filter((c) => c.type === "oral" && c.role === role).sort((a, b) => a.order - b.order);
 }
 
-/** Round a note to 2 decimals for display. */
-export function fmtNote(n: number): string {
-  return (Math.round(n * 100) / 100).toString();
-}
-
-/** A note as the jurors read it: French decimal comma, true minus sign ("−1,25"). */
+/** A note as every screen shows it: rounded to the hundredth, French decimal
+ *  comma, true minus sign ("−1,25"). The only way a note is written out. */
 export function frNote(n: number): string {
-  return fmtNote(n).replace(".", ",").replace(/^-/, "−");
+  return (Math.round(n * 100) / 100).toString().replace(".", ",").replace(/^-/, "−");
 }
 
 /** A success rate as typed ("0,1", "0.1", ".5"): between 0 and 1, to the

@@ -99,4 +99,4 @@ export function navFor(user: AuthUser | null): NavEntry[] {
 }
 
 export const roleLabel = (user: AuthUser) =>
-  user.role === "admin" && user.isJuror ? "Administration · Jury" : ROLE_LABEL[user.role];
+  user.role === "admin" && user.isJuror ? "Administration et jury" : ROLE_LABEL[user.role];

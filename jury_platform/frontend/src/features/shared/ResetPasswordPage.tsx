@@ -126,7 +126,7 @@ export function ResetPasswordPage() {
                 />
               </Field>
               <Btn type="submit" disabled={busy} className="w-full justify-center">
-                {busy ? "Enregistrement…" : "Enregistrer et me connecter"}
+                {busy ? "Enregistrement..." : "Enregistrer et me connecter"}
               </Btn>
             </form>
           </>

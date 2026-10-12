@@ -90,12 +90,12 @@ export function DayDraw({
   const choiceSummary = choices
     .map((n, i) => (n > 0 ? `${n} × ${ordinal(i + 1)}` : null))
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   return (
     <section>
       <SectionHeading
-        title={`Jour ${dayIndex + 1} · ${formatDay(day.date)}`}
+        title={`Jour ${dayIndex + 1}, ${formatDay(day.date)}`}
         right={
           <div className="flex items-center gap-2 flex-wrap">
             <Badge tone="neutral">{teams.length} équipes</Badge>
@@ -107,7 +107,7 @@ export function DayDraw({
             )}
             {validated && (
               <Badge tone="sage">
-                Tirage validé{day.drawValidatedAt ? ` · ${formatDay(day.drawValidatedAt.slice(0, 10))}` : ""}
+                Tirage validé{day.drawValidatedAt ? ` le ${formatDay(day.drawValidatedAt.slice(0, 10))}` : ""}
               </Badge>
             )}
             {drawn ? (
@@ -116,7 +116,7 @@ export function DayDraw({
                     explains what to do with them instead. */}
                 {freeTeams.length >= 3 && (
                   <Btn size="sm" disabled={busy} title="Tire seulement les équipes encore sans poule" onClick={complete}>
-                    {busy ? "Tirage…" : `Compléter le tirage (${freeTeams.length})`}
+                    {busy ? "Tirage..." : `Compléter le tirage (${freeTeams.length})`}
                   </Btn>
                 )}
                 <Btn variant="ghost" size="sm" disabled={busy} onClick={() => setConfirm("redraw")}>Refaire le tirage</Btn>
@@ -129,7 +129,7 @@ export function DayDraw({
                 title={undrawable ? "Il faut au moins 3 équipes pour former une poule" : undefined}
                 onClick={draw}
               >
-                {busy ? "Tirage…" : "Tirer les poules"}
+                {busy ? "Tirage..." : "Tirer les poules"}
               </Btn>
             )}
             <Btn variant="ghost" size="sm" disabled={busy} onClick={() => setAdding(true)}>
@@ -207,7 +207,7 @@ export function DayDraw({
         ) : (
           <BrutalCard className="p-6" withCorners={false} style={{ borderStyle: "dashed", boxShadow: "none" }}>
             <p className="font-open text-sm italic" style={{ color: "var(--ink-faint)" }}>
-              Pas encore de tirage pour ce jour — tirez les poules, ou composez-en une à la main.
+              Pas encore de tirage pour ce jour : tirez les poules, ou composez-en une à la main.
             </p>
           </BrutalCard>
         )}
@@ -306,7 +306,7 @@ function ValidationModal({
         />
         <ImpactList
           title={`${plural(impact?.assigned.length ?? 0, "rapport")} attribué${(impact?.assigned.length ?? 0) > 1 ? "s" : ""}`}
-          items={(impact?.assigned ?? []).map((r) => `${r.team} P${r.problemNumber} → ${r.juror}`)}
+          items={(impact?.assigned ?? []).map((r) => `${r.team} P${r.problemNumber} : ${r.juror}`)}
         />
         <ImpactList
           title={`${plural(impact?.unassigned.length ?? 0, "rapport")} à attribuer à la main`}
@@ -350,7 +350,7 @@ function SwapTeams({ dayId, teams }: { dayId: string; teams: Team[] }) {
   const select = (value: string, onChange: (v: string) => void) => (
     <Select value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "13.75rem" }}>
       <option value="">Choisir une équipe</option>
-      {sorted.map((t) => <option key={t.id} value={t.id}>{t.quadrigram} · {t.name}</option>)}
+      {sorted.map((t) => <option key={t.id} value={t.id}>{t.quadrigram} ({t.name})</option>)}
     </Select>
   );
 

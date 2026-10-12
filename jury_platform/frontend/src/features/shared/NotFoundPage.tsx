@@ -14,7 +14,7 @@ export function NotFoundPage() {
   const { role } = useSession();
   const { pathname } = useLocation();
   return (
-    <PageMotion className="space-y-10 pt-4 sm:pt-6">
+    <PageMotion className="space-y-10">
       <NotFoundHero />
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] gap-8 items-start">
         <div>
@@ -41,7 +41,7 @@ export function NotFoundPage() {
 // struck through as the conclusion lands.
 function ProofCard({ path }: { path: string }) {
   const reduce = useReducedMotion();
-  const shown = path.length > 48 ? `${path.slice(0, 47)}…` : path;
+  const shown = path.length > 48 ? `${path.slice(0, 45)}...` : path;
   const line = (i: number) =>
     reduce
       ? {}

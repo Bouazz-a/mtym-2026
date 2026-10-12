@@ -70,7 +70,7 @@ function DefensePresentation({ team, problemNumber, practice }: { team: Team | u
       <PresentationViewer
         presentationId={presentation.id}
         src={practice ? SAMPLE_PRESENTATION : undefined}
-        title={`${team.quadrigram} · Présentation du problème ${problemNumber}`}
+        title={`${team.quadrigram}, présentation du problème ${problemNumber}`}
       />
     </div>
   );

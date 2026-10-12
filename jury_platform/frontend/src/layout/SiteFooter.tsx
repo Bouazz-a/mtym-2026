@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { MtymLogo } from "@/features/shared/widgets";
 import { useSession } from "@/features/shared/SessionContext";
 import { isNavMenu, navFor, type NavItem } from "./navigation";
@@ -22,6 +22,7 @@ export function SiteFooter() {
   const { user } = useSession();
   const year = new Date().getFullYear();
   const bandRef = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
 
   const entries = navFor(user);
   const pages = entries.filter((e): e is NavItem => !isNavMenu(e));
@@ -30,6 +31,9 @@ export function SiteFooter() {
   const groups = entries.filter(isNavMenu).flatMap(menu =>
     menu.sections.map(s => ({ title: s.title ?? menu.label, items: s.items })),
   );
+  // Nobody signed in (the login page): no page to list, so no "Plateforme"
+  // column, and the presentation takes its room
+  const hasPages = entries.length > 0;
 
   useEffect(() => {
     registerDarkRegion(bandRef.current);
@@ -51,14 +55,14 @@ export function SiteFooter() {
         <motion.div
           className="relative shell pt-14 pb-10"
           style={{ zIndex: 1 }}
-          initial={{ opacity: 0, y: 16 }}
+          initial={reduce ? false : { opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.2 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
           {/* Four columns from xl; 2×2 from md, where four don't fit */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-y-8 md:gap-x-10 xl:gap-x-0">
-            <div className="xl:col-span-3 xl:pr-8 xl:border-r xl:border-[rgba(244,236,216,0.10)]">
+            <div className={`${hasPages ? "xl:col-span-3" : "xl:col-span-7"} xl:pr-8 xl:border-r xl:border-[rgba(244,236,216,0.10)]`}>
               <div className="flex items-center gap-4 mb-5">
                 <MtymLogo size="1.875rem" />
                 <span
@@ -83,35 +87,37 @@ export function SiteFooter() {
               </p>
             </div>
 
-            <FooterColumn
-              title="Plateforme"
-              className="xl:col-span-4 xl:px-8 xl:border-r xl:border-[rgba(244,236,216,0.10)]"
-            >
-              {pages.map(item => <PageLink key={item.to} item={item} />)}
-              {/* The groups alternate between two columns: Logistique |
-                  Scientifique, then Administration under Logistique */}
-              {groups.length > 0 && (
-                <li className="grid grid-cols-2 gap-x-6">
-                  {[0, 1].map(col => (
-                    <div key={col} className="space-y-1.5">
-                      {groups.filter((_, i) => i % 2 === col).map(group => (
-                        <div key={group.title} className="pt-3">
-                          <div
-                            className="font-mont text-micro uppercase tracking-widest mb-1.5"
-                            style={{ color: "rgba(244,236,216,0.6)", fontWeight: 700 }}
-                          >
-                            {group.title}
+            {hasPages && (
+              <FooterColumn
+                title="Plateforme"
+                className="xl:col-span-4 xl:px-8 xl:border-r xl:border-[rgba(244,236,216,0.10)]"
+              >
+                {pages.map(item => <PageLink key={item.to} item={item} />)}
+                {/* The groups alternate between two columns: Logistique |
+                    Scientifique, then Administration under Logistique */}
+                {groups.length > 0 && (
+                  <li className="grid grid-cols-2 gap-x-6">
+                    {[0, 1].map(col => (
+                      <div key={col} className="space-y-1.5">
+                        {groups.filter((_, i) => i % 2 === col).map(group => (
+                          <div key={group.title} className="pt-3">
+                            <div
+                              className="font-mont text-micro uppercase tracking-widest mb-1.5"
+                              style={{ color: "rgba(244,236,216,0.6)", fontWeight: 700 }}
+                            >
+                              {group.title}
+                            </div>
+                            <ul className="space-y-1.5">
+                              {group.items.map(item => <PageLink key={item.to} item={item} />)}
+                            </ul>
                           </div>
-                          <ul className="space-y-1.5">
-                            {group.items.map(item => <PageLink key={item.to} item={item} />)}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </li>
-              )}
-            </FooterColumn>
+                        ))}
+                      </div>
+                    ))}
+                  </li>
+                )}
+              </FooterColumn>
+            )}
 
             <FooterColumn
               title="À propos"
@@ -173,8 +179,8 @@ export function SiteFooter() {
               className="font-mont text-micro uppercase tracking-widest"
               style={{ color: "rgba(244,236,216,0.6)", fontWeight: 600 }}
             >
-              <span style={{ color: "var(--saffron)" }}>◆</span>{" "}
-              © {year} Math&amp;Maroc · Tous droits réservés
+              <span aria-hidden className="diamond-marker" style={{ background: "var(--saffron)", marginRight: "0.5rem", verticalAlign: "0.1em" }} />
+              © {year} Math&amp;Maroc. Tous droits réservés
             </div>
           </div>
         </motion.div>
@@ -183,7 +189,7 @@ export function SiteFooter() {
       <style>{`
         .footer-link {
           display: inline-block;
-          font-family: 'Montserrat', sans-serif;
+          font-family: var(--font-display);
           font-size: 0.78rem;
           letter-spacing: 0.04em;
           color: rgba(244,236,216,0.65);
@@ -191,7 +197,6 @@ export function SiteFooter() {
           transition: color 160ms, transform 160ms;
           padding: 0.125rem 0;
         }
-        .footer-link:hover { color: var(--saffron); transform: translateX(2px); }
         .footer-social {
           display: inline-flex;
           align-items: center;
@@ -202,14 +207,22 @@ export function SiteFooter() {
           border: 1px solid rgba(244,236,216,0.18);
           transition: color 160ms, border-color 160ms, background 160ms, transform 160ms;
         }
-        .footer-social:hover {
-          color: var(--forest);
-          background: var(--saffron);
-          border-color: var(--saffron);
-          transform: translateY(-1px);
+        .footer-link:focus-visible, .footer-social:focus-visible {
+          outline: 2px solid var(--saffron);
+          outline-offset: 2px;
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .footer-link:hover { color: var(--saffron); transform: translateX(2px); }
+          .footer-social:hover {
+            color: var(--forest);
+            background: var(--saffron);
+            border-color: var(--saffron);
+            transform: translateY(-1px);
+          }
         }
         @media (prefers-reduced-motion: reduce) {
           .site-footer-band { background: var(--forest); }
+          .footer-link:hover, .footer-social:hover { transform: none; }
         }
       `}</style>
     </footer>

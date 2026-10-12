@@ -4,8 +4,9 @@ import { Badge, Btn, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHea
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
 import { DocumentIcon } from "@/features/shared/icons";
-import { EmptyState, LoadError, StatCard } from "@/features/shared/widgets";
+import { EmptyState, LoadError, StatCard, StatStrip, type Stat } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
+import { useMediaQuery } from "@/features/shared/useMediaQuery";
 import { useSession } from "@/features/shared/SessionContext";
 import { planningPath } from "@/layout/navigation";
 import { getReportEvaluations } from "@/lib/repositories/evaluationRepository";
@@ -13,7 +14,7 @@ import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getMyReports } from "@/lib/repositories/reportAssignmentRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import type { FilterColumn } from "@/lib/services/columnFilters";
-import { fmtNote, reportCriteria, weightedNote } from "@/lib/services/gradingService";
+import { frNote, reportCriteria, weightedNote } from "@/lib/services/gradingService";
 import type { Team } from "@/types";
 
 // MyReportsPage — "Mes rapports": the reports the organizers handed to the
@@ -27,7 +28,7 @@ interface Row {
   note: number | null; // out of 20, null until saved
 }
 
-const teamText = (r: Row) => (r.team ? `${r.team.quadrigram} · ${r.team.name}` : "");
+const teamText = (r: Row) => (r.team ? `${r.team.quadrigram} (${r.team.name})` : "");
 
 const FILTER_COLUMNS: FilterColumn<Row>[] = [
   { key: "team", label: "Équipe", value: teamText, text: teamText },
@@ -36,7 +37,7 @@ const FILTER_COLUMNS: FilterColumn<Row>[] = [
     key: "note",
     label: "Note",
     value: (r) => r.note,
-    text: (r) => (r.note === null ? "" : fmtNote(r.note)),
+    text: (r) => (r.note === null ? "" : frNote(r.note)),
     range: true,
   },
 ];
@@ -48,6 +49,7 @@ export function MyReportsPage() {
   const teamsQ = useQuery({ queryKey: ["teams"], queryFn: () => getTeams() });
   const criteriaQ = useQuery({ queryKey: ["criteria"], queryFn: getCriteria });
   const evalsQ = useQuery({ queryKey: ["report-evaluations", "mine"], queryFn: () => getReportEvaluations({ mine: true }) });
+  const roomy = useMediaQuery("(min-width: 640px)"); // on a phone the figures share one compact card (StatStrip)
 
   const teamById = new Map((teamsQ.data ?? []).map((t) => [t.id, t]));
   const rows: Row[] = (mineQ.data ?? [])
@@ -69,6 +71,10 @@ export function MyReportsPage() {
   if (load.failed) return <LoadError onRetry={load.retry} />;
 
   const done = rows.filter((r) => r.note !== null).length;
+  const stats: Stat[] = [
+    { label: "Rapports", value: rows.length },
+    { label: "Corrigés", value: done, denom: rows.length, progressColor: "var(--sage)", highlight: done === rows.length },
+  ];
   const open = (r: Row) => navigate(`/mes-rapports/${r.reportId}`);
 
   return (
@@ -88,10 +94,13 @@ export function MyReportsPage() {
         />
       ) : (
         <>
-          <Stagger className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <StatCard label="Rapports" value={rows.length} />
-            <StatCard label="Corrigés" value={done} denom={rows.length} progressColor="var(--sage)" highlight={done === rows.length} />
-          </Stagger>
+          {roomy ? (
+            <Stagger className="grid grid-cols-2 gap-6">
+              {stats.map((s) => <StatCard key={s.label} {...s} />)}
+            </Stagger>
+          ) : (
+            <StatStrip stats={stats} />
+          )}
 
           <section>
             <SectionHeading
@@ -132,7 +141,7 @@ export function MyReportsPage() {
                       >
                         <td>
                           <div className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900, letterSpacing: "0.05em" }}>
-                            {r.team?.quadrigram ?? "—"}
+                            {r.team?.quadrigram ?? "?"}
                           </div>
                           <div className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>{r.team?.name}</div>
                         </td>
@@ -144,7 +153,7 @@ export function MyReportsPage() {
                         <td style={{ borderRight: "none" }}>
                           {r.note !== null ? (
                             <span className="font-mont text-sm" style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
-                              {fmtNote(r.note)}
+                              {frNote(r.note)}
                               <span className="text-micro" style={{ color: "var(--ink-faint)" }}> /20</span>
                             </span>
                           ) : (

@@ -76,7 +76,7 @@ export function PassageView({ data, coJurors, banner }: { data: PassageData; coJ
       <BackLink />
       {banner}
       <PageHeader
-        eyebrow={day ? `${centerLabel(day.center)} · ${formatDay(day.date)} · Poule ${passage.pool.label}` : `Poule ${passage.pool.label}`}
+        eyebrow={day ? `${centerLabel(day.center)}, ${formatDay(day.date)}, poule ${passage.pool.label}` : `Poule ${passage.pool.label}`}
         title={`Passage ${passage.label}`}
         sub="Vos notes ne sont visibles que par l'administration."
         right={<Badge tone="dark">Problème {passage.problemNumber}</Badge>}
@@ -84,10 +84,10 @@ export function PassageView({ data, coJurors, banner }: { data: PassageData; coJ
 
       <BrutalCard className="overflow-hidden" data-tour="passage-info">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: "var(--border)" }}>
-          <InfoCell label="Horaire" value={time ? `${time.start} – ${time.end}` : "—"} />
-          <InfoCell label="Salle" value={passage.room ?? "—"} />
-          <InfoCell label="Avec" value={coJurors || "—"} />
-          <InfoCell label="Observateur" value={passage.extraTeamId ? teamById.get(passage.extraTeamId)?.quadrigram ?? "—" : "—"} />
+          <InfoCell label="Horaire" value={time ? `${time.start} à ${time.end}` : "à définir"} />
+          <InfoCell label="Salle" value={passage.room ?? "à définir"} />
+          <InfoCell label="Avec" value={coJurors || "personne"} />
+          <InfoCell label="Observateur" value={passage.extraTeamId ? teamById.get(passage.extraTeamId)?.quadrigram ?? "?" : "aucun"} />
         </div>
       </BrutalCard>
 

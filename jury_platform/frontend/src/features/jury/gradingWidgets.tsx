@@ -185,7 +185,7 @@ function Points({ score, coefficient }: { score: number; coefficient: number }) 
       </span>
       {malus ? (
         <span className="block text-micro uppercase tracking-widest" style={{ color: "var(--clay)", fontWeight: 800 }}>
-          malus · jusqu'à {frNote(coefficient)}
+          malus, jusqu'à {frNote(coefficient)}
         </span>
       ) : (
         <span className="text-xs" style={{ color: "var(--ink-faint)", fontWeight: 700 }}> / {frNote(coefficient)} {unit}</span>
@@ -315,7 +315,7 @@ export function CriterionGradingTable({
   return (
     <div className="space-y-4">
       {groups.map(([theme, list]) => (
-        <div key={theme || "—"}>
+        <div key={theme || "sans thème"}>
           {theme && (
             <div
               className="font-mont text-tiny uppercase tracking-widest mb-1.5 px-1"
@@ -392,7 +392,7 @@ function CriterionRow({
         value={d.remark}
         disabled={disabled}
         onChange={(e) => onChange({ remark: e.target.value })}
-        placeholder="Commentaire (optionnel)…"
+        placeholder="Commentaire (optionnel)"
         aria-label={`${c.label} : commentaire`}
         className="w-full px-2 py-1.5 text-xs font-open focus-ring"
         style={FIELD_STYLE}

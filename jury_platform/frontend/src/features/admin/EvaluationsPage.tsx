@@ -13,7 +13,7 @@ import { queryState } from "@/features/shared/queryState";
 import { getAccounts } from "@/lib/repositories/accountRepository";
 import { getReportAssignments } from "@/lib/repositories/reportAssignmentRepository";
 import type { FilterColumn } from "@/lib/services/columnFilters";
-import { fmtNote, oralCriteria, reportCriteria } from "@/lib/services/gradingService";
+import { frNote, oralCriteria, reportCriteria } from "@/lib/services/gradingService";
 import { jurorSheets } from "@/lib/services/jurorNotes";
 import {
   centersWithPools, daysOfCenter, FINAL_PART_LABELS, GRADED_ROLES, type NoteSet, type PassageResult,
@@ -115,7 +115,7 @@ export function EvaluationsPage() {
             {daysOfCenter(results, selected).map(([date, dayResults]) => (
               <DayTable
                 key={`${selected}-${date}`}
-                title={`${centerLabel(selected)} · ${formatDay(date)}`}
+                title={`${centerLabel(selected)}, ${formatDay(date)}`}
                 results={dayResults}
                 quadById={quadById}
                 nameById={nameById}
@@ -131,7 +131,7 @@ export function EvaluationsPage() {
 
 // ─── One day's table, with spreadsheet-style filters on the notes ─────
 
-const noteText = (set: NoteSet) => (set.average === null ? "" : fmtNote(set.average));
+const noteText = (set: NoteSet) => (set.average === null ? "" : frNote(set.average));
 
 const FILTER_COLUMNS: FilterColumn<PassageResult>[] = [
   ...GRADED_ROLES.map((role) => ({
@@ -265,7 +265,7 @@ function ResultRow({
             <div>
               <div className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900 }}>{passage.label}</div>
               <div className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-                P{passage.problemNumber} · {slotTime(result.pool.centerDay, passage.slot)?.start}
+                P{passage.problemNumber}, {slotTime(result.pool.centerDay, passage.slot)?.start}
               </div>
             </div>
           </div>
@@ -294,7 +294,7 @@ function ResultRow({
           {sets.map(([label, set, role]) => (
             <DetailPart key={label}>
               <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>
-                {label} · {quadById.get(set.teamId) ?? "—"}
+                {label} : {quadById.get(set.teamId) ?? "?"}
               </div>
               {set.notes.length === 0 ? (
                 <p className="font-open text-xs italic" style={{ color: "var(--ink-faint)" }}>Pas encore noté.</p>
@@ -303,7 +303,7 @@ function ResultRow({
                   const note = editable(set, role, n.juryId, n.total);
                   return (
                     <div key={n.juryId} className="font-open text-xs mb-2.5" style={{ color: "var(--ink)" }}>
-                      <strong className="font-mont">{nameById.get(n.juryId) ?? "?"}</strong> · {fmtNote(n.total)} / {set.max}
+                      <strong className="font-mont">{nameById.get(n.juryId) ?? "?"}</strong> : {frNote(n.total)} / {set.max}
                       {passage.duo && !inDuo.has(n.juryId) && (
                         <span className="ml-2" title="Ce juré n'est pas, ou plus, dans le duo qui juge ce passage : sa note compte toujours">
                           <Badge tone="neutral">Hors duo</Badge>
@@ -326,12 +326,12 @@ function ResultRow({
 function NoteCell({ quad, set }: { quad: string | undefined; set: NoteSet }) {
   return (
     <div className="flex items-baseline gap-2 whitespace-nowrap">
-      <span className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900, letterSpacing: "0.05em" }}>{quad ?? "—"}</span>
+      <span className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900, letterSpacing: "0.05em" }}>{quad ?? "?"}</span>
       {set.average === null ? (
-        <span className="font-mont text-xs" style={{ color: "var(--ink-faint)" }}>—</span>
+        <span className="font-open text-micro" style={{ color: "var(--ink-faint)" }}>en attente</span>
       ) : (
-        <span className="font-mont text-sm" style={{ color: "var(--saffron-dark)", fontWeight: 900 }} title={`${set.notes.length} juré(s) · max ${set.max}`}>
-          {fmtNote(set.average)}
+        <span className="font-mont text-sm" style={{ color: "var(--saffron-dark)", fontWeight: 900 }} title={`${set.notes.length} juré(s), max ${set.max}`}>
+          {frNote(set.average)}
           <span className="text-micro" style={{ color: "var(--ink-faint)" }}> /{set.max}</span>
         </span>
       )}

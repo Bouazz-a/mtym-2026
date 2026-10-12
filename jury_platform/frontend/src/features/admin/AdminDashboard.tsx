@@ -95,7 +95,7 @@ export function AdminDashboard() {
         </Picker>
         <div className="flex items-center gap-3 font-open text-xs" style={{ color: "var(--ink-faint)" }}>
           <span aria-live="polite">
-            {refreshing ? "Mise à jour…" : `Mis à jour à ${updatedAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`}
+            {refreshing ? "Mise à jour..." : `Mis à jour à ${updatedAt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`}
           </span>
           <Btn variant="ghost" size="sm" disabled={refreshing} onClick={refresh}>Actualiser</Btn>
         </div>
@@ -140,16 +140,16 @@ export function AdminDashboard() {
                     >
                       <td className="font-mont" style={{ color: "var(--forest)", fontWeight: 900 }}>{r.label}</td>
                       <td style={{ textAlign: "center" }} className="font-mont">{r.teams}</td>
-                      <td style={{ textAlign: "center" }} className="font-mont">{r.days || "—"}</td>
+                      <td style={{ textAlign: "center" }} className="font-mont">{r.days}</td>
                       <td>
                         {r.withoutDay === 0
                           ? <Badge tone="sage">Toutes placées</Badge>
                           : <Badge tone="saffron">{r.withoutDay} sans jour</Badge>}
                       </td>
-                      <td style={{ textAlign: "center" }} className="font-mont">{r.pools || "—"}</td>
+                      <td style={{ textAlign: "center" }} className="font-mont">{r.pools}</td>
                       <td>
                         {r.passages === 0
-                          ? <span style={{ color: "var(--ink-faint)" }}>—</span>
+                          ? <span className="font-open text-xs" style={{ color: "var(--ink-faint)" }}>aucun passage</span>
                           : <Badge tone={r.withDuo === r.passages ? "sage" : "saffron"}>{r.withDuo}/{r.passages} passages</Badge>}
                       </td>
                       <td style={{ borderRight: "none" }}>

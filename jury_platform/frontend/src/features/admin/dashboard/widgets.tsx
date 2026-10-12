@@ -20,7 +20,7 @@ import { hatch } from "./hatch";
 const longDay = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 
-const figure = (done: number, total: number) => (total > 0 ? `${done}/${total}` : "—");
+const figure = (done: number, total: number) => (total > 0 ? `${done}/${total}` : "0");
 
 // A small segmented control for a widget's header
 function Toggle<T extends string>({ options, value, onChange, label }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
@@ -94,7 +94,7 @@ export function DayReadiness({ data, today, className }: { data: DashboardData; 
             {centerLabel(day.center)}
           </div>
           <div className="font-open text-sm mt-1.5 first-letter:uppercase" style={{ color: "var(--ink-soft)" }}>
-            {longDay(day.date)} · {teams} équipe{teams > 1 ? "s" : ""} · {pools} poule{pools > 1 ? "s" : ""}
+            {longDay(day.date)}, {teams} équipe{teams > 1 ? "s" : ""}, {pools} poule{pools > 1 ? "s" : ""}
           </div>
         </div>
         <Badge tone={when === "Aujourd'hui" ? "sage" : upcoming ? "saffron" : "neutral"}>{when}</Badge>
@@ -122,7 +122,7 @@ function StatusMark({ state, size = "1.5rem" }: { state: DayCheck["state"]; size
       className="shrink-0 grid place-items-center font-mont"
       style={{ width: size, height: size, background: m.bg, color: m.fg, border: `1.5px solid ${m.bd}`, fontWeight: 900, fontSize: "0.7rem" }}
     >
-      {state === "done" ? <CheckIcon size="0.7rem" /> : state === "todo" ? "!" : "·"}
+      {state === "done" ? <CheckIcon size="0.7rem" /> : state === "todo" ? "!" : ""}
     </span>
   );
 }
@@ -138,11 +138,11 @@ function CheckRow({ check: c }: { check: DayCheck }) {
           <span className="flex items-baseline justify-between gap-3">
             <span className="font-open text-sm truncate" style={{ color: c.state === "later" ? "var(--ink-faint)" : "var(--ink)", fontWeight: 600 }}>
               {c.label}
-              {c.note && <span className="font-normal" style={{ color: "var(--ink-faint)" }}> · {c.note}</span>}
+              {c.note && <span className="font-normal" style={{ color: "var(--ink-faint)" }}>, {c.note}</span>}
             </span>
             {!isFlag && (
               <span className="font-mont text-xs tabular-nums shrink-0" style={{ color: "var(--forest)", fontWeight: 900 }}>
-                {c.loading ? "…" : figure(c.done, c.total)}
+                {c.loading ? "..." : figure(c.done, c.total)}
               </span>
             )}
           </span>
@@ -170,7 +170,7 @@ export function StagesWidget({ stages, className }: { stages: Stage[]; className
                 <span className="flex items-baseline justify-between gap-3 mb-1.5">
                   <span className="font-open text-sm" style={{ color: "var(--ink)", fontWeight: 600 }}>{s.label}</span>
                   <span className="font-mont text-xs tabular-nums" style={{ color: "var(--forest)", fontWeight: 900 }}>
-                    {s.loading ? "…" : figure(s.done, s.total)}
+                    {s.loading ? "..." : figure(s.done, s.total)}
                     {!s.loading && pct !== null && <span className="ml-2" style={{ color: pct === 100 ? "var(--sage-dark)" : "var(--ink-faint)", fontWeight: 700 }}>{pct} %</span>}
                   </span>
                 </span>

@@ -17,6 +17,7 @@ const REPULSE_FORCE = 2.4;
 const FOREST = "18, 32, 25";
 const SAFFRON = "246, 168, 6";
 const GRID = 16; // the graph paper's fine grid (see .graph-paper)
+const DISPLAY_FONT = '"Montserrat Variable"'; // the display face, as a canvas names it (--font-display in index.css)
 
 interface Dot {
   x: number;
@@ -65,8 +66,8 @@ function DotCanvas() {
     let cancelled = false;
     const mouse = { x: 0, y: 0, active: false };
 
-    // Where the digits are: "404" in Montserrat 900 on an offscreen canvas,
-    // sampled every STEP px.
+    // Where the digits are: "404" in the display face (--font-display in
+    // index.css), weight 900, on an offscreen canvas, sampled every STEP px.
     const digitPoints = (w: number, h: number): [number, number][] => {
       const off = document.createElement("canvas");
       off.width = w;
@@ -76,7 +77,7 @@ function DotCanvas() {
       const narrow = w < NARROW;
       const STEP = narrow ? 5 : 8; // sampling step, in CSS px
       const fontSize = Math.min(h * 0.78, w * (narrow ? 0.4 : 0.34));
-      o.font = `900 ${fontSize}px Montserrat, sans-serif`;
+      o.font = `900 ${fontSize}px ${DISPLAY_FONT}, sans-serif`;
       o.textAlign = "center";
       o.textBaseline = "middle";
       o.fillText("404", w / 2, h / 2 + fontSize * 0.04);
@@ -193,7 +194,7 @@ function DotCanvas() {
 
     // The digits need the real font before they're sampled
     document.fonts
-      .load("900 100px Montserrat")
+      .load(`900 100px ${DISPLAY_FONT}`)
       .catch(() => undefined)
       .then(() => {
         if (cancelled) return;

@@ -18,7 +18,7 @@ import {
 } from "@/lib/repositories/reportAssignmentRepository";
 import { getTeams } from "@/lib/repositories/teamRepository";
 import type { FilterColumn } from "@/lib/services/columnFilters";
-import { fmtNote, reportCriteria, weightedNote } from "@/lib/services/gradingService";
+import { frNote, reportCriteria, weightedNote } from "@/lib/services/gradingService";
 import type { Account, AssignableReport, Team } from "@/types";
 import { centerLabel, formatDay } from "@/utils/labels";
 import { REPORT_QUERIES, useAction } from "./useAction";
@@ -245,7 +245,7 @@ function ReportsTable({ rows, jurors, problemsOf }: { rows: Row[]; jurors: Accou
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher une équipe…"
+              placeholder="Rechercher une équipe"
               aria-label="Rechercher une équipe"
               style={{ width: "15rem" }}
             />
@@ -268,16 +268,16 @@ function ReportsTable({ rows, jurors, problemsOf }: { rows: Row[]; jurors: Accou
                 <tr key={row.report.id}>
                   <td>
                     <div className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900, letterSpacing: "0.05em" }}>
-                      {row.team?.quadrigram ?? "—"}
+                      {row.team?.quadrigram ?? "?"}
                     </div>
                     <div className="font-open text-xs truncate" style={{ color: "var(--ink-soft)", maxWidth: "14rem" }}>{row.team?.name}</div>
                   </td>
-                  <td className="font-open text-xs">{row.team ? centerLabel(row.team.center) : "—"}</td>
+                  <td className="font-open text-xs">{row.team ? centerLabel(row.team.center) : "?"}</td>
                   <td><Badge tone="dark">P{row.report.problemNumber}</Badge></td>
                   <td>
                     <ReportViewer
                       reportId={row.report.id}
-                      title={`${row.team?.quadrigram ?? ""} · Rapport du problème ${row.report.problemNumber}`}
+                      title={`${row.team ? `${row.team.quadrigram}, rapport` : "Rapport"} du problème ${row.report.problemNumber}`}
                       label="Voir"
                     />
                   </td>
@@ -293,7 +293,7 @@ function ReportsTable({ rows, jurors, problemsOf }: { rows: Row[]; jurors: Accou
                   </td>
                   <td style={{ borderRight: "none" }}>
                     {row.grade !== null ? (
-                      <Badge tone="sage">{STATUS.done} · {fmtNote(row.grade)}/20</Badge>
+                      <Badge tone="sage">{STATUS.done} : {frNote(row.grade)}/20</Badge>
                     ) : row.juror ? (
                       <Badge tone="neutral">{STATUS.todo}</Badge>
                     ) : (
@@ -359,7 +359,7 @@ function JurorPicker({
   const isSpecialist = (j: Account) => (problemsOf.get(j.id) ?? []).includes(problem);
   const option = (j: Account) => (
     <option key={j.id} value={j.id}>
-      {jurorName(j)} · {load.get(j.id) ?? 0}
+      {jurorName(j)} ({load.get(j.id) ?? 0})
     </option>
   );
 
@@ -375,7 +375,7 @@ function JurorPicker({
         ...(row.juror && !row.specialist && { borderColor: "var(--clay)" }),
       }}
     >
-      <option value="">— Non attribué —</option>
+      <option value="">Non attribué</option>
       <optgroup label={`Spécialistes du P${problem}`}>{jurors.filter(isSpecialist).map(option)}</optgroup>
       <optgroup label="Autres jurés">{jurors.filter((j) => !isSpecialist(j)).map(option)}</optgroup>
     </Select>
@@ -400,13 +400,13 @@ function AutoAssign({ rows, disabledReason }: { rows: Row[]; disabledReason: str
     const parts = [`${res.changed} rapport${res.changed > 1 ? "s" : ""} attribué${res.changed > 1 ? "s" : ""}`];
     if (res.offSpecialty > 0) parts.push(`${res.offSpecialty} hors spécialité`);
     if (res.unassigned > 0) parts.push(`${res.unassigned} sans juré`);
-    setSummary(parts.join(" · "));
+    setSummary(parts.join(", "));
   };
 
   return (
     <div className="flex flex-col items-end gap-2">
       <Btn disabled={busy || disabledReason !== null} title={disabledReason ?? "Répartit les rapports entre les jurés"} onClick={() => setOpen(true)}>
-        {busy ? "Attribution…" : "Attribuer automatiquement"}
+        {busy ? "Attribution..." : "Attribuer automatiquement"}
       </Btn>
       {summary && (
         <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800 }}>

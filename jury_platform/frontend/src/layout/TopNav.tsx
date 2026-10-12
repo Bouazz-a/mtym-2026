@@ -1,10 +1,9 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { useSession } from "@/features/shared/SessionContext";
 import { MtymLogo } from "@/features/shared/widgets";
 import { Popover } from "@/features/shared/primitives";
-import { useSlide } from "@/features/shared/motion";
+import { CHEVRON_TURN, slideFrom } from "@/features/shared/motion";
 import { ChangePasswordModal } from "@/features/shared/ChangePasswordModal";
 import { ChevronDownIcon } from "@/features/shared/icons";
 import { isCurrentPage, isNavMenu, navFor, navPages, planningPath, roleLabel, type NavItem, type NavMenu } from "./navigation";
@@ -19,6 +18,9 @@ export function TopNav() {
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [openNavMenu, setOpenNavMenu] = useState<string | null>(null); // one dropdown at a time
+  // A dropdown opened straight from its neighbour: the two swap at once,
+  // where a fade out crossing a fade in would blur the bar
+  const [swapped, setSwapped] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const chipRef = useRef<HTMLButtonElement>(null);
 
@@ -32,6 +34,7 @@ export function TopNav() {
         background: "var(--forest)",
         color: "var(--paper)",
         borderBottom: "1px solid rgba(255,255,255,0.08)",
+        paddingRight: "var(--scrollbar-gap, 0px)", // see Modal: the bar keeps its place under a dialog
       }}
     >
       <div className="h-full shell flex items-center justify-between">
@@ -46,7 +49,7 @@ export function TopNav() {
               borderLeft: "1px solid rgba(255,255,255,0.12)",
             }}
           >
-            Jury · 2026
+            Jury 2026
           </div>
         </button>
 
@@ -58,7 +61,11 @@ export function TopNav() {
                 key={entry.label}
                 menu={entry}
                 open={openNavMenu === entry.label}
-                onOpenChange={(open) => setOpenNavMenu((cur) => (open ? entry.label : cur === entry.label ? null : cur))}
+                instant={swapped}
+                onOpenChange={(open) => {
+                  setSwapped(open && openNavMenu !== null && openNavMenu !== entry.label);
+                  setOpenNavMenu((cur) => (open ? entry.label : cur === entry.label ? null : cur));
+                }}
               />
             ) : (
               <NavItemLink key={entry.to} item={entry} />
@@ -108,7 +115,7 @@ export function TopNav() {
               </div>
               <ChevronDownIcon
                 size="0.75rem"
-                style={{ color: "rgba(244,236,216,0.55)", transition: "transform 180ms", transform: menuOpen ? "rotate(180deg)" : "none" }}
+                style={{ color: "rgba(244,236,216,0.55)", transition: CHEVRON_TURN, transform: menuOpen ? "rotate(180deg)" : "none" }}
               />
             </button>
 
@@ -159,18 +166,20 @@ export function TopNav() {
 }
 
 // The current page's saffron bar, at the bottom of the top bar: it slides
-// from the page left to the one opened
+// from the page left to the one opened. Each entry draws its own; the one
+// that goes leaves where it was (`bar`) for the one that comes.
+const bar: { leftAt: DOMRect | null } = { leftAt: null };
+
 function ActiveBar() {
-  const slide = useSlide();
-  return (
-    <motion.span
-      layoutId="nav-active-bar"
-      aria-hidden
-      className="absolute left-0 right-0 bottom-0"
-      style={{ height: 3, background: "var(--saffron)" }}
-      transition={slide}
-    />
-  );
+  const ref = useCallback((el: HTMLSpanElement | null) => {
+    if (!el) return;
+    slideFrom(el, bar.leftAt);
+    bar.leftAt = null;
+    return () => {
+      bar.leftAt = el.getBoundingClientRect();
+    };
+  }, []);
+  return <span ref={ref} aria-hidden className="absolute left-0 right-0 bottom-0" style={{ height: 3, background: "var(--saffron)" }} />;
 }
 
 function NavItemLink({ item }: { item: NavItem }) {
@@ -207,7 +216,17 @@ function NavItemLink({ item }: { item: NavItem }) {
 const HOVER_OPEN_DELAY = 100; // ms: sweeping across the bar doesn't flash menus open
 const HOVER_CLOSE_DELAY = 200; // ms: time to reach the panel below the button
 
-function NavMenuButton({ menu, open, onOpenChange }: { menu: NavMenu; open: boolean; onOpenChange: (open: boolean) => void }) {
+function NavMenuButton({
+  menu,
+  open,
+  instant,
+  onOpenChange,
+}: {
+  menu: NavMenu;
+  open: boolean;
+  instant: boolean; // it swaps with a neighbour: no fade
+  onOpenChange: (open: boolean) => void;
+}) {
   const { pathname } = useLocation();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -294,10 +313,10 @@ function NavMenuButton({ menu, open, onOpenChange }: { menu: NavMenu; open: bool
         aria-controls={open ? panelId : undefined}
       >
         {menu.label}
-        <ChevronDownIcon size="0.75rem" style={{ transition: "transform 180ms", transform: open ? "rotate(180deg)" : "none" }} />
+        <ChevronDownIcon size="0.75rem" style={{ transition: CHEVRON_TURN, transform: open ? "rotate(180deg)" : "none" }} />
         {active && <ActiveBar />}
       </button>
-      <Popover open={open} onClose={() => onOpenChange(false)} anchorRef={buttonRef} align="left" width={18}>
+      <Popover open={open} onClose={() => onOpenChange(false)} anchorRef={buttonRef} align="left" width={18} instant={instant}>
         <div
           ref={panelRef}
           id={panelId}

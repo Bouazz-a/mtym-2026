@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Alert, Btn, BrutalCard, Field, Input, PageMotion } from "./primitives";
+import { Alert, Btn, BrutalCard, FadeIn, Field, Input, PageMotion } from "./primitives";
 import { usePageTitle } from "./usePageTitle";
 import { MtymLogo } from "./widgets";
 import { useSession } from "./SessionContext";
@@ -41,11 +41,14 @@ export function LoginPage() {
             Qualifications 2026
           </span>
         </div>
-        {mode === "login" ? (
-          <LoginForm email={email} setEmail={setEmail} onForgot={() => setMode("forgot")} />
-        ) : (
-          <ForgotForm email={email} setEmail={setEmail} sent={mode === "sent"} onSent={() => setMode("sent")} onBack={backToLogin} />
-        )}
+        {/* One form replaces the other: it fades in rather than snapping */}
+        <FadeIn key={mode === "login" ? "login" : "forgot"}>
+          {mode === "login" ? (
+            <LoginForm email={email} setEmail={setEmail} onForgot={() => setMode("forgot")} />
+          ) : (
+            <ForgotForm email={email} setEmail={setEmail} sent={mode === "sent"} onSent={() => setMode("sent")} onBack={backToLogin} />
+          )}
+        </FadeIn>
       </BrutalCard>
     </PageMotion>
   );
@@ -122,7 +125,7 @@ function LoginForm({ email, setEmail, onForgot }: { email: string; setEmail: (em
           />
         </Field>
         <Btn type="submit" disabled={busy} className="w-full justify-center">
-          {busy ? "Connexion…" : "Se connecter"}
+          {busy ? "Connexion..." : "Se connecter"}
         </Btn>
       </form>
       <div className="mt-4 text-center">
@@ -185,7 +188,7 @@ function ForgotForm({
             />
           </Field>
           <Btn type="submit" disabled={busy} className="w-full justify-center">
-            {busy ? "Envoi…" : "Recevoir un lien"}
+            {busy ? "Envoi..." : "Recevoir un lien"}
           </Btn>
         </form>
       )}

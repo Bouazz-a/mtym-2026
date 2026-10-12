@@ -74,7 +74,7 @@ function StatCounter({
     return () => cancelAnimationFrame(raf);
   }, [started, value, duration]);
 
-  const display = Number.isInteger(value) ? Math.round(n) : n.toFixed(1);
+  const display = Number.isInteger(value) ? Math.round(n) : n.toFixed(1).replace(".", ",");
   return (
     <span ref={ref} className={className} style={style}>
       {display}
@@ -242,7 +242,8 @@ export function StatCard({
 }) {
   const pct = denom ? Math.round((value / denom) * 100) : null;
   return (
-    <BrutalCard highlight={highlight} className="p-6 h-full">
+    // Two to a row on a phone: tighter there, so the figure and its total fit
+    <BrutalCard highlight={highlight} className="p-4 sm:p-6 h-full">
       <div
         className="absolute top-0 right-0 clip-triangle-tr pointer-events-none"
         style={{ width: "3rem", height: "3rem", background: highlight ? "rgba(246,168,6,0.12)" : "rgba(18,32,25,0.04)" }}
@@ -253,27 +254,30 @@ export function StatCard({
       >
         {label}
       </p>
-      <div className="flex items-end gap-3 mb-3">
+      <div className="flex flex-wrap items-end gap-x-3 gap-y-1 mb-3">
         <StatCounter
           value={value}
           className="font-mont leading-none"
-          style={{ fontSize: "3rem", color: "var(--forest)", fontWeight: 900, letterSpacing: "-0.02em" }}
+          style={{ fontSize: "clamp(2.25rem, 10vw, 3rem)", color: "var(--forest)", fontWeight: 900, letterSpacing: "-0.02em" }}
         />
         {denom !== undefined && (
-          <span className="text-sm font-mont" style={{ color: "var(--ink-faint)", fontWeight: 700 }}>
+          <span className="text-sm font-mont whitespace-nowrap" style={{ color: "var(--ink-faint)", fontWeight: 700 }}>
             / {denom}
           </span>
         )}
       </div>
       {pct !== null && (
         <>
-          <div className="w-full" style={{ height: "0.375rem", background: "var(--paper-2)" }}>
+          {/* The bar grows from the left on arrival, like the dashboard's
+              (.dash-grow-x), and eases to its new length when the count changes */}
+          <div className="w-full overflow-hidden" style={{ height: "0.375rem", background: "var(--paper-2)" }}>
             <div
+              className="dash-grow-x"
               style={{
                 height: "100%",
-                width: `${pct}%`,
+                transform: `scaleX(${Math.max(0, Math.min(1, value / (denom || 1)))})`,
+                transformOrigin: "left",
                 background: progressColor,
-                transition: "width 600ms cubic-bezier(0.22,1,0.36,1)",
               }}
             />
           </div>
@@ -285,6 +289,57 @@ export function StatCard({
           </p>
         </>
       )}
+    </BrutalCard>
+  );
+}
+
+// ─── StatStrip: the same figures, side by side in one card ────────────
+
+export interface Stat {
+  label: string;
+  value: number;
+  denom?: number;
+  progressColor?: string;
+  highlight?: boolean;
+}
+
+// On a phone a column of StatCards is a screen high and pushes down what the
+// page is for (a juror's planning). There, the figures share one card: a
+// label, the count and its progress, as many to a row as there are figures.
+export function StatStrip({ stats }: { stats: Stat[] }) {
+  return (
+    <BrutalCard withCorners={false}>
+      <dl className="grid gap-px" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))`, background: "var(--border)" }}>
+        {stats.map((s) => (
+          <div key={s.label} className="px-3 py-2.5 flex flex-col" style={{ background: "var(--surface)" }}>
+            <dt className="font-mont text-micro uppercase tracking-wider" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+              {s.label}
+            </dt>
+            {/* Pushed to the bottom: the counts line up whatever lines their labels take */}
+            <dd
+              className="font-mont tabular-nums leading-none whitespace-nowrap mt-auto pt-2"
+              style={{ fontSize: "1.5rem", color: "var(--forest)", fontWeight: 900, letterSpacing: "-0.02em" }}
+            >
+              {s.value}
+              {s.denom !== undefined && (
+                <span className="text-xs ml-1" style={{ color: "var(--ink-faint)", fontWeight: 700, letterSpacing: 0 }}>/ {s.denom}</span>
+              )}
+            </dd>
+            <dd aria-hidden className="mt-2 overflow-hidden" style={{ height: "0.25rem", background: s.denom ? "var(--paper-2)" : undefined }}>
+              {s.denom ? (
+                <div
+                  className="dash-grow-x h-full"
+                  style={{
+                    transform: `scaleX(${Math.max(0, Math.min(1, s.value / s.denom))})`,
+                    transformOrigin: "left",
+                    background: s.progressColor ?? "var(--saffron)",
+                  }}
+                />
+              ) : null}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </BrutalCard>
   );
 }

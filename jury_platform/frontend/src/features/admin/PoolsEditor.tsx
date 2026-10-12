@@ -68,7 +68,7 @@ export function PoolCard({
           {draft ? (
             // While the grid is open its footer counts the empty cells live
             <Badge tone="saffron">
-              {showGrid ? "Brouillon" : `Brouillon · ${missingCells(pool.draft!)} case${missingCells(pool.draft!) > 1 ? "s" : ""} à remplir`}
+              {showGrid ? "Brouillon" : `Brouillon : ${missingCells(pool.draft!)} case${missingCells(pool.draft!) > 1 ? "s" : ""} à remplir`}
             </Badge>
           ) : (
             <Badge tone={withDuo === pool.passages.length ? "sage" : "saffron"}>
@@ -142,12 +142,12 @@ export function PoolCard({
                   <td><TeamCell quad={teamById.get(p.reporterTeamId)?.quadrigram} role="reporter" /></td>
                   <td>
                     <span className="font-mont text-xs" style={{ color: "var(--ink-faint)", fontWeight: 700 }}>
-                      {p.extraTeamId ? teamById.get(p.extraTeamId)?.quadrigram ?? "—" : "—"}
+                      {p.extraTeamId ? teamById.get(p.extraTeamId)?.quadrigram ?? "?" : "aucun"}
                     </span>
                   </td>
                   <td>
                     <span className="font-mont text-micro uppercase tracking-widest tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>
-                      {[slotTime(pool.centerDay, p.slot)?.start, p.room].filter(Boolean).join(" · ") || "—"}
+                      {[slotTime(pool.centerDay, p.slot)?.start, p.room].filter(Boolean).join(", ") || "à définir"}
                     </span>
                   </td>
                   <td>
@@ -159,7 +159,7 @@ export function PoolCard({
                         )}
                       </span>
                     ) : (
-                      <span className="font-mont text-xs" style={{ color: "var(--ink-faint)" }}>—</span>
+                      <span className="font-mont text-xs" style={{ color: "var(--ink-faint)" }}>sans duo</span>
                     )}
                   </td>
                   <td style={{ borderRight: "none" }}>
@@ -295,7 +295,7 @@ function PoolGridEditor({
         )}
         <div className="flex items-center gap-2 flex-wrap">
           <Btn size="sm" disabled={!dirty || busy || problems.length > 0} onClick={save}>
-            {busy ? "Enregistrement…" : missing > 0 ? "Enregistrer le brouillon" : "Enregistrer"}
+            {busy ? "Enregistrement..." : missing > 0 ? "Enregistrer le brouillon" : "Enregistrer"}
           </Btn>
           <Btn variant="ghost" size="sm" disabled={busy} onClick={() => { setGrid(saved); onDone(); }}>
             Annuler
@@ -327,7 +327,7 @@ function PoolGridEditor({
           takenElsewhere={takenElsewhere}
           usedInPassage={new Set(teamsOfRow(grid.passages.find((p) => p.slot === picking.slot) as GridPassage))}
           current={grid.passages.find((p) => p.slot === picking.slot)?.[picking.role] ?? null}
-          title={`${ROLE_LABEL[picking.role]} · passage ${picking.slot}`}
+          title={`${ROLE_LABEL[picking.role]}, passage ${picking.slot}`}
           onPick={(teamId) => {
             setGrid(setCell(grid, picking.slot, picking.role, teamId));
             setPicking(null);
@@ -453,7 +453,7 @@ function TeamCell({ quad, role }: { quad: string | undefined; role: "defender" |
         letterSpacing: "0.05em",
       }}
     >
-      {quad ?? "—"}
+      {quad ?? "?"}
     </span>
   );
 }
@@ -493,7 +493,7 @@ function PassageEditModal({
   const teamSelect = (value: string, onChange: (v: string) => void) => (
     <Select value={value} onChange={(e) => onChange(e.target.value)}>
       {poolTeams.map((t) => (
-        <option key={t.id} value={t.id}>{t.quadrigram} · {t.name}</option>
+        <option key={t.id} value={t.id}>{t.quadrigram} ({t.name})</option>
       ))}
     </Select>
   );
@@ -506,7 +506,7 @@ function PassageEditModal({
       footer={
         <>
           <Btn variant="ghost" onClick={onClose}>Annuler</Btn>
-          <Btn onClick={save} disabled={conflict || busy}>{busy ? "Enregistrement…" : "Enregistrer"}</Btn>
+          <Btn onClick={save} disabled={conflict || busy}>{busy ? "Enregistrement..." : "Enregistrer"}</Btn>
         </>
       }
     >

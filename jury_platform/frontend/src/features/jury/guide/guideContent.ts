@@ -45,7 +45,7 @@ export const PLANNING_STEPS: GuideStep[] = [
   {
     anchor: "passage-card",
     title: "Un passage",
-    text: "Environ une heure : la poule, la salle, le problème défendu et les trois équipes notées — DEF défend, OPP s'oppose, RAP rapporte. Dans une poule de 4, la quatrième équipe (OBS) reste hors de la salle et n'est pas notée.",
+    text: "Environ une heure : la poule, la salle, le problème défendu et les trois équipes notées : DEF défend, OPP s'oppose, RAP rapporte. Dans une poule de 4, la quatrième équipe (OBS) reste hors de la salle et n'est pas notée.",
   },
   {
     anchor: "oral-button",
@@ -106,7 +106,7 @@ export const PRACTICE_STEPS: GuideStep[] = [
   {
     anchor: "score",
     title: "Le taux de réussite",
-    text: "Pour chaque critère, touchez le taux : 0 · 0,25 · 0,5 · 0,75 · 1 (leur sens s'affiche au survol, et dans l'aide-mémoire). Une valeur entre deux ? Tapez-la dans « autre ».",
+    text: "Pour chaque critère, touchez le taux : 0 ; 0,25 ; 0,5 ; 0,75 ou 1 (leur sens s'affiche au survol, et dans l'aide-mémoire). Une valeur entre deux ? Tapez-la dans « autre ».",
   },
   {
     anchor: "coef",
@@ -126,7 +126,7 @@ export const PRACTICE_STEPS: GuideStep[] = [
   {
     anchor: "save",
     title: "Enregistrer",
-    text: "Rien n'est envoyé tant que vous n'avez pas cliqué. « Enregistré · 14:32 » confirme ; vous pourrez corriger ensuite (« Mettre à jour »). Chaque équipe s'enregistre séparément.",
+    text: "Rien n'est envoyé tant que vous n'avez pas cliqué. « Enregistré à 14:32 » confirme ; vous pourrez corriger ensuite (« Mettre à jour »). Chaque équipe s'enregistre séparément.",
   },
   {
     anchor: "report-viewer",
@@ -177,15 +177,15 @@ export const TIMELINE: { step: string; duration: string }[] = [
 
 export const ROLES: { role: string; text: string }[] = [
   {
-    role: "Défenseur · 10 min",
+    role: "Défenseur (10 min)",
     text: "Présente une synthèse des résultats de son équipe, avec des exemples, schémas et figures plutôt que de longues démonstrations, puis répond aux questions. Il doit rester fidèle au rapport écrit : présenter des résultats majeurs non rédigés est interdit (seules de légères corrections signalées sont admises). À sanctionner : dépassement de temps significatif, résultats inédits, réponses évasives.",
   },
   {
-    role: "Opposant · 8 min",
+    role: "Opposant (8 min)",
     text: "Relève erreurs, imprécisions et points forts par des questions ciblées, puis conclut par un récapitulatif honnête et bienveillant. Interdit : orienter le débat vers sa propre solution ou présenter ses propres résultats. Une opposition agressive ou excessive est sanctionnée.",
   },
   {
-    role: "Rapporteur · 8 min",
+    role: "Rapporteur (8 min)",
     text: "Résume le débat de manière neutre, évalue la pertinence des questions de l'opposant et la clarté des réponses du défenseur, puis pose ses propres questions sur les points majeurs non abordés. À éviter : répéter les critiques de l'opposant, s'arrêter à des détails de forme, ou se substituer à l'opposant.",
   },
 ];

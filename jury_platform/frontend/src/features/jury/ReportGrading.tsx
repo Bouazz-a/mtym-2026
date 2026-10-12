@@ -67,7 +67,7 @@ export function ReportWorkspace({
 }) {
   const sideBySide = useMediaQuery(SIDE_BY_SIDE);
   const report = team?.reports.find((r) => r.problemNumber === problemNumber);
-  const title = `${team?.quadrigram ?? ""} · Rapport du problème ${problemNumber}`;
+  const title = `${team ? `${team.quadrigram}, rapport` : "Rapport"} du problème ${problemNumber}`;
   const beside = sideBySide && report;
 
   return (

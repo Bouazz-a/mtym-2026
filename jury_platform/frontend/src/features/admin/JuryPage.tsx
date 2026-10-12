@@ -54,7 +54,7 @@ export function JuryPage() {
 
   const dayProgress = (dayId: string) => {
     const ps = pools.filter((p) => p.centerDayId === dayId).flatMap((p) => p.passages);
-    return ps.length ? ` · ${ps.filter((p) => p.duo).length}/${ps.length}` : "";
+    return ps.length ? ` (${ps.filter((p) => p.duo).length}/${ps.length})` : "";
   };
 
   return (
@@ -93,7 +93,7 @@ export function JuryPage() {
             </Picker>
             <Picker label="Jour">
               <Segmented
-                options={centerDays.map((d, i) => ({ value: d.id, label: `J${i + 1} · ${formatDay(d.date)}${dayProgress(d.id)}` }))}
+                options={centerDays.map((d, i) => ({ value: d.id, label: `J${i + 1}, ${formatDay(d.date)}${dayProgress(d.id)}` }))}
                 value={day.id}
                 onChange={(id) => select(center, id)}
               />

@@ -70,7 +70,7 @@ export function ConvocationsPage() {
               </Picker>
               <Picker label="Jour">
                 <Segmented
-                  options={centerDays.map((d, i) => ({ value: d.id, label: `J${i + 1} · ${formatDay(d.date)}` }))}
+                  options={centerDays.map((d, i) => ({ value: d.id, label: `J${i + 1}, ${formatDay(d.date)}` }))}
                   value={day.id}
                   onChange={(id) => select(center, id)}
                 />
@@ -132,7 +132,7 @@ function DayMailings({
       try {
         await sendMailing(row.teamId);
       } catch (err) {
-        setError(`${row.quadrigram} : ${errorMessage(err)} — envoi arrêté (${i}/${rows.length} envoyées).`);
+        setError(`${row.quadrigram} : ${errorMessage(err).replace(/\.$/, "")}. Envoi arrêté (${i}/${rows.length} envoyées).`);
         break;
       }
     }
@@ -157,7 +157,7 @@ function DayMailings({
       {/* A pool picked, or the whole day again: the section fades in */}
       <FadeIn key={pool ?? "all"} className="space-y-6">
         <SectionHeading
-          title={`Jour ${dayIndex + 1} · ${formatDay(day.date)}${pool ? ` · ${pool}` : ""}`}
+          title={`Jour ${dayIndex + 1}, ${formatDay(day.date)}${pool ? `, poule ${pool}` : ""}`}
           right={
             <div className="flex items-center gap-2 flex-wrap">
               <Btn variant="ghost" size="sm" onClick={() => setEditing(true)}>Modifier le mail</Btn>
@@ -175,7 +175,7 @@ function DayMailings({
 
         {!mailConfigured && (
           <Alert tone="warning" title="Envoi non configuré">
-            Les aperçus fonctionnent, mais aucun email ne peut partir : les réglages SMTP_… manquent dans le fichier backend/.env du serveur.
+            Les aperçus fonctionnent, mais aucun email ne peut partir : les réglages SMTP manquent dans le fichier backend/.env du serveur.
           </Alert>
         )}
         {!drawValidated && (
@@ -201,7 +201,7 @@ function DayMailings({
         {progress && (
           <BrutalCard withCorners={false} className="px-5 py-4" role="status">
             <div className="flex items-center justify-between font-mont text-xs uppercase tracking-widest mb-2" style={{ color: "var(--forest)", fontWeight: 800 }}>
-              <span>Envoi · {progress.current}</span>
+              <span>Envoi : {progress.current}</span>
               <span>{progress.done}/{progress.total}</span>
             </div>
             <div style={{ height: 6, background: "var(--paper-2)" }}>
@@ -235,11 +235,11 @@ function DayMailings({
                         <div className="font-mont text-xs" style={{ color: "var(--forest)", fontWeight: 900, letterSpacing: "0.05em" }}>{t.quadrigram}</div>
                         <div className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>{t.name}</div>
                       </td>
-                      <td className="col-tight font-mont text-xs" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>{t.pool ?? "—"}</td>
+                      <td className="col-tight font-mont text-xs" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>{t.pool ?? <span className="font-open" style={{ color: "var(--ink-faint)", fontWeight: 400 }}>aucune</span>}</td>
                       <td className="col-tight font-mont text-xs" style={{ color: t.recipients === 0 ? "var(--clay)" : "var(--ink)", fontWeight: 700 }}>
                         {t.recipients}/{t.members}
                       </td>
-                      <td className="col-tight">{t.defense ? <Problem n={t.defense.problem} /> : "—"}</td>
+                      <td className="col-tight">{t.defense ? <Problem n={t.defense.problem} /> : null}</td>
                       <td className="col-tight"><Against role={t.opposition} /></td>
                       <td className="col-tight"><Against role={t.report} /></td>
                       <td className="col-tight"><StatusBadge row={t} /></td>
@@ -398,7 +398,7 @@ function TemplateEditor({ info, teams, onClose }: { info: MailTemplateInfo; team
               Texte par défaut
             </Btn>
             <Btn variant="ghost" onClick={close}>Annuler</Btn>
-            <Btn disabled={busy || !dirty} onClick={save}>{busy ? "Enregistrement…" : "Enregistrer"}</Btn>
+            <Btn disabled={busy || !dirty} onClick={save}>{busy ? "Enregistrement..." : "Enregistrer"}</Btn>
           </>
         )
       }
@@ -424,7 +424,7 @@ function TemplateEditor({ info, teams, onClose }: { info: MailTemplateInfo; team
                 <button
                   key={name}
                   type="button"
-                  title={`${meaning} · insérer dans le champ « ${{ subject: "Objet", title: "Titre", intro: "Ouverture" }[field]} »`}
+                  title={`${meaning} : insérer dans le champ « ${{ subject: "Objet", title: "Titre", intro: "Ouverture" }[field]} »`}
                   onMouseDown={(e) => e.preventDefault()} // the field keeps its cursor
                   onClick={() => insert(name)}
                   className="px-2 py-1 font-mono text-xs focus-ring"
@@ -452,8 +452,8 @@ function TemplateEditor({ info, teams, onClose }: { info: MailTemplateInfo; team
             <>
               <label className="flex items-center gap-2">
                 <span className="font-mont text-tiny uppercase tracking-widest shrink-0" style={{ color: "var(--ink-soft)", fontWeight: 800 }}>Aperçu pour</span>
-                <Select value={sampleId} onChange={(e) => setSampleId(e.target.value)} style={{ width: "16rem" }}>
-                  {teams.map((t) => <option key={t.teamId} value={t.teamId}>{t.quadrigram} · {t.name}</option>)}
+                <Select value={sampleId} onChange={(e) => setSampleId(e.target.value)} className="min-w-0" style={{ width: "16rem" }}>
+                  {teams.map((t) => <option key={t.teamId} value={t.teamId}>{t.quadrigram} ({t.name})</option>)}
                 </Select>
               </label>
               {previewQ.isError && <Alert>{errorMessage(previewQ.error, "Aperçu indisponible.")}</Alert>}
@@ -513,7 +513,7 @@ function PreviewModal({ row, canSend, onClose }: { row: TeamMailingRow; canSend:
   return (
     <Modal
       open
-      title={`Convocation · ${row.quadrigram}`}
+      title={`Convocation ${row.quadrigram}`}
       onClose={onClose}
       width="min(60rem, 94vw)"
       footer={
@@ -537,14 +537,18 @@ function PreviewModal({ row, canSend, onClose }: { row: TeamMailingRow; canSend:
       ) : (
         <div className="space-y-4">
           {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
-          <dl className="grid gap-x-4 gap-y-1.5 font-open text-sm" style={{ gridTemplateColumns: "auto 1fr" }}>
+          {/* On a phone each label sits above its value, which gets the whole
+              width; beside it from sm, in a column that may shrink (minmax 0):
+              a long file name is cut rather than pushing the dialog wider
+              than the screen */}
+          <dl className="grid gap-x-4 gap-y-1.5 font-open text-sm grid-cols-[minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)]">
             <dt style={{ color: "var(--ink-soft)" }}>À</dt>
-            <dd style={{ color: p.to.length ? "var(--ink)" : "var(--clay)" }}>{p.to.length ? p.to.join(", ") : "Aucun membre n'a d'email"}</dd>
+            <dd style={{ color: p.to.length ? "var(--ink)" : "var(--clay)", overflowWrap: "anywhere" }}>{p.to.length ? p.to.join(", ") : "Aucun membre n'a d'email"}</dd>
             <dt style={{ color: "var(--ink-soft)" }}>Objet</dt>
-            <dd className="font-semibold" style={{ color: "var(--forest)" }}>{p.subject}</dd>
+            <dd className="font-semibold" style={{ color: "var(--forest)", overflowWrap: "anywhere" }}>{p.subject}</dd>
             <dt style={{ color: "var(--ink-soft)" }}>Pièces jointes</dt>
-            <dd className="flex flex-wrap gap-1.5">
-              {p.attachments.length === 0 ? "—" : p.attachments.map((a) => <AttachmentChip key={a.name} a={a} />)}
+            <dd className="flex flex-wrap gap-1.5 min-w-0">
+              {p.attachments.length === 0 ? "aucune" : p.attachments.map((a) => <AttachmentChip key={a.name} a={a} />)}
             </dd>
           </dl>
           {/* The email as the team will see it; sandboxed: no script runs */}
@@ -562,10 +566,12 @@ function PreviewModal({ row, canSend, onClose }: { row: TeamMailingRow; canSend:
 }
 
 function AttachmentChip({ a }: { a: MailingAttachment }) {
-  if (a.state === "missing") return <span title="Rapport pas encore déposé : l'email le dit"><Badge tone="danger">{a.name} · non déposé</Badge></span>;
-  if (a.state === "tooLarge") return <span title="Au-delà de 10 Mo : non joint, l'email le dit"><Badge tone="saffron">{a.name} · trop lourd</Badge></span>;
-  const size = a.size === null ? "taille inconnue" : a.size < 1024 * 1024 ? `${Math.max(1, Math.round(a.size / 1024))} Ko` : `${(a.size / 1024 / 1024).toFixed(1)} Mo`;
-  return <span title={a.error ? `Taille illisible : ${a.error}` : undefined}><Badge tone="sage">{a.name} · {size}</Badge></span>;
+  // The chip never grows past its line (a long file name is cut there)
+  const chip = "inline-flex max-w-full overflow-hidden";
+  if (a.state === "missing") return <span className={chip} title="Rapport pas encore déposé : l'email le dit"><Badge tone="danger">{a.name} (non déposé)</Badge></span>;
+  if (a.state === "tooLarge") return <span className={chip} title="Au-delà de 10 Mo : non joint, l'email le dit"><Badge tone="saffron">{a.name} (trop lourd)</Badge></span>;
+  const size = a.size === null ? "taille inconnue" : a.size < 1024 * 1024 ? `${Math.max(1, Math.round(a.size / 1024))} Ko` : `${(a.size / 1024 / 1024).toFixed(1).replace(".", ",")} Mo`;
+  return <span className={chip} title={a.error ? `Taille illisible : ${a.error}` : undefined}><Badge tone="sage">{a.name} ({size})</Badge></span>;
 }
 
 // ─── Cells ───────────────────────────────────────────────────────────
@@ -575,7 +581,7 @@ function Problem({ n }: { n: number }) {
 }
 
 function Against({ role }: { role: MailingRole | null }) {
-  if (!role) return <>—</>;
+  if (!role) return null;
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <Problem n={role.problem} />
@@ -598,5 +604,5 @@ function StatusBadge({ row }: { row: TeamMailingRow }) {
   if (row.status === "outdated") {
     return <span title={`Envoyé le ${when} ; le tirage a été revalidé depuis`}><Badge tone="saffron">À renvoyer</Badge></span>;
   }
-  return <span title={row.sentBy ? `par ${row.sentBy}` : undefined}><Badge tone="sage">Envoyé · {when}</Badge></span>;
+  return <span title={row.sentBy ? `par ${row.sentBy}` : undefined}><Badge tone="sage">Envoyé le {when}</Badge></span>;
 }

@@ -18,9 +18,9 @@ export function jurorSpecialties(duos: JuryDuo[], jurorId: string, exceptDuoId?:
   return [...new Set(problems)].sort();
 }
 
-// "Duo 1 · P2", or "Duo 1" while the duo has no problem
+// "Duo 1 (P2)", or "Duo 1" while the duo has no problem
 export function duoLabel(duo: JuryDuo): string {
-  return duo.problemNumber ? `Duo ${duo.number} · P${duo.problemNumber}` : `Duo ${duo.number}`;
+  return duo.problemNumber ? `Duo ${duo.number} (P${duo.problemNumber})` : `Duo ${duo.number}`;
 }
 
 // Duos judging more than one passage of the pool — allowed, but a duo

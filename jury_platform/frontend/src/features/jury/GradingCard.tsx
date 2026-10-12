@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { CheckIcon } from "@/features/shared/icons";
 import { Alert, Btn, BrutalCard, Textarea } from "@/features/shared/primitives";
 import { useSession } from "@/features/shared/SessionContext";
 import { errorMessage } from "@/lib/services/errors";
@@ -21,6 +22,9 @@ interface GradingInput {
 }
 
 type Saved = { globalRemark: string | null; grades: Grade[] } | undefined;
+
+// The footer's status for a grid saved before this visit (after a save here: its time)
+const EARLIER = "déjà enregistré";
 
 const savedDrafts = (criteria: Criterion[], saved: Saved): GradeDrafts =>
   Object.fromEntries(
@@ -66,7 +70,8 @@ export function GradingCard({
 
   const [drafts, setDrafts] = useState<GradeDrafts>(() => ({ ...savedDrafts(criteria, saved), ...kept?.drafts }));
   const [remark, setRemark] = useState(kept?.remark ?? saved?.globalRemark ?? "");
-  const [status, setStatus] = useState<string | null>(saved && !kept ? "déjà enregistré" : null);
+  const [status, setStatus] = useState<string | null>(saved && !kept ? EARLIER : null);
+  const [saves, setSaves] = useState(0); // counts the saves made here: each one draws its tick again
   const [dirty, setDirty] = useState(kept !== null); // changed since the last save
   const [restored, setRestored] = useState(kept !== null);
   const [busy, setBusy] = useState(false);
@@ -110,7 +115,7 @@ export function GradingCard({
     if (storageId) clearDraft(storageId);
     setDrafts(savedDrafts(criteria, saved));
     setRemark(saved?.globalRemark ?? "");
-    setStatus(saved ? "déjà enregistré" : null);
+    setStatus(saved ? EARLIER : null);
     setDirty(false);
     setRestored(false);
   };
@@ -131,6 +136,7 @@ export function GradingCard({
       setDirty(false);
       setRestored(false);
       setStatus(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
+      setSaves((n) => n + 1);
     } catch (err) {
       setError(errorMessage(err, "Impossible d'enregistrer l'évaluation."));
     } finally {
@@ -175,7 +181,7 @@ export function GradingCard({
               <Textarea
                 value={remark}
                 onChange={(e) => { setRemark(e.target.value); edited(); }}
-                placeholder="Synthèse de votre évaluation…"
+                placeholder="Synthèse de votre évaluation"
                 disabled={disabled}
               />
             </label>
@@ -185,16 +191,22 @@ export function GradingCard({
       </div>
 
       <div className="px-5 py-3 flex items-center justify-between gap-3" style={{ borderTop: "1px solid var(--border)", background: "var(--paper-2)" }}>
-        <div className="flex items-center gap-3 flex-wrap min-w-0">
+        <div className="flex items-center gap-x-3 gap-y-1 flex-wrap min-w-0">
           <span
             aria-live="polite"
-            className="font-mont text-tiny uppercase tracking-widest"
+            className="font-mont text-tiny uppercase tracking-widest inline-flex items-center gap-1.5"
             style={{ color: status ? "var(--sage-dark)" : dirty ? "var(--saffron-dark)" : "var(--ink-faint)", fontWeight: 800 }}
           >
+            {/* A tick by a saved grid; a save made here draws it */}
+            {status && !restored && (
+              <span key={saves} className={status === EARLIER ? "inline-flex" : "inline-flex check-draw"}>
+                <CheckIcon size="0.85rem" />
+              </span>
+            )}
             {restored
               ? "Brouillon non enregistré"
               : status
-                ? `Enregistré · ${status}${practice ? " (entraînement)" : ""}`
+                ? `${status === EARLIER ? "Déjà enregistré" : `Enregistré à ${status}`}${practice ? " (entraînement)" : ""}`
                 : dirty && saved
                   ? "Modifications non enregistrées"
                   : "Non enregistré"}
@@ -215,9 +227,10 @@ export function GradingCard({
           disabled={busy || disabled || criteria.length === 0}
           variant={saved && !dirty ? "ghost" : "primary"}
           size="sm"
+          className="shrink-0 whitespace-nowrap"
           data-tour={tourAnchors ? "save" : undefined}
         >
-          {busy ? "Enregistrement…" : saved ? "Mettre à jour" : "Enregistrer"}
+          {busy ? "Enregistrement..." : saved ? "Mettre à jour" : "Enregistrer"}
         </Btn>
       </div>
     </BrutalCard>

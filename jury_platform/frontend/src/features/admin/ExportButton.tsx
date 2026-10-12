@@ -17,7 +17,7 @@ export function ExportButton({
 }) {
   return (
     <Btn onClick={run} disabled={busy || disabled} title={title}>
-      <DownloadIcon size="0.95rem" /> {busy ? "Export…" : label}
+      <DownloadIcon size="0.95rem" /> {busy ? "Export..." : label}
     </Btn>
   );
 }

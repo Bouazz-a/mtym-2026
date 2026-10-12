@@ -43,7 +43,7 @@ export function ChangePasswordModal({ onClose }: { onClose: () => void }) {
           <>
             <Btn variant="ghost" onClick={onClose}>Annuler</Btn>
             <Btn type="submit" form="change-password" disabled={!valid || busy}>
-              {busy ? "Enregistrement…" : "Enregistrer"}
+              {busy ? "Enregistrement..." : "Enregistrer"}
             </Btn>
           </>
         )

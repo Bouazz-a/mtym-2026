@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Alert, Badge, Btn, BrutalCard, Field, Input, Modal, PageHeader, PageLoading, PageMotion, SectionHeading, Select, Stagger,
+  Alert, Badge, Btn, BrutalCard, ConfirmInPlace, Field, Input, Modal, PageHeader, PageLoading, PageMotion, SectionHeading, Select, Stagger,
 } from "@/features/shared/primitives";
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
@@ -55,7 +55,7 @@ function accountRows(accounts: Account[], pools: PoolDetails[]): AccountRow[] {
         const entry = judged.get(member.id) ?? { passages: 0, days: new Map() };
         entry.passages += 1;
         const day = pool.centerDay;
-        if (day) entry.days.set(day.id, { date: day.date, label: `${centerLabel(day.center)} · ${formatDay(day.date)}` });
+        if (day) entry.days.set(day.id, { date: day.date, label: `${centerLabel(day.center)}, ${formatDay(day.date)}` });
         judged.set(member.id, entry);
       }
     }
@@ -74,7 +74,7 @@ function accountRows(accounts: Account[], pools: PoolDetails[]): AccountRow[] {
     });
 }
 
-const roleText = (a: Account) => (a.role === "jury" ? "Jury" : a.isJuror ? "Admin · juré" : "Admin");
+const roleText = (a: Account) => (a.role === "jury" ? "Jury" : a.isJuror ? "Admin et juré" : "Admin");
 
 const COLUMNS: FilterColumn<AccountRow>[] = [
   {
@@ -159,7 +159,7 @@ export function AccountsPage() {
       try {
         await sendCredentials(row.id);
       } catch (err) {
-        setSendError(`${row.firstName} ${row.lastName} : ${errorMessage(err)} — envoi arrêté (${i}/${list.length} envoyés).`);
+        setSendError(`${row.firstName} ${row.lastName} : ${errorMessage(err).replace(/\.$/, "")}. Envoi arrêté (${i}/${list.length} envoyés).`);
         break;
       }
     }
@@ -201,7 +201,7 @@ export function AccountsPage() {
 
       {mailQ.data && !mailConfigured && (
         <Alert tone="warning" title="Envoi non configuré">
-          Aucun email ne peut partir : les réglages SMTP_… manquent dans le fichier backend/.env du serveur. Les mots de passe
+          Aucun email ne peut partir : les réglages SMTP manquent dans le fichier backend/.env du serveur. Les mots de passe
           restent affichés une fois, à transmettre vous-même.
         </Alert>
       )}
@@ -210,7 +210,7 @@ export function AccountsPage() {
       {progress && (
         <BrutalCard withCorners={false} className="px-5 py-4" role="status">
           <div className="flex items-center justify-between font-mont text-xs uppercase tracking-widest mb-2" style={{ color: "var(--forest)", fontWeight: 800 }}>
-            <span>Envoi · {progress.current}</span>
+            <span>Envoi : {progress.current}</span>
             <span>{progress.done}/{progress.total}</span>
           </div>
           <div style={{ height: 6, background: "var(--paper-2)" }}>
@@ -274,46 +274,46 @@ export function AccountsPage() {
                       </span>
                     </td>
                     <td className="col-tight font-open text-xs" style={{ color: "var(--ink-soft)" }}>
-                      {days.length === 0 ? <span style={{ color: "var(--ink-faint)" }}>—</span> : days.map((d) => <div key={d}>{d}</div>)}
+                      {days.length === 0 ? <span style={{ color: "var(--ink-faint)" }}>aucun</span> : days.map((d) => <div key={d}>{d}</div>)}
                     </td>
-                    <td style={{ textAlign: "center" }} className="font-mont col-tight">{passages ?? "—"}</td>
+                    <td style={{ textAlign: "center" }} className="font-mont col-tight">{passages ?? <span className="font-open text-xs" style={{ color: "var(--ink-faint)" }}>pas juré</span>}</td>
                     <td className="col-tight">
                       {/* The day; the time under the pointer */}
                       {a.credentialsSentAt
-                        ? <span title={`Envoyés le ${sentAt(a.credentialsSentAt)}`}><Badge tone="sage">Envoyés · {sentOn(a.credentialsSentAt)}</Badge></span>
+                        ? <span title={`Envoyés le ${sentAt(a.credentialsSentAt)}`}><Badge tone="sage">Envoyés le {sentOn(a.credentialsSentAt)}</Badge></span>
                         : <Badge tone="neutral">Jamais envoyés</Badge>}
                     </td>
                     <td className="col-tight" style={{ borderRight: "none" }}>
                       {/* No wrapping: the column hugs the buttons instead of
-                          stacking them, and the table scrolls if too narrow */}
-                      <div className="flex gap-1.5 justify-end flex-nowrap">
-                        <Btn variant="ghost" size="sm" onClick={() => setEditing(a)}>Modifier</Btn>
-                        {/* The old password stops working at once: asked first */}
-                        {confirmReset === a.id ? (
-                          <>
-                            <Btn
-                              variant="forest"
-                              size="sm"
-                              disabled={busy}
-                              onClick={() => reset(a)}
-                              title={mailConfigured ? "Générer un nouveau mot de passe et l'envoyer par email" : "Générer un nouveau mot de passe"}
-                            >
-                              Confirmer
-                            </Btn>
-                            <Btn variant="ghost" size="sm" onClick={() => setConfirmReset(null)}>Annuler</Btn>
-                          </>
+                          stacking them, and the table scrolls if too narrow.
+                          A new password (the old one stops working at once)
+                          and a deletion are asked first, in the buttons'
+                          place: the column, and so the table, keeps its width. */}
+                      <ConfirmInPlace
+                        asking={confirmReset === a.id || confirmDelete === a.id}
+                        question={confirmReset === a.id ? "Nouveau mot de passe ?" : "Supprimer ce compte ?"}
+                        confirm={confirmReset === a.id ? (
+                          <Btn
+                            variant="forest"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => reset(a)}
+                            title={mailConfigured ? "Générer un nouveau mot de passe et l'envoyer par email" : "Générer un nouveau mot de passe"}
+                          >
+                            Confirmer
+                          </Btn>
                         ) : (
-                          <Btn variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmReset(a.id)}>Nouveau mot de passe</Btn>
+                          <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(null); run(() => deleteAccount(a.id)); }}>Confirmer</Btn>
                         )}
-                        {a.id !== user?.id && (confirmDelete === a.id ? (
-                          <>
-                            <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(null); run(() => deleteAccount(a.id)); }}>Confirmer</Btn>
-                            <Btn variant="ghost" size="sm" onClick={() => setConfirmDelete(null)}>Annuler</Btn>
-                          </>
-                        ) : (
-                          <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(a.id)}>Supprimer</Btn>
-                        ))}
-                      </div>
+                        onCancel={() => { setConfirmReset(null); setConfirmDelete(null); }}
+                        className="flex gap-1.5 justify-end flex-nowrap"
+                      >
+                        <Btn variant="ghost" size="sm" onClick={() => setEditing(a)}>Modifier</Btn>
+                        <Btn variant="ghost" size="sm" disabled={busy} onClick={() => { setConfirmDelete(null); setConfirmReset(a.id); }}>Nouveau mot de passe</Btn>
+                        {a.id !== user?.id && (
+                          <Btn variant="danger" size="sm" onClick={() => { setConfirmReset(null); setConfirmDelete(a.id); }}>Supprimer</Btn>
+                        )}
+                      </ConfirmInPlace>
                     </td>
                   </tr>
                 ))}

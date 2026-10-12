@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
-  Alert, Badge, BrutalCard, Btn, FadeIn, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Stagger,
+  Alert, Badge, BrutalCard, Btn, ConfirmInPlace, FadeIn, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Stagger,
 } from "@/features/shared/primitives";
 import { GridIcon } from "@/features/shared/icons";
 import { ReportModal } from "@/features/shared/ReportViewer";
@@ -70,7 +70,7 @@ export function TournamentPage() {
       {exporter.error && <Alert>{exporter.error}</Alert>}
 
       <Segmented
-        options={CENTERS.map((c) => ({ value: c.value, label: `${c.label} · ${countByCenter(c.value)}` }))}
+        options={CENTERS.map((c) => ({ value: c.value, label: `${c.label} (${countByCenter(c.value)})` }))}
         value={center}
         onChange={setCenter}
       />
@@ -130,7 +130,7 @@ function DaysSection({ center, days, withoutDay }: { center: Center; days: Cente
   return (
     <section>
       <SectionHeading
-        title={`Jours · ${centerLabel(center)}`}
+        title={`Jours, ${centerLabel(center)}`}
         right={
           <Btn
             size="sm"
@@ -180,19 +180,21 @@ function DayRow({ day, index }: { day: CenterDay; index: number }) {
           {formatDay(day.date)}
         </span>
         <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>
-          {day._count.teams} équipe{day._count.teams > 1 ? "s" : ""} · {day._count.pools} poule{day._count.pools > 1 ? "s" : ""}
+          {day._count.teams} équipe{day._count.teams > 1 ? "s" : ""}, {day._count.pools} poule{day._count.pools > 1 ? "s" : ""}
         </span>
-        <div className="flex items-center gap-2 ml-auto">
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "10.625rem" }} />
-          <Btn variant="ghost" size="sm" disabled={busy || date === day.date || !date} onClick={() => run(() => updateCenterDay(day.id, date))}>
-            Modifier
-          </Btn>
-          {confirmDelete ? (
-            <>
-              <Btn variant="danger" size="sm" onClick={() => run(() => deleteCenterDay(day.id))}>Confirmer</Btn>
-              <Btn variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Annuler</Btn>
-            </>
-          ) : (
+        {/* The deletion is asked in the place of the date and its buttons: the row doesn't move */}
+        <div className="ml-auto">
+          <ConfirmInPlace
+            asking={confirmDelete}
+            question="Supprimer ce jour ?"
+            confirm={<Btn variant="danger" size="sm" onClick={() => run(() => deleteCenterDay(day.id))}>Confirmer</Btn>}
+            onCancel={() => setConfirmDelete(false)}
+            className="flex items-center gap-2"
+          >
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: "10.625rem" }} />
+            <Btn variant="ghost" size="sm" disabled={busy || date === day.date || !date} onClick={() => run(() => updateCenterDay(day.id, date))}>
+              Modifier
+            </Btn>
             <Btn
               variant="danger"
               size="sm"
@@ -202,7 +204,7 @@ function DayRow({ day, index }: { day: CenterDay; index: number }) {
             >
               Supprimer
             </Btn>
-          )}
+          </ConfirmInPlace>
         </div>
       </div>
       {error && <div className="mt-3"><Alert>{error}</Alert></div>}
@@ -226,8 +228,8 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
         right={
           <Segmented
             options={[
-              { value: "all", label: `Toutes · ${teams.length}` },
-              { value: "none", label: `Sans jour · ${teams.filter((t) => !t.centerDayId).length}` },
+              { value: "all", label: `Toutes (${teams.length})` },
+              { value: "none", label: `Sans jour (${teams.filter((t) => !t.centerDayId).length})` },
             ]}
             value={onlyWithoutDay ? "none" : "all"}
             onChange={(v) => setOnlyWithoutDay(v === "none")}
@@ -260,7 +262,7 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
                       <div className="font-open text-xs" style={{ color: "var(--ink-soft)" }}>{team.name}</div>
                     </td>
                     <td className="font-open text-xs" style={{ color: "var(--ink-soft)", maxWidth: "20rem" }}>
-                      {team.members.map((m) => `${m.firstName} ${m.lastName}`).join(", ") || "—"}
+                      {team.members.map((m) => `${m.firstName} ${m.lastName}`).join(", ") || "aucun membre"}
                     </td>
                     <td>
                       {/* A filed report opens in the modal; a missing one is just a mark */}
@@ -281,7 +283,7 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
                               className="report-chip"
                               title={`Voir le rapport du problème ${n}`}
                               aria-label={`Voir le rapport de ${team.quadrigram}, problème ${n}`}
-                              onClick={() => setViewing({ id: report.id, title: `${team.quadrigram} · Rapport du problème ${n}` })}
+                              onClick={() => setViewing({ id: report.id, title: `${team.quadrigram}, rapport du problème ${n}` })}
                             >
                               <Badge tone="sage">P{n}</Badge>
                             </button>
@@ -293,12 +295,12 @@ function TeamsSection({ teams, days, pools }: { teams: Team[]; days: CenterDay[]
                       <Select
                         value={team.centerDayId ?? ""}
                         disabled={locked}
-                        title={locked ? "Déjà dans une poule — annulez le tirage de son jour pour la déplacer" : undefined}
+                        title={locked ? "Déjà dans une poule : annulez le tirage de son jour pour la déplacer" : undefined}
                         onChange={(e) => run(() => setTeamDay(team.id, e.target.value || null))}
                       >
                         <option value="">Sans jour</option>
                         {days.map((d, i) => (
-                          <option key={d.id} value={d.id}>J{i + 1} · {formatDay(d.date)}</option>
+                          <option key={d.id} value={d.id}>J{i + 1}, {formatDay(d.date)}</option>
                         ))}
                       </Select>
                     </td>

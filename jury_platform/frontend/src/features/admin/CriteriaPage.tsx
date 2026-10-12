@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Alert, Badge, BrutalCard, Btn, FadeIn, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Textarea,
+  Alert, Badge, BrutalCard, Btn, ConfirmInPlace, FadeIn, Input, PageHeader, PageLoading, PageMotion, SectionHeading, Segmented, Select, Textarea,
 } from "@/features/shared/primitives";
 import { LoadError } from "@/features/shared/widgets";
 import {
@@ -187,7 +187,7 @@ function ProblemWeightsEditor({ saved }: { saved: Record<string, number> }) {
         {QUALIFS_PROBLEMS.map((p) => (
           <label key={p} style={{ width: "8.125rem" }}>
             <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-              Problème {p} · %
+              Problème {p} (%)
             </div>
             <Input
               type="number"
@@ -199,7 +199,7 @@ function ProblemWeightsEditor({ saved }: { saved: Record<string, number> }) {
             />
           </label>
         ))}
-        <Badge tone={valid ? "sage" : "saffron"}>Total · {filled ? `${Math.round(total * 100) / 100} %` : "—"}</Badge>
+        <Badge tone={valid ? "sage" : "saffron"}>Total : {filled ? `${String(Math.round(total * 100) / 100).replace(".", ",")} %` : "à compléter"}</Badge>
         <Btn size="sm" disabled={!dirty || !valid || busy} onClick={() => run(() => updateFinalWeights({ problemWeights: values }))}>
           Enregistrer
         </Btn>
@@ -279,7 +279,7 @@ function CriterionGroup({ criteria, onAdd, outOf20 = false }: { criteria: Criter
         <span className="font-mont text-tiny uppercase tracking-widest" style={{ color: "var(--forest)", fontWeight: 900 }}>
           {criteria.length} critère{criteria.length > 1 ? "s" : ""}
         </span>
-        <Badge tone="neutral">Total des coefficients · {totalCoef}{outOf20 && totalCoef > 0 ? " · note ramenée sur 20" : ""}</Badge>
+        <Badge tone="neutral">Total des coefficients : {String(totalCoef).replace(".", ",")}{outOf20 && totalCoef > 0 ? ", note ramenée sur 20" : ""}</Badge>
       </div>
 
       {criteria.length === 0 ? (
@@ -341,9 +341,19 @@ function CriterionRowEditor({ criterion }: { criterion: Criterion }) {
         </label>
         <label style={{ width: "10.625rem" }}>
           {label("Thème (optionnel)")}
-          <Input value={draft.theme ?? ""} placeholder="Débat, Malus…" onChange={(e) => setDraft({ ...draft, theme: e.target.value })} />
+          <Input value={draft.theme ?? ""} placeholder="ex. Débat, Malus" onChange={(e) => setDraft({ ...draft, theme: e.target.value })} />
         </label>
-        <div className="flex items-center gap-1.5">
+        {/* The deletion is asked in the two buttons' place: the fields beside them don't move */}
+        <ConfirmInPlace
+          asking={confirmDelete}
+          confirm={
+            <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(false); run(() => deleteCriterion(criterion.id)); }}>
+              Confirmer
+            </Btn>
+          }
+          onCancel={() => setConfirmDelete(false)}
+          className="flex items-center gap-1.5"
+        >
           <Btn
             size="sm"
             disabled={!dirty || !valid || busy}
@@ -356,17 +366,8 @@ function CriterionRowEditor({ criterion }: { criterion: Criterion }) {
           >
             Enregistrer
           </Btn>
-          {confirmDelete ? (
-            <>
-              <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(false); run(() => deleteCriterion(criterion.id)); }}>
-                Confirmer
-              </Btn>
-              <Btn variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Annuler</Btn>
-            </>
-          ) : (
-            <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>Supprimer</Btn>
-          )}
-        </div>
+          <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>Supprimer</Btn>
+        </ConfirmInPlace>
       </div>
       {/* Shown to the jurors when they hover or click the criterion's title */}
       <label className="block mt-2.5">

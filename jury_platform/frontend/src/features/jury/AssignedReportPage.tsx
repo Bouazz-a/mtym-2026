@@ -37,8 +37,8 @@ export function AssignedReportPage() {
     <PageMotion className="space-y-8">
       <BackLink />
       <PageHeader
-        eyebrow={team ? `${team.name} · ${centerLabel(team.center)}` : "Rapport"}
-        title={`${team?.quadrigram ?? ""} · Rapport du problème ${problemNumber}`}
+        eyebrow={team ? `${team.name}, ${centerLabel(team.center)}` : "Rapport"}
+        title={`${team ? `${team.quadrigram}, rapport` : "Rapport"} du problème ${problemNumber}`}
         sub="Votre note n'est visible que par l'administration."
         right={<Badge tone="dark">Problème {problemNumber}</Badge>}
       />
@@ -49,10 +49,10 @@ export function AssignedReportPage() {
         header={
           <>
             <span className="font-mont text-micro uppercase tracking-widest px-2 py-0.5" style={{ background: "var(--forest)", color: "var(--paper)", fontWeight: 800 }}>
-              Rapport écrit · P{problemNumber}
+              Rapport écrit, P{problemNumber}
             </span>
             <div className="font-mont mt-2" style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.3rem", letterSpacing: "0.06em" }}>
-              {team?.quadrigram ?? "—"}
+              {team?.quadrigram ?? "?"}
             </div>
             <div className="font-open text-xs truncate" style={{ color: "var(--ink-soft)" }}>{team?.name ?? ""}</div>
           </>

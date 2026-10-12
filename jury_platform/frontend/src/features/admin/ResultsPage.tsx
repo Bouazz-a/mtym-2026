@@ -5,7 +5,7 @@ import { GridIcon } from "@/features/shared/icons";
 import { EmptyState, LoadError } from "@/features/shared/widgets";
 import { queryState } from "@/features/shared/queryState";
 import type { FilterColumn } from "@/lib/services/columnFilters";
-import { fmtNote } from "@/lib/services/gradingService";
+import { frNote } from "@/lib/services/gradingService";
 import { FINAL_PART_LABELS, FINAL_PARTS, percent, teamResults, type TeamResult, type WrittenNote } from "@/lib/services/results";
 import type { Team } from "@/types";
 import { CENTERS, centerLabel } from "@/utils/labels";
@@ -22,7 +22,7 @@ import { useGradedPassages } from "./useGradedPassages";
 // (weighted average, weights set on the Critères page). Filters per column,
 // the center included.
 
-const pctText = (p: number | null) => (p === null ? "" : fmtNote(Math.round(p * 10) / 10));
+const pctText = (p: number | null) => (p === null ? "" : frNote(Math.round(p * 10) / 10));
 const centerText = (t: TeamResult) => (t.pool.centerDay ? centerLabel(t.pool.centerDay.center) : "");
 const centerRank = (t: TeamResult) => CENTERS.findIndex((c) => c.value === t.pool.centerDay?.center);
 
@@ -155,7 +155,7 @@ function ResultsTable({
                         <td
                           key={key}
                           className="font-mont tabular-nums"
-                          title={set?.average != null ? `${fmtNote(set.average)} / ${set.max}` : undefined}
+                          title={set?.average != null ? `${frNote(set.average)} / ${set.max}` : undefined}
                         >
                           {p === null ? <Pending /> : (
                             <span style={{ color: "var(--saffron-dark)", fontWeight: 900 }}>

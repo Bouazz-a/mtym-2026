@@ -46,16 +46,16 @@ export function buildPoolSheets(
       rows.push([text]);
     };
 
-    title("MTYM 2026 · Qualifications");
+    title("MTYM 2026 Qualifications");
     title(
-      `${centerLabel(center)} · ${formatDay(day.date)} · ${dayPools.length} poule${dayPools.length > 1 ? "s" : ""} · ${dayTeams.length} équipe${dayTeams.length > 1 ? "s" : ""}`,
+      `${centerLabel(center)}, ${formatDay(day.date)}, ${dayPools.length} poule${dayPools.length > 1 ? "s" : ""}, ${dayTeams.length} équipe${dayTeams.length > 1 ? "s" : ""}`,
     );
     rows.push([]);
 
     if (dayPools.length === 0) title("Aucune poule pour ce jour.");
 
     for (const pool of dayPools) {
-      title(`Poule ${pool.label}${pool.draft ? " · brouillon" : ""}`);
+      title(`Poule ${pool.label}${pool.draft ? " (brouillon)" : ""}`);
       rows.push([...HEADER]);
       for (const row of passageRows(pool, day, quad)) rows.push(row);
       rows.push([]);
@@ -87,7 +87,7 @@ function passageRows(
 ): (string | number | null)[][] {
   const time = (slot: number) => {
     const t = slotTime(day, slot);
-    return t ? `${t.start} – ${t.end}` : "";
+    return t ? `${t.start} à ${t.end}` : "";
   };
   const lineups = pool.draft
     ? [...pool.draft.passages].sort((a, b) => a.slot - b.slot)
@@ -105,7 +105,7 @@ function passageRows(
   ]);
 }
 
-// "J1 · 24 oct." — Excel refuses [ ] : * ? / \ and more than 31 characters
+// "J1 24 oct.": Excel refuses [ ] : * ? / \ and more than 31 characters
 function sheetName(index: number, day: CenterDay): string {
-  return `J${index + 1} · ${formatDay(day.date)}`.replace(/[[\]:*?/\\]/g, " ").slice(0, 31);
+  return `J${index + 1} ${formatDay(day.date)}`.replace(/[[\]:*?/\\]/g, " ").slice(0, 31);
 }

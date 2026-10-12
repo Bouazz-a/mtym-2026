@@ -155,7 +155,7 @@ export function ColumnFilterMenu({
               <div className="mb-2">
                 <Input
                   type="search"
-                  placeholder="Rechercher…"
+                  placeholder="Rechercher"
                   aria-label={`${label} : rechercher`}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}

@@ -1,12 +1,12 @@
-import { Children, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
-import { motion, useReducedMotion, type Transition } from "framer-motion";
+import { Children, isValidElement, startTransition, useCallback, useEffect, useId, useLayoutEffect, useOptimistic, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { FIELD_STYLE } from "./fieldStyle";
 import { usePageTitle } from "./usePageTitle";
 import { CloseIcon } from "./icons";
-import { useSlide } from "./motion";
+import { arrive, hasLeft, slideFrom, useLeave } from "./motion";
 
 // Primitives — visual building blocks aligned with the MTYM aesthetic:
-// editorial typography (Montserrat display + Open Sans body), saturated
+// editorial typography (Montserrat display + IBM Plex Sans body), saturated
 // saffron accents on a paper/forest base, square 2-4px borders rather
 // than the rounded look that screams generic AI app.
 
@@ -59,6 +59,44 @@ export function Btn({
     >
       {children}
     </button>
+  );
+}
+
+// ─── A confirmation asked in place ─────────────────────────────────────
+
+// « Confirmer / Annuler » takes the place of the buttons it is about without
+// taking more room than them: they stay where they are, hidden, and hold
+// the width, so asking never moves the row, or the whole table, around it.
+// `className` lays the buttons out (flex, gap…); `question` says what is
+// confirmed where there is room for it.
+export function ConfirmInPlace({
+  asking,
+  question,
+  confirm,
+  onCancel,
+  className = "",
+  children,
+}: {
+  asking: boolean;
+  question?: string;
+  confirm: ReactNode; // the button that goes ahead
+  onCancel: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <div className={className} inert={asking} style={asking ? { visibility: "hidden" } : undefined}>
+        {children}
+      </div>
+      {asking && (
+        <div className="absolute inset-0 flex items-center justify-end gap-1.5 flex-nowrap fade-in">
+          {question && <span className="font-open text-xs mr-1 whitespace-nowrap" style={{ color: "var(--ink)" }}>{question}</span>}
+          {confirm}
+          <Btn variant="ghost" size="sm" onClick={onCancel}>Annuler</Btn>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -254,9 +292,10 @@ export function SectionHeading({
 }) {
   return (
     <div className={`flex flex-wrap items-end justify-between gap-x-4 gap-y-3 mb-4 ${className}`}>
+      {/* Capitals this heavy need air: a slightly open tracking */}
       <h2
-        className="font-mont uppercase tracking-tight flex items-center gap-2 min-w-0"
-        style={{ fontSize: "1.05rem", color: "var(--forest)", fontWeight: 900 }}
+        className="font-mont uppercase flex items-center gap-2 min-w-0"
+        style={{ fontSize: "1rem", color: "var(--forest)", fontWeight: 900, letterSpacing: "0.02em" }}
       >
         <DiamondMarker />
         {title}
@@ -270,12 +309,17 @@ export function SectionHeading({
 
 type BadgeTone = "neutral" | "saffron" | "sage" | "danger" | "dark";
 
-// ─── Page transition wrapper ──────────────────────────────────────────
+// ─── Arrivals ─────────────────────────────────────────────────────────
 
-// A page arrives with a short fade and rise; the page it replaces leaves at
-// once (no exit to wait for), so moving between pages never stalls.
-const PAGE_TRANSITION: Transition = { duration: 0.24, ease: [0.16, 1, 0.3, 1] };
+// The browser plays all of these by itself (opacity and transform only), so
+// they stay smooth while the page is still being drawn, which is exactly
+// when a page arrives. With reduced motion, a fade only.
 
+// A page arrives with a short fade and rise, its sections one after the
+// other from the top; the page it replaces leaves at once (no exit to wait
+// for), so moving between pages never stalls. Played once, when the page
+// appears (arrive() in motion.ts): what it shows later (an error, another
+// day's content) has its own entrance, or none.
 export function PageMotion({
   children,
   className = "",
@@ -283,41 +327,25 @@ export function PageMotion({
   children: ReactNode;
   className?: string;
 }) {
-  const reduce = useReducedMotion();
-  return (
-    <motion.div
-      initial={reduce ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={PAGE_TRANSITION}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (ref.current) return arrive([...ref.current.children]);
+  }, []);
+  return <div ref={ref} className={className}>{children}</div>;
 }
 
 // Content replaced in place (another day, another center): it fades in
 // instead of snapping. Give it a `key` that changes with what it shows.
-export function FadeIn({ children, className }: { children: ReactNode; className?: string }) {
-  const reduce = useReducedMotion();
-  return (
-    <motion.div
-      initial={reduce ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
+// (This one and the next are plain CSS: index.css, "Arrivals".)
+export function FadeIn({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`fade-in ${className}`}>{children}</div>;
 }
 
-
-// Staggered entrance container — each direct child fades up
-// (opacity 0→1, y 12→0) with a 40ms cascade. Put the layout classes
+// Staggered entrance container: each direct child fades up (by `y` pixels
+// at the reader's font size) with a 40ms cascade. Put the layout classes
 // (grid/space-y/flex) on `className`; the wrappers become the layout
 // items so spacing is preserved. Remount it (change its `key`) to
-// replay the cascade — e.g. on a tab switch. Honors reduced-motion.
+// replay the cascade, e.g. on a tab switch.
 export function Stagger({
   children,
   className = "",
@@ -331,24 +359,20 @@ export function Stagger({
   y?: number;
   initialDelay?: number;
 }) {
-  const reduce = useReducedMotion();
   const items = Children.toArray(children);
   return (
     <div className={className}>
       {items.map((child, i) => (
-        <motion.div
+        <div
           key={isValidElement(child) && child.key != null ? child.key : i}
-          className="h-full"
-          initial={reduce ? false : { opacity: 0, y }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: reduce ? 0 : initialDelay + Math.min(i * step, 0.5),
-            duration: 0.32,
-            ease: [0.16, 1, 0.3, 1],
+          className="h-full rise-in"
+          style={{
+            ["--rise" as string]: `${y / 16}rem`,
+            animationDelay: `${Math.round((initialDelay + Math.min(i * step, 0.5)) * 1000)}ms`,
           }}
         >
           {child}
-        </motion.div>
+        </div>
       ))}
     </div>
   );
@@ -359,6 +383,16 @@ export function Stagger({
 // What Tab can reach inside a dialog
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
 
+// A dialog closes faster than it opens: its veil fades while it draws back a little
+const MODAL_EXIT: KeyframeAnimationOptions = { duration: 140, easing: "ease-out", fill: "forwards" };
+const leaveModal = (layer: HTMLElement) => {
+  layer.querySelector(".modal-dialog")?.animate([{ transform: "none" }, { transform: "scale(0.98)" }], MODAL_EXIT);
+  return layer.animate([{ opacity: 1 }, { opacity: 0 }], MODAL_EXIT);
+};
+
+// A dialog is drawn at the end of the page (a portal), not where it is
+// declared: the layout around it (the spacing of a page's sections, a table
+// cell's typography) can't reach it, and it always covers the whole screen.
 export function Modal({
   open, title, children, onClose, footer, width,
 }: {
@@ -367,10 +401,14 @@ export function Modal({
   children: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
-  width?: number | string; // px, or any CSS width
+  // Its widest (40rem by default): px at the base font size, or any CSS
+  // width. It follows the page scale and never goes past the screen.
+  width?: number | string;
 }) {
+  const layerRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  useLeave(layerRef, open, leaveModal);
 
   // What had focus when the dialog opened, read while rendering: by the
   // time effects run, a field's autoFocus inside the dialog has taken it.
@@ -412,60 +450,66 @@ export function Modal({
     return () => {
       document.removeEventListener("keydown", onTab);
       // Only once the dialog is gone (not on StrictMode's test unmount)
-      if (!dialog?.isConnected) opener?.focus?.();
+      if (!dialog || hasLeft(dialog)) opener?.focus?.();
     };
   }, [open, opener]);
 
-  // Lock the body scroll while a modal is open.
+  // Lock the page's scroll while a dialog is open. The room of the scroll
+  // bar this hides is kept (--scrollbar-gap, used by the page and the top
+  // bar), so nothing behind the dialog shifts sideways.
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+    const root = document.documentElement;
+    const prev = { overflow: document.body.style.overflow, gap: root.style.getPropertyValue("--scrollbar-gap") };
+    const gap = window.innerWidth - root.clientWidth;
     document.body.style.overflow = "hidden";
+    if (gap > 0) root.style.setProperty("--scrollbar-gap", `${gap}px`);
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prev.overflow;
+      root.style.setProperty("--scrollbar-gap", prev.gap);
       window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
-    <>
+  return createPortal(
+    <div className="modal-layer" ref={layerRef}>
       <div className="modal-backdrop" onClick={onClose} />
       <div className="modal-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}
            ref={dialogRef}
            tabIndex={-1}
-           style={{ ...(width ? { width } : {}), outline: "none" }}
+           style={{
+             ...(width !== undefined && { ["--modal-width" as string]: typeof width === "number" ? `${width / 16}rem` : width }),
+             outline: "none",
+           }}
            onClick={e => e.stopPropagation()}>
+        {/* The title and the buttons stay in view; what is between them scrolls */}
         <header
-          className="px-6 py-4 flex items-center justify-between gap-3"
+          className="px-6 py-4 flex items-center justify-between gap-3 shrink-0"
           style={{ borderBottom: "2px solid var(--forest)" }}
         >
-          <h2 id={titleId} className="font-mont uppercase tracking-tight"
-              style={{ fontSize: "1.05rem", color: "var(--forest)", fontWeight: 900, letterSpacing: "-0.01em" }}>
+          <h2 id={titleId} className="font-mont uppercase"
+              style={{ fontSize: "1rem", color: "var(--forest)", fontWeight: 900, letterSpacing: "0.02em" }}>
             {title}
           </h2>
-          <button
-            onClick={onClose}
-            aria-label="Fermer"
-            className="p-2 -mr-2"
-            style={{ color: "var(--ink-faint)" }}
-          >
+          <button onClick={onClose} aria-label="Fermer" className="icon-btn p-2 -mr-2 shrink-0">
             <CloseIcon size="1rem" />
           </button>
         </header>
-        <div className="p-6">{children}</div>
+        <div className="modal-body p-6">{children}</div>
         {footer && (
           <footer
-            className="px-6 py-4 flex items-center justify-end gap-2"
+            className="px-6 py-4 flex flex-wrap items-center justify-end gap-2 shrink-0"
             style={{ borderTop: "1px solid var(--border)", background: "var(--paper-2)" }}
           >
             {footer}
           </footer>
         )}
       </div>
-    </>
+    </div>,
+    document.body,
   );
 }
 
@@ -476,6 +520,11 @@ export function Modal({
 // size, so the popover grows with everything else.
 const rootFontSize = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
+// It grows out of what opened it (its origin is the anchor's middle), and
+// closes faster, drawing back toward it
+const leavePopover = (node: HTMLElement) =>
+  node.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.97)" }], { duration: 110, easing: "ease-out", fill: "forwards" });
+
 export function Popover({
   open,
   onClose,
@@ -485,6 +534,7 @@ export function Popover({
   width = 20,
   id,
   role = "dialog",
+  instant = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -495,6 +545,8 @@ export function Popover({
   width?: number;
   id?: string; // for the anchor's aria-controls / aria-describedby
   role?: "dialog" | "tooltip";
+  /** Opens and closes at once: one menu replacing its neighbour, where two fades would cross */
+  instant?: boolean;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -530,7 +582,10 @@ export function Popover({
   //
   // On narrow screens the popover is clamped inside the viewport (half a
   // line of margin) rather than anchored off its left edge.
-  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight?: number; placed: boolean } | null>(null);
+  // `originX`: the anchor's middle, from the popover's left edge
+  const [pos, setPos] = useState<{
+    top: number; left: number; width: number; maxHeight?: number; placed: boolean; originX: number; above: boolean;
+  } | null>(null);
   useLayoutEffect(() => {
     if (!open) return;
     const anchor = anchorRef.current;
@@ -539,14 +594,21 @@ export function Popover({
     const viewport = window.innerWidth;
     const gap = 0.5 * rootFontSize();
     const w = Math.min(width * rootFontSize(), viewport - 2 * gap);
-    const left = align === "right" ? rect.right - w : rect.left;
+    const left = Math.max(gap, Math.min(align === "right" ? rect.right - w : rect.left, viewport - w - gap));
     setPos({
       top: rect.bottom + gap,
-      left: Math.max(gap, Math.min(left, viewport - w - gap)),
+      left,
       width: w,
       placed: false,
+      originX: Math.max(0, Math.min(rect.left + rect.width / 2 - left, w)),
+      above: false,
     });
   }, [open, align, width, anchorRef]);
+
+  // Whether it opened at once, as asked at that moment: a change of mind
+  // under an open popover would play its entrance again
+  const [opening, setOpening] = useState({ open, instant });
+  if (open !== opening.open) setOpening({ open, instant });
 
   // Second pass, once the popover is in the DOM and has a height: if it
   // would run past the bottom of the viewport (a fixed element can't be
@@ -561,28 +623,34 @@ export function Popover({
     const gap = 0.5 * rootFontSize();
     let { top } = pos;
     let maxHeight: number | undefined;
+    let above = false;
     if (top + height > viewportHeight - gap) {
-      const above = anchorTop - gap - height;
-      if (above >= gap) top = above;
-      else {
+      const room = anchorTop - gap - height;
+      if (room >= gap) {
+        top = room;
+        above = true;
+      } else {
         top = gap;
         maxHeight = viewportHeight - 2 * gap;
       }
     }
-    setPos({ ...pos, top, maxHeight, placed: true });
+    setPos({ ...pos, top, maxHeight, above, placed: true });
   }, [open, pos, anchorRef]);
 
-  if (!open || !pos) return null;
+  const shown = open && pos !== null;
+  useLeave(ref, shown, instant ? null : leavePopover);
+  if (!shown) return null;
 
   return (
     <div
       ref={ref}
-      className="popover"
+      className={opening.instant ? "popover popover--instant" : "popover"}
       style={{
         position: "fixed",
         top: pos.top,
         left: pos.left,
         width: pos.width,
+        transformOrigin: `${pos.originX}px ${pos.above ? "100%" : "0"}`,
         ...(pos.maxHeight !== undefined && { maxHeight: pos.maxHeight, overflowY: "auto" }),
       }}
       id={id}
@@ -629,6 +697,11 @@ export function Badge({
 
 // The active option's dark block slides to the one picked. The weight
 // stays the same across states, so picking never shifts the others.
+//
+// The block follows the click at once, before the page that goes with the
+// choice is drawn (a choice kept in the address re-renders the whole page):
+// `picked` is the click's own answer until `value` catches up, and the
+// slide is played by the browser (slideFrom), whatever the page is doing.
 export function Segmented<T extends string | number>({
   options,
   value,
@@ -638,8 +711,17 @@ export function Segmented<T extends string | number>({
   value: T;
   onChange: (v: T) => void;
 }) {
-  const id = useId();
-  const slide = useSlide();
+  const [picked, pick] = useOptimistic(value);
+  // Where the block was when it left an option: the next one slides from there
+  const leftAt = useRef<DOMRect | null>(null);
+  const block = useCallback((el: HTMLSpanElement | null) => {
+    if (!el) return;
+    slideFrom(el, leftAt.current);
+    leftAt.current = null;
+    return () => {
+      leftAt.current = el.getBoundingClientRect();
+    };
+  }, []);
   return (
     <div
       className="inline-flex p-0.5 flex-wrap"
@@ -650,19 +732,20 @@ export function Segmented<T extends string | number>({
       }}
     >
       {options.map((opt) => {
-        const active = opt.value === value;
+        const active = opt.value === picked;
         return (
           <button
             key={String(opt.value)}
             type="button"
             aria-pressed={active}
-            onClick={() => onChange(opt.value)}
+            onClick={() => startTransition(() => {
+              pick(opt.value);
+              onChange(opt.value);
+            })}
             className="segmented-option relative px-4 py-1.5 font-mont text-micro uppercase tracking-widest focus-ring"
             style={{ color: active ? "var(--saffron)" : "var(--ink-soft)", fontWeight: 800 }}
           >
-            {active && (
-              <motion.span layoutId={`segmented-${id}`} aria-hidden className="absolute inset-0" style={{ background: "var(--forest)" }} transition={slide} />
-            )}
+            {active && <span ref={block} aria-hidden className="absolute inset-0" style={{ background: "var(--forest)" }} />}
             <span className="relative">{opt.label}</span>
           </button>
         );
@@ -697,7 +780,7 @@ export function Alert({
   const color = { error: "var(--clay)", success: "var(--sage-dark)", warning: "var(--saffron-dark)" }[tone];
   return (
     <BrutalCard
-      className="p-4"
+      className="p-4 alert-in"
       withCorners={false}
       role={tone === "error" ? "alert" : "status"}
       style={{ borderColor: color, boxShadow: `2px 2px 0 0 ${color}` }}
@@ -746,7 +829,7 @@ export function PageLoading({ variant = "page" }: { variant?: "page" | "section"
       <div aria-hidden style={{ border: "2px solid var(--forest)", boxShadow: "2px 2px 0 0 var(--forest)", background: "var(--surface)" }}>
         <div className="px-4 flex items-center" style={{ height: "2.75rem", background: "var(--forest-soft)" }}>
           <span className="loading-label font-mont text-micro uppercase tracking-widest" style={{ color: "rgba(244,236,216,0.75)", fontWeight: 800 }}>
-            Chargement…
+            Chargement...
           </span>
         </div>
         {rows.map((width, i) => (
@@ -762,7 +845,7 @@ export function PageLoading({ variant = "page" }: { variant?: "page" | "section"
         ))}
       </div>
       {/* Last, so the spacing above doesn't count it as the first child */}
-      <span className="sr-only">Chargement…</span>
+      <span className="sr-only">Chargement...</span>
     </div>
   );
 }

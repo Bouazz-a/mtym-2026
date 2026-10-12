@@ -71,13 +71,13 @@ describe("buildPoolSheets", () => {
 
   it("makes one sheet per day, named after it", () => {
     expect(sheets).toHaveLength(2);
-    expect(sheets[0].name).toMatch(/^J1 · /);
-    expect(sheets[1].name).toMatch(/^J2 · /);
+    expect(sheets[0].name).toMatch(/^J1 /);
+    expect(sheets[1].name).toMatch(/^J2 /);
     expect(sheets.every((s) => s.name.length <= 31)).toBe(true);
   });
 
   it("heads each sheet with the center, the day and what it holds", () => {
-    expect(sheets[0].rows[0][0]).toBe("MTYM 2026 · Qualifications");
+    expect(sheets[0].rows[0][0]).toBe("MTYM 2026 Qualifications");
     expect(sheets[0].rows[1][0]).toContain("Casablanca");
     expect(sheets[0].rows[1][0]).toContain("1 poule");
     expect(sheets[0].rows[1][0]).toContain("4 équipes");
@@ -95,8 +95,8 @@ describe("buildPoolSheets", () => {
   it("writes one row per passage, in slot order, with the day's hours", () => {
     const { rows } = sheets[0];
     const first = rowStartingWith(rows, "P1")!;
-    expect(first).toEqual(["P1", "13:15 – 14:15", "Amphi A", 1, "ALFA", "BETA", "GAMA", "DELT"]);
-    expect(rowStartingWith(rows, "P4")![1]).toBe("17:15 – 18:15");
+    expect(first).toEqual(["P1", "13:15 à 14:15", "Amphi A", 1, "ALFA", "BETA", "GAMA", "DELT"]);
+    expect(rowStartingWith(rows, "P4")![1]).toBe("17:15 à 18:15");
   });
 
   it("leaves the observer empty in a pool of 3", () => {
@@ -136,8 +136,8 @@ describe("buildPoolSheets", () => {
       },
     };
     const [sheet] = buildPoolSheets("casablanca", [d1], [draft], teams);
-    expect(sheet.rows.some((r) => r[0] === "Poule CAS-A5 · brouillon")).toBe(true);
-    expect(rowStartingWith(sheet.rows, "P1")).toEqual(["P1", "13:15 – 14:15", "", 2, "ALFA", "", "", ""]);
+    expect(sheet.rows.some((r) => r[0] === "Poule CAS-A5 (brouillon)")).toBe(true);
+    expect(rowStartingWith(sheet.rows, "P1")).toEqual(["P1", "13:15 à 14:15", "", 2, "ALFA", "", "", ""]);
   });
 
   it("says so when a day has no pool", () => {

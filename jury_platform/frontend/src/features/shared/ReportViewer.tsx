@@ -59,14 +59,13 @@ export function ReportPanel({ reportId, src, title }: { reportId: string; src?: 
         <iframe src={url} title={title} className="flex-1 w-full" style={{ border: "none", background: "var(--paper-2)" }} />
       ) : (
         <div className="flex-1 grid place-items-center font-mont text-tiny uppercase tracking-widest" style={{ color: "var(--ink-faint)" }}>
-          Ouverture du rapport…
+          Ouverture du rapport...
         </div>
       )}
     </BrutalCard>
   );
 }
 
-const FRAME_STYLE = { width: "100%", height: "68vh", border: "1px solid var(--border)", background: "var(--paper-2)" } as const;
 
 // `report`: the one to show (its id and the modal's title), null when closed
 export function ReportModal({ report, onClose }: { report: { id: string; title: string } | null; onClose: () => void }) {
@@ -88,10 +87,10 @@ export function ReportModal({ report, onClose }: { report: { id: string; title: 
       {query.isError ? (
         <Alert>{errorMessage(query.error, "Rapport introuvable.")}</Alert>
       ) : url ? (
-        <iframe src={url} title={report?.title ?? "Rapport"} style={FRAME_STYLE} />
+        <iframe src={url} title={report?.title ?? "Rapport"} className="pdf-frame" />
       ) : (
-        <div className="grid place-items-center font-mont text-tiny uppercase tracking-widest" style={{ ...FRAME_STYLE, color: "var(--ink-faint)" }}>
-          Ouverture du rapport…
+        <div className="pdf-frame grid place-items-center font-mont text-tiny uppercase tracking-widest" style={{ color: "var(--ink-faint)" }}>
+          Ouverture du rapport...
         </div>
       )}
     </Modal>
@@ -166,7 +165,7 @@ function PdfButton({
   return (
     <>
       <Btn variant={variant} size="sm" onClick={open} disabled={busy}>
-        {busy ? "Ouverture…" : label}
+        {busy ? "Ouverture..." : label}
       </Btn>
       {error && <div className="mt-3"><Alert>{error}</Alert></div>}
       <Modal
@@ -182,7 +181,7 @@ function PdfButton({
         }
       >
         {url && (
-          <iframe src={url} title={title} style={FRAME_STYLE} />
+          <iframe src={url} title={title} className="pdf-frame" />
         )}
       </Modal>
     </>

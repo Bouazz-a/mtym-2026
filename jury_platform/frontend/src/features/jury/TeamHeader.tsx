@@ -10,7 +10,7 @@ export function TeamHeader({ role, team }: { role: "defender" | "opponent" | "re
         {meta.label}
       </span>
       <div className="font-mont mt-2" style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.3rem", letterSpacing: "0.06em" }}>
-        {team?.quadrigram ?? "—"}
+        {team?.quadrigram ?? "?"}
       </div>
       <div className="font-open text-xs truncate" style={{ color: "var(--ink-soft)" }}>{team?.name ?? ""}</div>
     </>

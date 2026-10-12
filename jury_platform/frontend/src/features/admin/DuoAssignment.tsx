@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Alert, Badge, Btn, BrutalCard, Modal, SectionHeading, Select } from "@/features/shared/primitives";
+import { Alert, Badge, Btn, BrutalCard, ConfirmInPlace, Modal, SectionHeading, Select } from "@/features/shared/primitives";
 import { autoAssignDuos, createDuo, deleteDuo, updateDuo, type AutoAssignMode } from "@/lib/repositories/duoRepository";
 import type { Account, CenterDay, JuryDuo, PoolDetails, ScheduleSlot, Team } from "@/types";
 import { jurorSpecialties } from "@/utils/duos";
@@ -45,7 +45,7 @@ export function DayJury({
     <div className="space-y-10">
       <section>
         <SectionHeading
-          title={`Duos du jour · J${dayIndex + 1}`}
+          title={`Duos du jour, J${dayIndex + 1}`}
           right={<Badge tone="neutral">{duos.length} duo{duos.length > 1 ? "s" : ""}</Badge>}
         />
         <BrutalCard className="p-5">
@@ -68,7 +68,7 @@ export function DayJury({
 
       <section>
         <SectionHeading
-          title={`Planning · ${formatDay(day.date)}`}
+          title={`Planning du ${formatDay(day.date)}`}
           right={
             passages.length > 0 && (
               <div className="flex items-center gap-3 flex-wrap">
@@ -149,7 +149,7 @@ function AutoAssign({
     if (res.assigned > 0) parts.push(`${res.specialized}/${res.assigned} jugés par un spécialiste`);
     if (res.withoutDuo > 0) parts.push(`${res.withoutDuo} sans duo (pas assez de duos)`);
     if (res.samePool > 0) parts.push(`${res.samePool} fois la même poule deux fois`);
-    setSummary(parts.join(" · "));
+    setSummary(parts.join(", "));
     onWarnings(res.warnings);
   };
 
@@ -161,7 +161,7 @@ function AutoAssign({
         title={duos.length === 0 ? "Formez d'abord au moins un duo" : "Répartit les passages entre les duos du jour"}
         onClick={() => setOpen(true)}
       >
-        {busy ? "Attribution…" : "Attribuer automatiquement"}
+        {busy ? "Attribution..." : "Attribuer automatiquement"}
       </Btn>
       {summary && (
         <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800 }}>
@@ -230,7 +230,7 @@ function JurorSelect({
         const specialty = specialtyOf(j.id);
         return (
           <option key={j.id} value={j.id} disabled={j.id !== value && unavailable.has(j.id)}>
-            {j.lastName} {j.firstName}{specialty.length > 0 ? ` · P${specialty.join(" et P")}` : ""}
+            {j.lastName} {j.firstName}{specialty.length > 0 ? ` (P${specialty.join(" et P")})` : ""}
           </option>
         );
       })}
@@ -311,7 +311,10 @@ function DuoLayout({ badge, children: [jurorFields, actions] }: { badge: ReactNo
   return (
     <div className="flex items-baseline gap-3 flex-wrap">
       <div style={{ width: "5rem" }}>{badge}</div>
-      <div className="flex items-baseline gap-3 flex-wrap flex-1 min-w-0">{jurorFields}</div>
+      {/* Room for one juror's field at least (or what the badge leaves, on a
+          phone): short of that, the problem and actions go to the next line
+          instead of squeezing the field */}
+      <div className="flex items-baseline gap-3 flex-wrap flex-1" style={{ minWidth: "min(15rem, 100% - 5.75rem)" }}>{jurorFields}</div>
       <div className="flex items-baseline gap-3 flex-wrap" style={{ minWidth: "min(24rem, 100%)" }}>{actions}</div>
     </div>
   );
@@ -360,19 +363,21 @@ function DuoRow({
             disabled={busy}
             onChange={(problemNumber) => run(() => updateDuo(duo.id, { problemNumber }))}
           />
-          <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800, minWidth: "5.5rem" }}>
-            {passages} passage{passages > 1 ? "s" : ""}
-          </span>
-          {confirmDelete ? (
-            <>
-              <Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(false); run(() => deleteDuo(duo.id)); }}>Confirmer</Btn>
-              <Btn variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Annuler</Btn>
-            </>
-          ) : (
+          {/* The deletion is asked in the place of the count and the button:
+              the row keeps its width, the jurors' fields stay on their line */}
+          <ConfirmInPlace
+            asking={confirmDelete}
+            confirm={<Btn variant="danger" size="sm" onClick={() => { setConfirmDelete(false); run(() => deleteDuo(duo.id)); }}>Confirmer</Btn>}
+            onCancel={() => setConfirmDelete(false)}
+            className="flex items-baseline gap-3"
+          >
+            <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-soft)", fontWeight: 800, minWidth: "5.5rem" }}>
+              {passages} passage{passages > 1 ? "s" : ""}
+            </span>
             <Btn variant="danger" size="sm" title="Ses passages repasseront « sans duo »" onClick={() => setConfirmDelete(true)}>
               Supprimer
             </Btn>
-          )}
+          </ConfirmInPlace>
         </>
       </DuoLayout>
       {error && <div className="mt-2"><Alert>{error}</Alert></div>}

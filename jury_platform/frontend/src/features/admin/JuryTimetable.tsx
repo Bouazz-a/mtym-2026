@@ -179,7 +179,7 @@ function BreakRow({ minutes }: { minutes: number }) {
         className="inline-block px-3 font-mont text-micro uppercase tracking-widest tabular-nums"
         style={{ position: "sticky", left: 0, color: "var(--ink-soft)", fontWeight: 800 }}
       >
-        {minutes > 0 ? `Pause · ${minutes} min` : "Sans pause"}
+        {minutes > 0 ? `Pause de ${minutes} min` : "Sans pause"}
       </span>
     </div>
   );
@@ -214,7 +214,7 @@ function PassageCell({
   clash: boolean;
   onOpen: () => void;
 }) {
-  const quad = (id: string) => teamById.get(id)?.quadrigram ?? "—";
+  const quad = (id: string) => teamById.get(id)?.quadrigram ?? "?";
   const { duo } = passage;
   return (
     <button
@@ -279,7 +279,7 @@ function DuoPicker({
   const { run, busy, error } = useAction(DUO_QUERIES);
   const n = passage.slot;
   const slot = schedule[n - 1];
-  const quad = (id: string) => teamById.get(id)?.quadrigram ?? "—";
+  const quad = (id: string) => teamById.get(id)?.quadrigram ?? "?";
   const dayPassages = pools.flatMap((p) => p.passages);
   const labelsOf = (duoId: string, ps: (PassageDetails | undefined)[]) =>
     ps.filter((p): p is PassageDetails => Boolean(p && p.id !== passage.id && p.duo?.id === duoId)).map((p) => p.label);
@@ -298,7 +298,7 @@ function DuoPicker({
       <div className="space-y-5">
         <div>
           <div className="font-mont text-micro uppercase tracking-widest mb-2" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
-            Poule {pool.label}{slot ? ` · ${slot.start} – ${slotEnd(slot)}` : ""} · Problème {passage.problemNumber}
+            Poule {pool.label}{slot ? `, ${slot.start} à ${slotEnd(slot)}` : ""}, problème {passage.problemNumber}
           </div>
           <div className="space-y-1">
             <RoleLine role="defender" quad={quad(passage.defenderTeamId)} />
@@ -331,8 +331,8 @@ function DuoPicker({
                   aside={`${count} passage${count > 1 ? "s" : ""}`}
                 >
                   {duo.problemNumber === passage.problemNumber && <Badge tone="sage">Spécialiste du P{duo.problemNumber}</Badge>}
-                  {inPool.length > 0 && <Badge tone="danger">Doublon · {inPool.join(", ")}</Badge>}
-                  {sameTime.length > 0 && <Badge tone="danger">Même heure · {sameTime.join(", ")}</Badge>}
+                  {inPool.length > 0 && <Badge tone="danger">Doublon : {inPool.join(", ")}</Badge>}
+                  {sameTime.length > 0 && <Badge tone="danger">Même heure : {sameTime.join(", ")}</Badge>}
                 </DuoOption>
               );
             })}
@@ -368,7 +368,7 @@ function DuoOption({
       aria-checked={selected}
       disabled={disabled}
       onClick={onSelect}
-      className="duo-option w-full text-left px-4 py-3 flex items-center gap-3 disabled:opacity-60"
+      className="duo-option w-full text-left px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 disabled:opacity-60"
       style={{ border: `2px solid ${selected ? "var(--forest)" : "var(--border)"}` }}
     >
       <span
@@ -378,7 +378,9 @@ function DuoOption({
       >
         {selected && <span style={{ width: "0.5rem", height: "0.5rem", borderRadius: "50%", background: "var(--forest)" }} />}
       </span>
-      <span className="min-w-0 flex-1">
+      {/* At least 13rem for the duo and its warnings: on a phone the count
+          of passages goes under them instead of over them */}
+      <span className="min-w-0 flex-1" style={{ flexBasis: "13rem" }}>
         <span className="font-mont text-sm block" style={{ color: "var(--forest)", fontWeight: 900 }}>
           {title}
           {sub && <span className="font-open ml-2" style={{ color: "var(--ink)", fontWeight: 400 }}>{sub}</span>}
@@ -386,7 +388,7 @@ function DuoOption({
         {children && <span className="flex gap-1 flex-wrap mt-1.5">{children}</span>}
       </span>
       {aside && (
-        <span className="font-mont text-micro uppercase tracking-widest shrink-0" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
+        <span className="font-mont text-micro uppercase tracking-widest shrink-0 ml-auto" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
           {aside}
         </span>
       )}
