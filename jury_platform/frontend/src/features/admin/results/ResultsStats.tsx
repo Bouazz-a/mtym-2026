@@ -1,11 +1,10 @@
-import type { ReactNode } from "react";
 import { Badge, BrutalCard, SectionHeading } from "@/features/shared/primitives";
 import { FINAL_PART_LABELS, FINAL_PARTS, percent, type TeamResult } from "@/lib/services/results";
 import { bins, frStat, niceDomain, summarize, type Summary } from "@/lib/services/stats";
 import type { Team } from "@/types";
 import { CENTERS, centerLabel } from "@/utils/labels";
 import { GroupedBars, Meter, Widget } from "../dashboard/charts";
-import { BoxLegend, Histogram, ScaleBar, StripPlot, type StripRow } from "./charts";
+import { BoxLegend, Figures, Histogram, ScaleBar, StripPlot, type Figure, type StripRow } from "./charts";
 
 // The statistics of the final grades, above the Résultats table: the key
 // figures, how the teams spread, how each of the four notes went, and the
@@ -74,7 +73,7 @@ export function ResultsStats({ rows, teamById }: { rows: TeamResult[]; teamById:
 // ─── The key figures, each placed on the scale of the notes ──────────
 
 function KeyFigures({ summary: s, total }: { summary: Summary; total: number }) {
-  const tiles: { label: string; value: string; unit?: string; sub?: string; bar: ReactNode }[] = [
+  const tiles: Figure[] = [
     { label: "Équipes notées", value: String(s.count), sub: `sur ${total} en poule`, bar: <Meter done={s.count} total={total} label="Équipes notées" height="0.375rem" /> },
     { label: "Moyenne", value: frStat(s.mean), unit: "%", bar: <ScaleBar at={s.mean} /> },
     { label: "Médiane", value: frStat(s.median), unit: "%", sub: "la moitié des équipes au-dessus", bar: <ScaleBar at={s.median} /> },
@@ -84,21 +83,7 @@ function KeyFigures({ summary: s, total }: { summary: Summary; total: number }) 
   ];
   return (
     <div>
-      <BrutalCard withCorners={false}>
-        <dl className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-px" style={{ background: "var(--border)" }}>
-          {tiles.map((t) => (
-            <div key={t.label} className="px-4 py-3 flex flex-col" style={{ background: "var(--surface)" }}>
-              <dt className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>{t.label}</dt>
-              <dd className="font-mont leading-none tabular-nums mt-2" style={{ fontSize: "1.6rem", color: "var(--forest)", fontWeight: 900, letterSpacing: "-0.02em" }}>
-                {t.value}
-                {t.unit && <span className="text-xs ml-1" style={{ color: "var(--ink-faint)", letterSpacing: 0 }}>{t.unit}</span>}
-              </dd>
-              <dd className="font-open text-xs mt-1 mb-3" style={{ color: "var(--ink-faint)", minHeight: "1rem" }}>{t.sub}</dd>
-              <dd className="mt-auto">{t.bar}</dd>
-            </div>
-          ))}
-        </dl>
-      </BrutalCard>
+      <Figures tiles={tiles} className="grid-cols-2 md:grid-cols-3 xl:grid-cols-6" />
       <p className="font-open text-xs mt-2" style={{ color: "var(--ink-faint)" }}>
         Sous chaque chiffre, sa place sur l'échelle des notes, de 0 à 100 %. Variance et écart type sont ceux de toutes les équipes notées (diviseur n).
       </p>

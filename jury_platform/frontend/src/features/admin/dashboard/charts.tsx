@@ -39,6 +39,27 @@ export function Widget({
   );
 }
 
+// ─── A small segmented control for a widget's header ─────────────────
+
+export function Toggle<T extends string>({ options, value, onChange, label }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void; label: string }) {
+  return (
+    <div role="group" aria-label={label} className="inline-flex" style={{ border: "1.5px solid var(--forest)" }}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={o.value === value}
+          onClick={() => onChange(o.value)}
+          className="dash-chip px-2.5 py-1 font-mont text-micro uppercase tracking-widest focus-ring"
+          style={{ background: o.value === value ? "var(--forest)" : "transparent", color: o.value === value ? "var(--saffron)" : "var(--ink-soft)", fontWeight: 800 }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── A progress bar ──────────────────────────────────────────────────
 
 export function Meter({

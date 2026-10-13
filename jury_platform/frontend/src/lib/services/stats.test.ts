@@ -1,4 +1,7 @@
-import { bins, frStat, mad, mean, median, niceDomain, niceMax, quantile, stdDev, summarize, variance } from "./stats";
+import {
+  bins, concordance, frStat, linearFit, mad, mean, median, niceDomain, niceMax, pearson, quantile, ranking, spearman, stdDev, strength, summarize,
+  variance, type Pair,
+} from "./stats";
 
 // The 43 final notes of the previous edition, with the mean and the standard
 // deviation the committee published for them.
@@ -81,5 +84,58 @@ describe("stats", () => {
     expect(frStat(54.26)).toBe("54,3");
     expect(frStat(0.7, 2)).toBe("0,70");
     expect(frStat(12, 0)).toBe("12");
+  });
+});
+
+// Checked against SciPy (pearsonr, spearmanr)
+describe("two notes of the same teams", () => {
+  const TEXTBOOK: Pair[] = [[1, 2], [2, 4], [3, 5], [4, 4], [5, 5]];
+  const NOTES: Pair[] = [[62.5, 58], [48, 52.5], [71.2, 60.1], [55.5, 70.3], [39.9, 45], [80.1, 77.7], [66.6, 49.9]];
+
+  it("measures how closely one note follows the other", () => {
+    expect(pearson([[1, 2], [2, 4], [3, 6]])).toBeCloseTo(1, 12);
+    expect(pearson([[1, 6], [2, 4], [3, 2]])).toBeCloseTo(-1, 12);
+    expect(pearson(TEXTBOOK)).toBeCloseTo(0.7745966692414834, 12);
+    expect(pearson(NOTES)).toBeCloseTo(0.6619505299557582, 12);
+  });
+
+  it("says nothing of fewer than three teams, nor of a note that never varies", () => {
+    expect(pearson([])).toBeNull();
+    expect(pearson([[1, 2], [3, 4]])).toBeNull();
+    expect(pearson([[5, 1], [5, 2], [5, 3]])).toBeNull();
+    expect(spearman([[1, 2], [3, 4]])).toBeNull();
+    expect(linearFit([[5, 1], [5, 2], [5, 3]])).toBeNull();
+    expect(concordance([[1, 1]])).toBeNull();
+  });
+
+  it("draws the line that best tells one note from the other", () => {
+    const fit = linearFit(TEXTBOOK)!;
+    expect(fit.slope).toBeCloseTo(0.6, 12);
+    expect(fit.intercept).toBeCloseTo(2.2, 12);
+  });
+
+  it("ranks the highest first, equal notes sharing their place", () => {
+    expect(ranking([50, 80, 80, 20])).toEqual([3, 1, 1, 4]);
+    expect(ranking([7])).toEqual([1]);
+    expect(ranking([])).toEqual([]);
+    // 0.1 + 0.2 and 0.3 are one note
+    expect(ranking([0.1 + 0.2, 0.3, 0.2])).toEqual([1, 1, 3]);
+  });
+
+  it("compares two rankings, ties included", () => {
+    expect(spearman(NOTES)).toBeCloseTo(0.642857142857143, 12);
+    expect(spearman([[10, 1], [20, 3], [20, 2], [30, 5], [40, 4]])).toBeCloseTo(0.8720815992723809, 12);
+    expect(spearman([[1, 4], [2, 3], [3, 2], [4, 1]])).toBeCloseTo(-1, 12);
+  });
+
+  it("counts the pairs of teams both notes put in the same order", () => {
+    expect(concordance(NOTES)).toBeCloseTo(16 / 21, 12);
+    expect(concordance([[1, 4], [2, 3], [3, 2], [4, 1]])).toBe(0);
+    // The two teams level at 20 are left out: 8 of the 9 other pairs agree
+    expect(concordance([[10, 1], [20, 3], [20, 2], [30, 5], [40, 4]])).toBeCloseTo(8 / 9, 12);
+  });
+
+  it("puts a word on a correlation, whatever its sign", () => {
+    expect([0.05, 0.2, -0.4, 0.6, -0.9].map(strength)).toEqual(["none", "weak", "moderate", "strong", "veryStrong"]);
   });
 });

@@ -1,4 +1,5 @@
-// Descriptive statistics of a list of notes: what the Résultats page charts.
+// Descriptive statistics of a list of notes, and of two notes of the same
+// teams (how they go together): what the Résultats page charts.
 //
 // Variance and standard deviation are the population's (divisor n): the
 // teams are the whole population, not a sample of it.
@@ -66,6 +67,101 @@ export function summarize(xs: number[]): Summary | null {
     q3: quantile(xs, 0.75)!,
     max: Math.max(...xs),
   };
+}
+
+// ─── Two notes of the same teams ─────────────────────────────────────
+
+// One team's two notes, or two ranks: [x, y]
+export type Pair = [number, number];
+
+const MIN_PAIRS = 3; // under three teams, two notes "go together" by accident
+
+// Pearson's r, from -1 to 1: how closely y follows x along a straight line.
+// Null under three pairs, and when one of the two never varies.
+export function pearson(pairs: Pair[]): number | null {
+  if (pairs.length < MIN_PAIRS) return null;
+  const mx = mean(pairs.map(([x]) => x))!;
+  const my = mean(pairs.map(([, y]) => y))!;
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (const [x, y] of pairs) {
+    sxy += (x - mx) * (y - my);
+    sxx += (x - mx) ** 2;
+    syy += (y - my) ** 2;
+  }
+  return sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : null;
+}
+
+// The straight line that best tells y from x (least squares): y = slope · x + intercept
+export function linearFit(pairs: Pair[]): { slope: number; intercept: number } | null {
+  if (pairs.length < MIN_PAIRS) return null;
+  const mx = mean(pairs.map(([x]) => x))!;
+  const my = mean(pairs.map(([, y]) => y))!;
+  const sxx = pairs.reduce((s, [x]) => s + (x - mx) ** 2, 0);
+  if (sxx === 0) return null;
+  const slope = pairs.reduce((s, [x, y]) => s + (x - mx) * (y - my), 0) / sxx;
+  return { slope, intercept: my - slope * mx };
+}
+
+// Two notes this close are the same note: a difference left by the order of an addition
+const SAME = 1e-9;
+
+// Each value's place, the highest first, in the order given. Equal values
+// share their place and the next one skips as many (1, 2, 2, 4), like a
+// sports ranking.
+export function ranking(values: number[]): number[] {
+  const order = values.map((_, i) => i).sort((a, b) => values[b] - values[a]);
+  const out: number[] = new Array(values.length);
+  order.forEach((index, place) => {
+    const previous = order[place - 1];
+    out[index] = place > 0 && Math.abs(values[previous] - values[index]) < SAME ? out[previous] : place + 1;
+  });
+  return out;
+}
+
+// Places for a rank correlation: equal values take the middle of the places they share
+function midRanks(values: number[]): number[] {
+  const places = ranking(values);
+  const shared = new Map<number, number>();
+  for (const place of places) shared.set(place, (shared.get(place) ?? 0) + 1);
+  return places.map((place) => place + (shared.get(place)! - 1) / 2);
+}
+
+// Spearman's rho, from -1 to 1: Pearson's r of the two rankings. It only
+// asks whether the teams come in the same order, not by how much.
+export function spearman(pairs: Pair[]): number | null {
+  if (pairs.length < MIN_PAIRS) return null;
+  const rx = midRanks(pairs.map(([x]) => x));
+  const ry = midRanks(pairs.map(([, y]) => y));
+  return pearson(rx.map((x, i) => [x, ry[i]]));
+}
+
+// Of all the ways to pick two teams, the share that both notes put in the
+// same order (0 to 1). Two teams level on one of the notes are left out.
+// Null when no two teams can be told apart.
+export function concordance(pairs: Pair[]): number | null {
+  let same = 0;
+  let compared = 0;
+  for (let i = 0; i < pairs.length; i++) {
+    for (let j = i + 1; j < pairs.length; j++) {
+      const dx = pairs[i][0] - pairs[j][0];
+      const dy = pairs[i][1] - pairs[j][1];
+      if (Math.abs(dx) < SAME || Math.abs(dy) < SAME) continue;
+      compared++;
+      if (dx > 0 === dy > 0) same++;
+    }
+  }
+  return compared > 0 ? same / compared : null;
+}
+
+// How strong a link a correlation tells of, whatever its sign (the usual
+// thresholds: 0.1, 0.3, 0.5, 0.7)
+export type Strength = "none" | "weak" | "moderate" | "strong" | "veryStrong";
+
+export function strength(r: number): Strength {
+  const size = Math.abs(r);
+  return size < 0.1 ? "none" : size < 0.3 ? "weak" : size < 0.5 ? "moderate" : size < 0.7 ? "strong" : "veryStrong";
 }
 
 // ─── For the charts ───────────────────────────────────────────────────

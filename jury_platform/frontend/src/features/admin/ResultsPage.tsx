@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Alert, Badge, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading } from "@/features/shared/primitives";
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
@@ -7,26 +8,45 @@ import { queryState } from "@/features/shared/queryState";
 import type { FilterColumn } from "@/lib/services/columnFilters";
 import { frNote } from "@/lib/services/gradingService";
 import { FINAL_PART_LABELS, FINAL_PARTS, percent, teamResults, type TeamResult, type WrittenNote } from "@/lib/services/results";
+import { standings } from "@/lib/services/standings";
 import type { Team } from "@/types";
 import { CENTERS, centerLabel } from "@/utils/labels";
 import { ExportButton } from "./ExportButton";
+import { JurorAgreement } from "./results/JurorAgreement";
+import { OralWritten } from "./results/OralWritten";
 import { ProblemStats } from "./results/ProblemStats";
+import { Rankings } from "./results/Rankings";
 import { ResultsStats } from "./results/ResultsStats";
 import { useExport } from "./useExport";
 import { useGradedPassages } from "./useGradedPassages";
 
 // ResultsPage — the statistics of the final grades (results/ResultsStats)
-// and of each problem (results/ProblemStats), then one table of every drawn
-// team, all centers together: its notes as defender, opponent and reporter
-// and for its written reports, each as a % of its grid, and its final grade
-// (weighted average, weights set on the Critères page). Filters per column,
-// the center included.
+// and of each problem (results/ProblemStats), the oral against the written
+// report (results/OralWritten), how far apart the jurors of a duo grade
+// (results/JurorAgreement), the three rankings (results/Rankings), then one
+// table of every drawn team, all centers together: its notes as defender,
+// opponent and reporter and for its written reports, each as a % of its
+// grid, and its final grade (weighted average, weights set on the Critères
+// page). Filters per column, the center included. The page is several
+// screens long: a row of chips under its title jumps to each part.
 
 const pctText = (p: number | null) => (p === null ? "" : frNote(Math.round(p * 10) / 10));
 const centerText = (t: TeamResult) => (t.pool.centerDay ? centerLabel(t.pool.centerDay.center) : "");
 const centerRank = (t: TeamResult) => CENTERS.findIndex((c) => c.value === t.pool.centerDay?.center);
 
 const CENTER_COLUMN: FilterColumn<TeamResult> = { key: "center", label: "Centre", value: centerText, text: centerText };
+
+// The page's parts, in order, as the chips name them
+const PARTS = {
+  finals: "Notes finales",
+  problems: "Par problème",
+  halves: "Oral et écrit",
+  jurors: "Accord entre jurés",
+  rankings: "Classements",
+  teams: "Toutes les équipes",
+};
+type PartKey = keyof typeof PARTS;
+const partId = (key: PartKey) => `resultats-${key}`;
 
 const COLUMNS: FilterColumn<TeamResult>[] = [
   ...FINAL_PARTS.map((key) => ({
@@ -49,6 +69,7 @@ export function ResultsPage() {
 
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const rows = teamResults(results, weights, written);
+  const ranked = standings(rows, weights);
 
   return (
     <PageMotion className="space-y-10">
@@ -59,12 +80,42 @@ export function ResultsPage() {
         <EmptyState icon={GridIcon} title="Aucune poule" sub="Les résultats apparaîtront une fois les poules tirées et notées." />
       ) : (
         <>
-          <ResultsStats rows={rows} teamById={teamById} />
-          <ProblemStats results={results} teams={teams} criteria={criteria} report={report} />
-          <ResultsTable teams={rows} teamById={teamById} written={written} />
+          <Jumps />
+          <Part id="finals"><ResultsStats rows={rows} teamById={teamById} /></Part>
+          <Part id="problems"><ProblemStats results={results} teams={teams} criteria={criteria} report={report} /></Part>
+          <Part id="halves"><OralWritten list={ranked} weights={weights} teamById={teamById} /></Part>
+          <Part id="jurors"><JurorAgreement results={results} teamById={teamById} /></Part>
+          <Part id="rankings"><Rankings list={ranked} teamById={teamById} /></Part>
+          <Part id="teams"><ResultsTable teams={rows} teamById={teamById} written={written} /></Part>
         </>
       )}
     </PageMotion>
+  );
+}
+
+// One part of the page, where a chip can jump to: it stops under the top bar,
+// and takes the focus so the keyboard goes on from there
+function Part({ id, children }: { id: PartKey; children: ReactNode }) {
+  return <div id={partId(id)} tabIndex={-1} className="scroll-mt-24" style={{ outline: "none" }}>{children}</div>;
+}
+
+function Jumps() {
+  const jump = (key: PartKey) => {
+    const part = document.getElementById(partId(key));
+    if (!part) return;
+    // At once: gliding past thousands of pixels of charts takes over a second
+    part.scrollIntoView({ block: "start" });
+    part.focus({ preventScroll: true });
+  };
+  return (
+    <nav aria-label="Parties de la page" className="flex flex-wrap items-center gap-2">
+      <span className="font-mont text-micro uppercase tracking-widest mr-1" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>Aller à</span>
+      {(Object.keys(PARTS) as PartKey[]).map((key) => (
+        <button key={key} type="button" onClick={() => jump(key)} className="jump-chip px-2.5 py-2 sm:py-1.5 font-mont text-micro uppercase tracking-widest" style={{ fontWeight: 800 }}>
+          {PARTS[key]}
+        </button>
+      ))}
+    </nav>
   );
 }
 

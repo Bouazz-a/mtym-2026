@@ -764,6 +764,74 @@ textarea.focus-ring:focus,
   .dash-grow-x, .dash-arc, .dash-chip, .dash-row { transition: none; }
 }
 
+/* ─── Résultats: a cloud of points (results/charts.tsx, Scatter) ────── */
+/* A point is placed by its two notes, --x and --y, from 0 to 100. Where the
+   plot can be a size container, a translate in the plot's own units carries
+   the point there from the bottom left corner: only a transform changes, so
+   from one cloud to the next each team glides to its new place without any
+   layout. Elsewhere the same two figures place it, and it jumps. */
+.scatter-plot { container-type: size; }
+/* The plot reads the point nearest to the pointer: the points themselves
+   don't answer it */
+.scatter-point {
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  bottom: calc(var(--y) * 1%);
+  width: 1rem;
+  height: 1rem;
+  margin: 0 0 -0.5rem -0.5rem;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+@supports (width: 1cqw) {
+  .scatter-point {
+    left: 0;
+    bottom: 0;
+    translate: calc(var(--x) * 1cqw) calc(var(--y) * -1cqh);
+    transition: translate 400ms var(--ease-out);
+  }
+}
+.scatter-point > span {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--forest);
+  opacity: 0.5;
+  transition: scale 120ms var(--ease-out), opacity 120ms;
+}
+/* The point being read: filled, ringed, above its neighbours */
+.scatter-point[data-on] { z-index: 1; }
+.scatter-point[data-on] > span {
+  background: var(--saffron);
+  box-shadow: 0 0 0 1.5px var(--forest);
+  opacity: 1;
+  scale: 1.5;
+}
+/* The chips under the page's title: each jumps to one of its parts */
+.jump-chip {
+  border: 1.5px solid var(--field-border);
+  background: var(--surface);
+  color: var(--forest);
+  cursor: pointer;
+  transition: border-color 150ms, background-color 150ms, transform 120ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .jump-chip:hover { border-color: var(--forest); background: var(--paper-2); }
+}
+.jump-chip:active { transform: scale(0.97); }
+.jump-chip:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; }
+/* A line of a list that picks what a chart shows (Corrélations) */
+.pick-row { transition: background-color 150ms; cursor: pointer; }
+@media (hover: hover) and (pointer: fine) {
+  .pick-row[aria-pressed="false"]:hover { background: rgba(18, 32, 25, 0.04); }
+}
+.pick-row[aria-pressed="true"] { background: rgba(98, 159, 115, 0.14); }
+.pick-row:focus-visible { outline: 2px solid var(--forest); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .scatter-point, .scatter-point > span, .pick-row, .jump-chip { transition: none; }
+}
+
 /* Grading scale (0 · 0,25 · 0,5 · 0,75 · 1): one mark per button, the
    picked one filled (forest, clay for a malus — set inline) */
 .score-step {

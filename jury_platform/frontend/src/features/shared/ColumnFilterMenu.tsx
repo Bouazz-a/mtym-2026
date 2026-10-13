@@ -49,6 +49,7 @@ export function ColumnFilterMenu({
   sort,
   onSort,
   range = false,
+  rangeLabel = "Note entre",
   emptyLabel = "(Vide)",
   align = "left",
   tone = "dark",
@@ -61,6 +62,7 @@ export function ColumnFilterMenu({
   sort: SortDir | null; // this column's sort, if it's the sorted one
   onSort: (dir: SortDir | null) => void;
   range?: boolean;
+  rangeLabel?: string; // what the two bounds are bounds of, when not a note: "Rang entre"
   emptyLabel?: string; // how "" reads in the checklist
   align?: "left" | "right";
   tone?: "dark" | "light"; // the header it sits on: forest (default) or saffron
@@ -124,14 +126,14 @@ export function ColumnFilterMenu({
 
           {range && (
             <div className="px-3 pt-3 pb-1" style={{ borderTop: "1px solid var(--border)", marginTop: 6 }}>
-              <SubLabel>Note entre</SubLabel>
+              <SubLabel>{rangeLabel}</SubLabel>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
                   step="any"
                   inputMode="decimal"
                   placeholder="min"
-                  aria-label={`${label} : note minimum`}
+                  aria-label={`${label} : minimum`}
                   value={filter.min}
                   onChange={(e) => onFilter({ ...filter, min: e.target.value })}
                 />
@@ -141,7 +143,7 @@ export function ColumnFilterMenu({
                   step="any"
                   inputMode="decimal"
                   placeholder="max"
-                  aria-label={`${label} : note maximum`}
+                  aria-label={`${label} : maximum`}
                   value={filter.max}
                   onChange={(e) => onFilter({ ...filter, max: e.target.value })}
                 />

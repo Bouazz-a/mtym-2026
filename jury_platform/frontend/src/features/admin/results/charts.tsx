@@ -1,6 +1,7 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { BrutalCard } from "@/features/shared/primitives";
 import { useMediaQuery } from "@/features/shared/useMediaQuery";
-import { frStat, niceMax, type Bin, type Summary } from "@/lib/services/stats";
+import { frStat, mean, niceDomain, niceMax, type Bin, type Summary } from "@/lib/services/stats";
 
 // The charts of the Résultats page's statistics, drawn like the dashboard's:
 // CSS in the app's colors, no chart library. What is pointed at (mouse,
@@ -59,6 +60,64 @@ export function ScaleBar({ domain = [0, 100], at, span }: { domain?: [number, nu
         <div className="absolute" style={{ left: `${x(at)}%`, top: "-0.1875rem", bottom: "-0.1875rem", width: "0.1875rem", translate: "-50% 0", background: "var(--forest)" }} />
       )}
     </div>
+  );
+}
+
+// A figure with a sign, on a scale centred on 0: the bar leaves the middle
+// towards its side (a correlation from -1 to 1, places won or lost). Made of
+// spans, so it can sit in a button.
+export function SignedBar({
+  value,
+  reach = 1,
+  colors = ["var(--clay)", "var(--forest)"],
+  grow = false,
+}: {
+  value: number;
+  reach?: number; // what the whole half-scale stands for
+  colors?: [string, string]; // under 0, above 0
+  grow?: boolean; // the bar grows from the middle on arrival
+}) {
+  const size = Math.min(1, Math.abs(value) / (reach || 1)) * 50;
+  const up = value >= 0;
+  return (
+    <span aria-hidden className="block relative w-full" style={{ height: "0.375rem", background: "var(--paper-2)" }}>
+      <span
+        className={`absolute inset-y-0 ${grow ? "dash-grow-x" : ""}`}
+        style={{ left: up ? "50%" : `${50 - size}%`, width: `${size}%`, transformOrigin: up ? "left" : "right", background: colors[up ? 1 : 0] }}
+      />
+      <span className="absolute" style={{ left: "50%", top: "-0.125rem", bottom: "-0.125rem", width: "1px", translate: "-50% 0", background: "var(--forest)" }} />
+    </span>
+  );
+}
+
+// ─── A row of key figures, each with its place on a scale ────────────
+
+export interface Figure {
+  label: string;
+  value: ReactNode;
+  unit?: string;
+  sub?: ReactNode; // one line under the figure
+  bar?: ReactNode; // where it sits: a ScaleBar, a Meter, a SignedBar
+}
+
+// `className`: how many tiles to a row at each width (grid-cols-…)
+export function Figures({ tiles, className }: { tiles: Figure[]; className: string }) {
+  return (
+    <BrutalCard withCorners={false}>
+      <dl className={`grid gap-px ${className}`} style={{ background: "var(--border)" }}>
+        {tiles.map((t) => (
+          <div key={t.label} className="px-4 py-3 flex flex-col" style={{ background: "var(--surface)" }}>
+            <dt className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>{t.label}</dt>
+            <dd className="font-mont leading-none tabular-nums mt-2" style={{ fontSize: "1.6rem", color: "var(--forest)", fontWeight: 900, letterSpacing: "-0.02em" }}>
+              {t.value}
+              {t.unit && <span className="text-xs ml-1" style={{ color: "var(--ink-faint)", letterSpacing: 0 }}>{t.unit}</span>}
+            </dd>
+            <dd className="font-open text-xs mt-1 mb-3" style={{ color: "var(--ink-faint)", minHeight: "1rem" }}>{t.sub}</dd>
+            <dd className="mt-auto">{t.bar}</dd>
+          </div>
+        ))}
+      </dl>
+    </BrutalCard>
   );
 }
 
@@ -303,15 +362,142 @@ function Box({ summary: s, x }: { summary: Summary; x: (v: number) => string }) 
   );
 }
 
-// What the box plot's strokes mean, for a legend
-export function BoxLegend() {
+// What the box plot's strokes mean, for a legend. `one` and `half`: what a
+// point stands for, when it isn't a team.
+export function BoxLegend({ one = "une équipe", half = "la moitié des équipes" }: { one?: string; half?: string }) {
   const item = "inline-flex items-center gap-2";
   return (
     <>
-      <li className={item}><Dot style={{ opacity: 0.7 }} />une équipe</li>
-      <li className={item}><span aria-hidden className="inline-block" style={{ width: "1.25rem", height: "0.75rem", background: "var(--paper-2)", boxShadow: "inset 0 0 0 1.5px var(--forest-soft)" }} />la moitié des équipes (du 1er au 3e quartile)</li>
+      <li className={item}><Dot style={{ opacity: 0.7 }} />{one}</li>
+      <li className={item}><span aria-hidden className="inline-block" style={{ width: "1.25rem", height: "0.75rem", background: "var(--paper-2)", boxShadow: "inset 0 0 0 1.5px var(--forest-soft)" }} />{half} (du 1er au 3e quartile)</li>
       <li className={item}><span aria-hidden className="inline-block" style={{ width: "0.1875rem", height: "0.85rem", background: "var(--forest)" }} />médiane</li>
       <li className={item}><span aria-hidden className="inline-block" style={{ width: "0.5rem", height: "0.5rem", rotate: "45deg", background: "var(--saffron)", boxShadow: "inset 0 0 0 1.5px var(--forest)" }} />moyenne</li>
     </>
+  );
+}
+
+// ─── Two notes of each team: a cloud of points ───────────────────────
+
+export interface ScatterPoint {
+  key: string;
+  x: number;
+  y: number;
+  text: string; // spelled out when it is pointed at
+}
+
+// How near the pointer must come to a point to read it, in pixels
+const NEAR = 22;
+
+// One point per team, at its two notes: to the right, more of the first;
+// higher up, more of the second. The trend is the line that best tells one
+// from the other, the dashed lines are the two means. The points are placed
+// from the stylesheet (.scatter-point, index.css): give those of two clouds
+// the same keys and, from one to the other, each team glides to its new
+// place.
+export function Scatter({
+  points,
+  xLabel,
+  yLabel,
+  fit,
+  trend: trendText = "tendance",
+  label,
+  idle,
+  height = "17rem",
+}: {
+  points: ScatterPoint[];
+  xLabel: string; // what runs along the bottom, with its unit
+  yLabel: string; // what runs up the side
+  fit?: { slope: number; intercept: number } | null;
+  trend?: string; // what the trend's line says, in the legend
+  label: string; // what the chart shows, for screen readers
+  idle: string; // the line under the chart while nothing is pointed at
+  height?: string;
+}) {
+  const [pointed, setPointed] = useState<string | null>(null);
+  if (points.length === 0) return null;
+  const xs = niceDomain(points.map((p) => p.x));
+  const ys = niceDomain(points.map((p) => p.y));
+  const at = (v: number, [from, to]: [number, number]) => ((v - from) / (to - from)) * 100;
+  // A label every 10 points on a short scale, every 20 on a long one
+  const ticks = ([from, to]: [number, number]) => {
+    const step = to - from > 50 ? 20 : 10;
+    return Array.from({ length: Math.floor((to - from) / 10) + 1 }, (_, i) => from + i * 10).filter((v) => v % step === 0);
+  };
+  const [meanX, meanY] = [mean(points.map((p) => p.x))!, mean(points.map((p) => p.y))!];
+  // What is read is the point nearest to the pointer, not the one under it:
+  // in a dense cloud the points overlap, and one would answer for another
+  const point = (e: PointerEvent<HTMLDivElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    let nearest: string | null = null;
+    let reach = NEAR ** 2;
+    for (const p of points) {
+      const dx = box.left + (at(p.x, xs) / 100) * box.width - e.clientX;
+      const dy = box.bottom - (at(p.y, ys) / 100) * box.height - e.clientY;
+      if (dx * dx + dy * dy < reach) {
+        reach = dx * dx + dy * dy;
+        nearest = p.key;
+      }
+    }
+    setPointed(nearest);
+  };
+  const trend = fit && { from: 100 - at(fit.slope * xs[0] + fit.intercept, ys), to: 100 - at(fit.slope * xs[1] + fit.intercept, ys) };
+  const axisLabel = "font-mont text-micro uppercase";
+  const axisStyle: CSSProperties = { color: "var(--ink-faint)", fontWeight: 800, letterSpacing: "0.06em" };
+  const tickStyle: CSSProperties = { color: "var(--ink-faint)", fontWeight: 700 };
+
+  return (
+    <div>
+      <div className={axisLabel} style={axisStyle} aria-hidden>{yLabel}</div>
+      <div className="relative mt-1" style={{ height, marginLeft: "2rem" }} role="img" aria-label={label}>
+        <span aria-hidden className="absolute inset-y-0 left-0" style={{ borderLeft: "1px solid var(--forest)" }} />
+        <span aria-hidden className="absolute inset-x-0 bottom-0" style={{ borderTop: "1px solid var(--forest)" }} />
+        {/* The side's labels, level with the plot (which sits a little inside) */}
+        <div aria-hidden className="absolute" style={{ top: "0.5rem", bottom: "0.5rem", right: "100%", width: "2rem" }}>
+          {ticks(ys).map((v) => (
+            <span key={v} className="absolute right-0 pr-1.5 font-mont text-micro tabular-nums" style={{ bottom: `${at(v, ys)}%`, translate: "0 50%", ...tickStyle }}>{v}</span>
+          ))}
+        </div>
+        {/* A little inside the axes, so a point at either end shows whole */}
+        <div
+          className="absolute scatter-plot"
+          style={{ inset: "0.5rem" }}
+          onPointerDown={point}
+          onPointerMove={point}
+          // A finger leaves as it lifts: the point it touched stays read
+          onPointerLeave={(e) => { if (e.pointerType === "mouse") setPointed(null); }}
+        >
+          {ticks(ys).map((v) => <span key={`y${v}`} aria-hidden className="absolute inset-x-0" style={{ bottom: `${at(v, ys)}%`, borderTop: "1px dashed var(--border)" }} />)}
+          {ticks(xs).map((v) => <span key={`x${v}`} aria-hidden className="absolute inset-y-0" style={{ left: `${at(v, xs)}%`, borderLeft: "1px dashed var(--border)" }} />)}
+          {/* The means and the trend: redrawn (and faded in) with each cloud */}
+          <svg key={`${xLabel}:${yLabel}`} aria-hidden className="absolute inset-0 w-full h-full fade-in" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <line x1={at(meanX, xs)} x2={at(meanX, xs)} y1="0" y2="100" stroke="var(--sage)" strokeWidth="1.5" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
+            <line x1="0" x2="100" y1={100 - at(meanY, ys)} y2={100 - at(meanY, ys)} stroke="var(--sage)" strokeWidth="1.5" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
+            {trend && <line x1="0" x2="100" y1={trend.from} y2={trend.to} stroke="var(--saffron-dark)" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />}
+          </svg>
+          {points.map((p) => (
+            <span
+              key={p.key}
+              data-on={pointed === p.key ? "" : undefined}
+              className="scatter-point"
+              style={{ ["--x" as string]: at(p.x, xs), ["--y" as string]: at(p.y, ys) }}
+            >
+              <span />
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="relative" style={{ height: "1.25rem", margin: "0 0.5rem 0 2.5rem" }} aria-hidden>
+        {ticks(xs).map((v) => (
+          <span key={v} className="absolute top-1 font-mont text-micro tabular-nums" style={{ left: `${at(v, xs)}%`, translate: "-50% 0", ...tickStyle }}>{v}</span>
+        ))}
+      </div>
+      <div className={`${axisLabel} text-right mt-1`} style={axisStyle} aria-hidden>{xLabel}</div>
+      <Legend>
+        <li className="inline-flex items-center gap-2"><Dot style={{ opacity: 0.7 }} />une équipe</li>
+        <li className="inline-flex items-center gap-2"><span aria-hidden className="inline-block" style={{ width: "1.25rem", borderTop: "1.5px dashed var(--sage)" }} />moyennes</li>
+        {trend && <li className="inline-flex items-center gap-2"><span aria-hidden className="inline-block" style={{ width: "1.25rem", borderTop: "2.5px solid var(--saffron-dark)" }} />{trendText}</li>}
+      </Legend>
+      <Readout>{points.find((p) => p.key === pointed)?.text ?? idle}</Readout>
+    </div>
   );
 }
