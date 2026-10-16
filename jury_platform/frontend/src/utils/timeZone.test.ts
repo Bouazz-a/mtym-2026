@@ -1,4 +1,4 @@
-import { gapText, gapWithSchedule, scheduleInstant, timeIn, zoneName } from "./timeZone";
+import { gapWithSchedule, scheduleInstant, timeIn } from "./timeZone";
 
 describe("a schedule time on another clock", () => {
   it("knows which instant a time in Morocco stands for", () => {
@@ -30,7 +30,6 @@ describe("a schedule time on another clock", () => {
     expect(gapWithSchedule("Europe/Zurich", "2026-10-31")).toBe(60);
     expect(gapWithSchedule("Asia/Kolkata", "2026-10-17")).toBe(330);
     expect(gapWithSchedule("America/New_York", "2026-10-17")).toBe(-240);
-    expect([60, 270, -45].map(gapText)).toEqual(["1 h", "4 h 30", "45 min"]);
   });
 
   it("never sets a device in Morocco apart from Morocco, even with stale time zone data", () => {
@@ -38,9 +37,5 @@ describe("a schedule time on another clock", () => {
     expect(gapWithSchedule("Africa/El_Aaiun", "2026-10-17")).toBe(0);
     // A device set to UTC to get the right clock in Morocco reads the same hours
     expect(gapWithSchedule("UTC", "2026-10-17")).toBe(0);
-  });
-
-  it("names the zone in French, with a plain apostrophe", () => {
-    expect(zoneName("Europe/Zurich", "2026-10-17")).toBe("heure d'été d'Europe centrale");
   });
 });

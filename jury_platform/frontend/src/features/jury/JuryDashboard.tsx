@@ -15,7 +15,7 @@ import { getTeams } from "@/lib/repositories/teamRepository";
 import type { PassageDetails, PoolDetails } from "@/types";
 import { centerLabel, formatDay } from "@/utils/labels";
 import { breakMinutes, DEFAULT_SCHEDULE, slotEnd } from "@/utils/schedule";
-import { deviceZone, gapText, gapWithSchedule, timeIn, zoneName } from "@/utils/timeZone";
+import { deviceZone, gapWithSchedule, timeIn } from "@/utils/timeZone";
 import { hasSeenGuide } from "./guide/guideStorage";
 import { useJuryGuide } from "./guide/useJuryGuide";
 
@@ -125,12 +125,6 @@ export function JuryDashboard() {
                     </span>
                   )}
                 />
-                {ahead !== 0 && (
-                  <p className="font-open text-sm mb-4" style={{ color: "var(--ink-soft)", maxWidth: "62rem" }}>
-                    Les heures sont celles de votre appareil ({zoneName(zone, day.date)}), {gapText(ahead)} de {ahead > 0 ? "plus" : "moins"} qu'au
-                    Maroc. L'heure du Maroc, celle des organisateurs, est rappelée sous chaque horaire.
-                  </p>
-                )}
                 <BrutalCard className="overflow-hidden" data-tour="planning">
                   {(day.schedule ?? DEFAULT_SCHEDULE).map((slot, i, schedule) => {
                     const here = dayPassages.filter((p) => p.slot === i + 1);

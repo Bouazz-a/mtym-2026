@@ -66,18 +66,3 @@ export function gapWithSchedule(zone: string, date: string): number {
   const noon = scheduleInstant(date, "12:00");
   return offsetAt(zone, noon) - offsetAt(SCHEDULE_ZONE, noon);
 }
-
-// "1 h", "4 h 30", "45 min"
-export function gapText(minutes: number): string {
-  const size = Math.abs(minutes);
-  const [h, m] = [Math.floor(size / 60), size % 60];
-  return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, "0")}`;
-}
-
-// What the device's zone is called, on that day: "heure d'été d'Europe centrale"
-export function zoneName(zone: string, date: string): string {
-  const name = new Intl.DateTimeFormat("fr-FR", { timeZone: zone, timeZoneName: "long" })
-    .formatToParts(scheduleInstant(date, "12:00"))
-    .find((part) => part.type === "timeZoneName")?.value;
-  return (name ?? zone).replace(/’/g, "'");
-}
