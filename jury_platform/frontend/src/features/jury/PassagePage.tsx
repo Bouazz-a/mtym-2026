@@ -13,6 +13,7 @@ import { getTeams } from "@/lib/repositories/teamRepository";
 import { ForbiddenError, NotFoundError } from "@/lib/services/errors";
 import { centerLabel, formatDay } from "@/utils/labels";
 import { slotTime } from "@/utils/schedule";
+import { deviceZone, gapWithSchedule, timeIn } from "@/utils/timeZone";
 import { Memo } from "./Memo";
 import { OralGrading } from "./OralGrading";
 import { ReportGrading } from "./ReportGrading";
@@ -70,6 +71,13 @@ export function PassageView({ data, coJurors, banner }: { data: PassageData; coJ
   const { passage, teamById } = data;
   const day = passage.pool.centerDay;
   const time = slotTime(day, passage.slot);
+  // On the device's clock, Morocco's beside it when they differ (utils/timeZone.ts)
+  const zone = deviceZone();
+  const ahead = day ? gapWithSchedule(zone, day.date) : 0;
+  const local = (hhmm: string) => {
+    const t = timeIn(zone, day!.date, hhmm);
+    return t.dayShift === 0 ? t.time : `${t.time} (${t.dayShift > 0 ? "le lendemain" : "la veille"})`;
+  };
 
   return (
     <PageMotion className="space-y-8">
@@ -84,7 +92,11 @@ export function PassageView({ data, coJurors, banner }: { data: PassageData; coJ
 
       <BrutalCard className="overflow-hidden" data-tour="passage-info">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: "var(--border)" }}>
-          <InfoCell label="Horaire" value={time ? `${time.start} à ${time.end}` : "à définir"} />
+          <InfoCell
+            label="Horaire"
+            value={!time ? "à définir" : ahead === 0 ? `${time.start} à ${time.end}` : `${local(time.start)} à ${local(time.end)}`}
+            sub={time && ahead !== 0 ? `${time.start} à ${time.end} au Maroc` : undefined}
+          />
           <InfoCell label="Salle" value={passage.room ?? "à définir"} />
           <InfoCell label="Avec" value={coJurors || "personne"} />
           <InfoCell label="Observateur" value={passage.extraTeamId ? teamById.get(passage.extraTeamId)?.quadrigram ?? "?" : "aucun"} />
@@ -120,13 +132,14 @@ function BackLink() {
   );
 }
 
-function InfoCell({ label, value }: { label: string; value: string }) {
+function InfoCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="px-4 py-3" style={{ background: "var(--surface)" }}>
       <div className="font-mont text-micro uppercase tracking-widest mb-1" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>
         {label}
       </div>
       <div className="font-mont text-sm" style={{ color: "var(--forest)", fontWeight: 900 }}>{value}</div>
+      {sub && <div className="font-open text-micro mt-0.5" style={{ color: "var(--ink-faint)" }}>{sub}</div>}
     </div>
   );
 }

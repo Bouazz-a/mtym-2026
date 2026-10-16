@@ -15,6 +15,7 @@ import { getTeams } from "@/lib/repositories/teamRepository";
 import type { PassageDetails, PoolDetails } from "@/types";
 import { centerLabel, formatDay } from "@/utils/labels";
 import { breakMinutes, DEFAULT_SCHEDULE, slotEnd } from "@/utils/schedule";
+import { deviceZone, gapText, gapWithSchedule, timeIn, zoneName } from "@/utils/timeZone";
 import { hasSeenGuide } from "./guide/guideStorage";
 import { useJuryGuide } from "./guide/useJuryGuide";
 
@@ -24,6 +25,8 @@ import { useJuryGuide } from "./guide/useJuryGuide";
 // With several days, a picker switches between them (query string +
 // history replace, like the admin pages). The guided tour starts here the
 // first time (or when the account menu asks for it, ?guide=1).
+// The hours are the device's (utils/timeZone.ts): a juror abroad reads the
+// day on their own clock, Morocco's time under each one.
 
 type MyPassage = PassageDetails & { pool: PoolDetails };
 
@@ -63,6 +66,8 @@ export function JuryDashboard() {
   const dayPassages = mine.filter((p) => p.pool.centerDay?.id === day?.id);
   const firstPassageId = [...dayPassages].sort((a, b) => a.slot - b.slot)[0]?.id; // the guide points at it
   const coJurors = dayPassages[0]?.duo?.members.filter((m) => m.id !== user?.id) ?? [];
+  const zone = deviceZone();
+  const ahead = day ? gapWithSchedule(zone, day.date) : 0; // minutes ahead of Morocco
   const stats: Stat[] = [
     { label: "Passages", value: mine.length },
     { label: "Oraux notés", value: mine.reduce((s, p) => s + oralDone(p), 0), denom: mine.length * 3, progressColor: "var(--sage)" },
@@ -120,19 +125,37 @@ export function JuryDashboard() {
                     </span>
                   )}
                 />
+                {ahead !== 0 && (
+                  <p className="font-open text-sm mb-4" style={{ color: "var(--ink-soft)", maxWidth: "62rem" }}>
+                    Les heures sont celles de votre appareil ({zoneName(zone, day.date)}), {gapText(ahead)} de {ahead > 0 ? "plus" : "moins"} qu'au
+                    Maroc. L'heure du Maroc, celle des organisateurs, est rappelée sous chaque horaire.
+                  </p>
+                )}
                 <BrutalCard className="overflow-hidden" data-tour="planning">
                   {(day.schedule ?? DEFAULT_SCHEDULE).map((slot, i, schedule) => {
                     const here = dayPassages.filter((p) => p.slot === i + 1);
+                    const [start, end] = [timeIn(zone, day.date, slot.start), timeIn(zone, day.date, slotEnd(slot))];
                     return (
                       <Fragment key={i}>
                         {i > 0 && <PauseBand minutes={breakMinutes(schedule, i)} />}
                         <div className="flex" style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}>
                           <div
                             className="shrink-0 px-3 py-4 flex flex-col"
-                            style={{ width: "5.25rem", background: "var(--paper-2)", borderRight: "2px solid var(--forest)" }}
+                            style={{ width: ahead === 0 ? "5.25rem" : "6.25rem", background: "var(--paper-2)", borderRight: "2px solid var(--forest)" }}
                           >
-                            <span className="font-mont tabular-nums" style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.05rem" }}>{slot.start}</span>
-                            <span className="font-mont text-xs tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>{slotEnd(slot)}</span>
+                            <span className="font-mont tabular-nums" style={{ color: "var(--forest)", fontWeight: 900, fontSize: "1.05rem" }}>
+                              {start.time}
+                              {start.dayShift !== 0 && <DayShift days={start.dayShift} />}
+                            </span>
+                            <span className="font-mont text-xs tabular-nums" style={{ color: "var(--ink-soft)", fontWeight: 700 }}>
+                              {end.time}
+                              {end.dayShift !== 0 && <DayShift days={end.dayShift} />}
+                            </span>
+                            {ahead !== 0 && (
+                              <span className="font-open text-micro tabular-nums mt-2" style={{ color: "var(--ink-faint)" }}>
+                                Maroc {slot.start}
+                              </span>
+                            )}
                           </div>
                           <div className="flex-1 min-w-0 p-4 space-y-4">
                             {here.length === 0 ? (
@@ -163,6 +186,15 @@ export function JuryDashboard() {
         </>
       )}
     </PageMotion>
+  );
+}
+
+// A time that falls on another day on the device's clock than in Morocco
+function DayShift({ days }: { days: number }) {
+  return (
+    <span className="text-micro ml-1" style={{ color: "var(--ink-faint)", fontWeight: 700 }} title={days > 0 ? "le lendemain" : "la veille"}>
+      {days > 0 ? `+${days}` : `−${-days}`} j
+    </span>
   );
 }
 
