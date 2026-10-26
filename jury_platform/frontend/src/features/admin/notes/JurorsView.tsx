@@ -304,6 +304,15 @@ function JurorNotes({ sheet, teamById, criteria }: { sheet: JurorSheet; teamById
                             autres jurés : {frNote((task.others / 100) * task.max)} / {frNote(task.max)}
                           </span>
                         )}
+                        {task.countsZero && (
+                          <span
+                            className="block font-open text-micro"
+                            style={{ color: "var(--clay)", fontWeight: 400 }}
+                            title="Corrigé avant que la liste des admissibles soit arrêtée : l'équipe n'en fait pas partie, ce rapport compte 0"
+                          >
+                            compté 0, équipe non admissible
+                          </span>
+                        )}
                       </>
                     )}
                   </dd>

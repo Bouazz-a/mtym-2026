@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Alert, Badge, BrutalCard, PageHeader, PageLoading, PageMotion, SectionHeading } from "@/features/shared/primitives";
 import { ColumnFilterMenu, FilterSummary, NoMatchRow } from "@/features/shared/ColumnFilterMenu";
 import { useColumnFilters } from "@/features/shared/useColumnFilters";
@@ -8,6 +8,7 @@ import { queryState } from "@/features/shared/queryState";
 import type { FilterColumn } from "@/lib/services/columnFilters";
 import { frNote } from "@/lib/services/gradingService";
 import { FINAL_PART_LABELS, FINAL_PARTS, percent, teamResults, type TeamResult, type WrittenNote } from "@/lib/services/results";
+import { admissibilityRows } from "@/lib/services/admissibility";
 import { standings } from "@/lib/services/standings";
 import type { Team } from "@/types";
 import { CENTERS, centerLabel } from "@/utils/labels";
@@ -23,7 +24,8 @@ import { useGradedPassages } from "./useGradedPassages";
 // ResultsPage — the statistics of the final grades (results/ResultsStats)
 // and of each problem (results/ProblemStats), the oral against the written
 // report (results/OralWritten), how far apart the jurors of a duo grade
-// (results/JurorAgreement), the three rankings (results/Rankings), then one
+// (results/JurorAgreement), the rankings with phase A of the selection, the
+// admissibles (results/Rankings, results/Admissibles), then one
 // table of every drawn team, all centers together: its notes as defender,
 // opponent and reporter and for its written reports, each as a % of its
 // grid, and its final grade (weighted average, weights set on the Critères
@@ -60,8 +62,10 @@ const COLUMNS: FilterColumn<TeamResult>[] = [
 ];
 
 export function ResultsPage() {
-  const { queries, teams, weights, results, written, criteria, report } = useGradedPassages();
+  const { queries, teams, weights, results, written, criteria, report, admissibles } = useGradedPassages();
   const exporter = useExport(async () => (await import("@/lib/services/exportService")).exportGradesXlsx());
+  // Before the early returns (a hook)
+  const admissibility = useMemo(() => admissibilityRows(results, weights, teams), [results, weights, teams]);
 
   const load = queryState(...queries);
   if (load.loading) return <PageLoading />;
@@ -85,7 +89,9 @@ export function ResultsPage() {
           <Part id="problems"><ProblemStats results={results} teams={teams} criteria={criteria} report={report} /></Part>
           <Part id="halves"><OralWritten list={ranked} weights={weights} teamById={teamById} /></Part>
           <Part id="jurors"><JurorAgreement results={results} teamById={teamById} /></Part>
-          <Part id="rankings"><Rankings list={ranked} teamById={teamById} /></Part>
+          <Part id="rankings">
+            <Rankings list={ranked} teamById={teamById} admissibility={admissibility} admissibles={admissibles} written={written} weights={weights} />
+          </Part>
           <Part id="teams"><ResultsTable teams={rows} teamById={teamById} written={written} /></Part>
         </>
       )}
@@ -249,6 +255,7 @@ function WrittenProgress({ note }: { note: WrittenNote | undefined }) {
   const parts = [
     ...(note.graded > 0 && note.graded < note.submitted ? [`${note.graded}/${note.submitted} rapports notés`] : []),
     ...(note.missing.length > 0 ? [`${note.missing.map((p) => `P${p}`).join(", ")} non déposé${note.missing.length > 1 ? "s" : ""} (0)`] : []),
+    ...(note.zeroed.length > 0 ? [`${note.zeroed.map((p) => `P${p}`).join(", ")} hors admissibles (0)`] : []),
   ];
   if (parts.length === 0) return null;
   return (

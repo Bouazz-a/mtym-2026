@@ -33,13 +33,14 @@ const pools = [pool("casablanca", [
 ])];
 const board: ReportAssignmentBoard = {
   reports: [
-    { id: "r1", teamId: "A", problemNumber: 2, accountId: "j1", graded: true },
-    { id: "r2", teamId: "C", problemNumber: 1, accountId: "j2", graded: false },
-    { id: "r3", teamId: "B", problemNumber: 4, accountId: null, graded: false },
-    { id: "r4", teamId: "R", problemNumber: 1, accountId: "j1", graded: false },
+    { id: "r1", teamId: "A", problemNumber: 2, accountId: "j1", graded: true, admissible: true },
+    { id: "r2", teamId: "C", problemNumber: 1, accountId: "j2", graded: false, admissible: true },
+    { id: "r3", teamId: "B", problemNumber: 4, accountId: null, graded: false, admissible: true },
+    { id: "r4", teamId: "R", problemNumber: 1, accountId: "j1", graded: false, admissible: true },
   ],
   pendingDays: [],
   jurors: [],
+  admissibles: null,
 } as ReportAssignmentBoard;
 const oral = (passageId: string, juryId: string): OralEvaluation => ({ id: `${passageId}${juryId}`, juryId, passageId, teamId: "A", role: "defender", globalRemark: null, grades: [] });
 const orals = [oral("x1", "j1"), oral("x1", "j2"), oral("x2", "j3")];
@@ -65,6 +66,13 @@ describe("dashboard figures", () => {
       graded: "1/2",
       orals: "3/15", // 2 jurors × 3 + 3 jurors × 3 expected
     });
+  });
+
+  it("leaves out a report graded before its team was left out of the admissibles", () => {
+    const outside = { id: "r5", teamId: "B", problemNumber: 3, accountId: "j2", graded: true, admissible: false };
+    const withList = { ...data, board: { ...board, reports: [...board.reports, outside] } };
+    const by = Object.fromEntries(stages(scoped(withList, "casablanca"), "").map((s) => [s.key, `${s.done}/${s.total}`]));
+    expect([by.assigned, by.graded]).toEqual(["2/3", "1/2"]); // as before
   });
 
   it("marks the stages whose data is still loading", () => {

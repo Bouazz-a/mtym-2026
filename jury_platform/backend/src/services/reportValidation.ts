@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { planReportAssignment } from "../algorithms/reportAssignment";
+import { admissibleIds } from "./admissibles";
 import { teamsOf } from "./passages";
 import { jurorProblems } from "./reportPool";
 
@@ -14,7 +15,8 @@ import { jurorProblems } from "./reportPool";
 //   · the reports now to hand out (a problem the team no longer defends) go
 //     to jurors with « Compléter »'s rules (algorithms/reportAssignment.ts),
 //     when the day's reports were already handed out — a first validation
-//     hands out nothing, the admin does it on Affectation des rapports;
+//     hands out nothing, the admin does it on Affectation des rapports.
+//     Once the list of admissibles is fixed, only theirs (admissibles.ts);
 //   · every other report keeps its juror and its grade.
 //
 // The admin sees it before validating (GET /api/center-days/:id/draw-
@@ -84,7 +86,10 @@ export async function planValidation(client: Prisma.TransactionClient, centerDay
   }
 
   const handedOut = reports.some((r) => r.assignment);
-  const open = handedOut ? reports.filter((r) => !r.assignment && placed.has(r.teamId) && !isDefended(r)) : [];
+  const admissible = await admissibleIds(client);
+  const open = handedOut
+    ? reports.filter((r) => !r.assignment && placed.has(r.teamId) && !isDefended(r) && (!admissible || admissible.has(r.teamId)))
+    : [];
   if (open.length === 0) return plan;
 
   // Balanced against every juror's current load, the reports leaving them excluded

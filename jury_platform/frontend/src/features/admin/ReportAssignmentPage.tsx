@@ -29,7 +29,9 @@ import { REPORT_QUERIES, useAction } from "./useAction";
 // automatic assignment gives every juror the same number of reports and
 // keeps them within the problem of their duo as far as that allows
 // (backend/src/algorithms/reportAssignment.ts); the admin can then move
-// any report by hand, and "Compléter" hands out only what's left.
+// any report by hand, and "Compléter" hands out only what's left. Once the
+// list of admissibles is fixed (page Admissibles), only their reports are
+// here: the others count 0, and those graded before stay with their juror.
 
 interface Row {
   report: AssignableReport;
@@ -69,7 +71,10 @@ export function ReportAssignmentPage() {
   const criteria = criteriaQ.data ?? [];
   const evals = evalsQ.data ?? [];
 
+  // Graded before the list of admissibles was fixed, outside it: nothing left to do
+  const countedZero = board.reports.filter((r) => !r.admissible).length;
   const rows: Row[] = board.reports
+    .filter((report) => report.admissible)
     .map((report) => {
       const saved = report.accountId && evals.find(
         (e) => e.juryId === report.accountId && e.teamId === report.teamId && e.problemNumber === report.problemNumber,
@@ -109,6 +114,16 @@ export function ReportAssignmentPage() {
         <StatCard label="Corrigés" value={corrected} denom={rows.length || undefined} progressColor="var(--sage)" highlight={rows.length > 0 && corrected === rows.length} />
         <StatCard label="Hors spécialité" value={offSpecialty} denom={assigned || undefined} progressColor="var(--clay)" />
       </Stagger>
+
+      {board.admissibles && (
+        <Alert tone="success" title="Liste des admissibles arrêtée">
+          Seuls les rapports des {board.admissibles.teams} équipes admissibles sont à corriger (liste arrêtée le{" "}
+          {new Date(board.admissibles.fixedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })} par {board.admissibles.fixedBy}, page{" "}
+          <Link to="/resultats?ordre=admissibilite" className="underline font-semibold">Résultats</Link>, Classements). Ceux des autres équipes comptent 0, le rapport
+          défendu à part.
+          {countedZero > 0 && ` ${countedZero} rapport${countedZero > 1 ? "s" : ""} de ces équipes, corrigé${countedZero > 1 ? "s" : ""} avant, reste${countedZero > 1 ? "nt" : ""} à leur juré et compte${countedZero > 1 ? "nt" : ""} 0.`}
+        </Alert>
+      )}
 
       {(board.pendingDays.length > 0 || withoutProblem.length > 0) && (
         <Alert tone="warning" title="À vérifier">

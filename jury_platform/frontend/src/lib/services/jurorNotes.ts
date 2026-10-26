@@ -26,6 +26,7 @@ interface TaskBase {
   percent: number | null; // the note in % of its grid
   others: number | null; // the other jurors' average on the same thing, in %
   remark: string | null;
+  countsZero: boolean; // a report of a team left out of the admissibles: it counts 0 whatever its note
 }
 
 export type JurorTask = TaskBase & (
@@ -66,7 +67,7 @@ export function jurorSheets(
   criteria: Criterion[],
   oral: OralEvaluation[],
   report: ReportEvaluation[],
-  assigned: Pick<AssignableReport, "teamId" | "problemNumber" | "accountId">[],
+  assigned: (Pick<AssignableReport, "teamId" | "problemNumber" | "accountId"> & { admissible?: boolean })[],
 ): JurorSheet[] {
   const oralGrid = Object.fromEntries(GRADED_ROLES.map((role) => [role, oralCriteria(criteria, role)])) as Record<GradedRole, Criterion[]>;
   const reportGrid = new Map<number, Criterion[]>();
@@ -104,11 +105,13 @@ export function jurorSheets(
       percent: evaluation ? pct(evaluation.grades, grid) : null,
       others: mean(on.filter((e) => e.juryId !== jurorId).flatMap((e) => pct(e.grades, grid) ?? [])),
       remark: evaluation?.globalRemark ?? null,
+      countsZero: false,
     };
   };
 
   const reportTask = (
     jurorId: string, origin: TaskBase["origin"], teamId: string, problemNumber: number, slot: (typeof slots)[number] | null,
+    countsZero = false,
   ): JurorTask => {
     const on = reportsOn.get(`${teamId}:${problemNumber}`) ?? [];
     const evaluation = on.find((e) => e.juryId === jurorId) ?? null;
@@ -122,6 +125,7 @@ export function jurorSheets(
       percent,
       others: mean(on.filter((e) => e.juryId !== jurorId).flatMap((e) => pct(e.grades, grid) ?? [])),
       remark: evaluation?.globalRemark ?? null,
+      countsZero,
     };
   };
 
@@ -139,7 +143,9 @@ export function jurorSheets(
         seen.add(task.key);
         tasks.push(task);
       };
-      for (const r of assigned) if (r.accountId === account.id) add(reportTask(account.id, "assigned", r.teamId, r.problemNumber, null));
+      for (const r of assigned) {
+        if (r.accountId === account.id) add(reportTask(account.id, "assigned", r.teamId, r.problemNumber, null, r.admissible === false));
+      }
       // Whatever else they graded: nothing asks for it any more
       for (const e of oral) {
         const slot = e.juryId === account.id ? passageById.get(e.passageId) : undefined;

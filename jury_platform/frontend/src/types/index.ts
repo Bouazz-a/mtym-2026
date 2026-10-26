@@ -205,6 +205,9 @@ export interface FinalWeights {
   // The written-report note is the weighted average of the team's reports
   // (each out of 20): each problem's weight in %, keyed "1".."4", adding up to 100
   problemWeights: Record<string, number>;
+  // True: the written-report note is the defended report alone, the other
+  // reports weighing nothing (their notes are kept, they just don't count)
+  reportDefendedOnly: boolean;
 }
 
 // ================== Report assignment ==================
@@ -217,12 +220,36 @@ export interface AssignableReport {
   problemNumber: number;
   accountId: string | null; // the juror correcting it
   graded: boolean; // that juror has saved a grade: it can't move any more
+  // false: a team outside the list of admissibles, graded before the list
+  // was fixed. It stays with its juror and counts 0.
+  admissible: boolean;
 }
 
 export interface ReportAssignmentBoard {
   reports: AssignableReport[];
   pendingDays: { id: string; center: Center; date: string }[]; // draw not validated: teams wait
   jurors: { id: string; problems: number[] }[]; // every juror's specialties (their duos' problems)
+  admissibles: { teams: number; fixedAt: string; fixedBy: string } | null; // the list, once fixed
+}
+
+// ================== Admissibles ==================
+
+// The admissible teams, fixed by an admin (page Admissibles): the first
+// λ × n of the ranking by admissibility note. While the list exists only
+// their reports are handed out, and the other teams' reports, the defended
+// one aside, count 0.
+export interface AdmissibleList {
+  places: number; // n
+  lambda: number; // λ
+  teamIds: string[]; // in the order of the ranking
+  fixedAt: string;
+  fixedBy: string; // the admin's name at that moment
+}
+
+// What fixing a list does to the reports already handed out
+export interface AdmissiblesImpact {
+  takenBack: { reportId: string; team: string; problemNumber: number; juror: string }[];
+  keptGraded: { team: string; problemNumber: number; juror: string }[]; // stay with their juror, count 0
 }
 
 // "Mes rapports": a report handed to the juror

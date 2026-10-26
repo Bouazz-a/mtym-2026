@@ -100,6 +100,7 @@ export const DEFAULT_WEIGHTS: FinalWeights = {
   reporter: 2,
   report: 5,
   problemWeights: { 1: 25, 2: 25, 3: 25, 4: 25 },
+  reportDefendedOnly: false,
 };
 
 // A note as a percentage of its grid's maximum
@@ -137,12 +138,26 @@ export function outOf20(set: NoteSet): NoteSet {
 //   · it counts as soon as one report is graded, and moves as the others
 //     come in (`graded`/`submitted` tell how far along it is);
 //   · a problem the team submitted no report for counts 0/20 (`missing`);
-//   · a problem whose grid is still empty can't be graded and is left out.
+//   · a problem whose grid is still empty can't be graded and is left out;
+//   · once the list of admissibles is fixed (`outside`), a team outside it
+//     has its reports counted 0/20, the defended one aside (`zeroed`):
+//     only the admissibles' reports are corrected;
+//   · with « rapport défendu seulement » (Critères page, `defendedOnly`: the
+//     problem each team defends), the other reports weigh nothing
+//     (`ignored`): the note is the defended report's, theirs are kept.
 // A team that submitted nothing gets 0 at once.
 export interface WrittenNote extends NoteSet {
   graded: number; // submitted reports with a note
-  submitted: number; // reports the team submitted (on problems with a grid)
+  submitted: number; // reports the team submitted (on problems with a grid), zeroed ones aside
   missing: number[]; // problems without a report, counted 0/20
+  zeroed: number[]; // reports of a team outside the admissibles, counted 0/20
+  ignored: number[]; // problems weighing nothing: not the defended one, with « rapport défendu seulement »
+}
+
+// The fixed list of admissibles, as the written notes need it
+export interface OutsideList {
+  admissible: Set<string>;
+  defended: Map<string, number>; // team -> the problem it defends
 }
 
 export function writtenReportNotes(
@@ -150,6 +165,8 @@ export function writtenReportNotes(
   criteria: Criterion[],
   report: ReportEvaluation[],
   problemWeights: Record<string, number>,
+  outside?: OutsideList,
+  defendedOnly?: Map<string, number>,
 ): Map<string, WrittenNote> {
   return new Map(
     teams.map((team) => {
@@ -158,13 +175,25 @@ export function writtenReportNotes(
       let graded = 0;
       let submitted = 0;
       const missing: number[] = [];
+      const zeroed: number[] = [];
+      const ignored: number[] = [];
       const notes: JurorNote[] = [];
+      const left = outside && !outside.admissible.has(team.id);
       for (const problem of QUALIFS_PROBLEMS) {
         const w = problemWeights[String(problem)] ?? 0;
         const grid = reportCriteria(criteria, problem);
         if (w <= 0 || weightedNote([], grid).maxTotal <= 0) continue;
+        if (defendedOnly && defendedOnly.get(team.id) !== problem) {
+          ignored.push(problem);
+          continue;
+        }
         if (!team.reports.some((r) => r.problemNumber === problem)) {
           missing.push(problem);
+          weight += w; // 0/20
+          continue;
+        }
+        if (left && outside.defended.get(team.id) !== problem) {
+          zeroed.push(problem);
           weight += w; // 0/20
           continue;
         }
@@ -177,7 +206,7 @@ export function writtenReportNotes(
         notes.push(...set.notes);
       }
       const counts = weight > 0 && (graded > 0 || submitted === 0);
-      return [team.id, { teamId: team.id, max: 20, notes, average: counts ? sum / weight : null, graded, submitted, missing }];
+      return [team.id, { teamId: team.id, max: 20, notes, average: counts ? sum / weight : null, graded, submitted, missing, zeroed, ignored }];
     }),
   );
 }

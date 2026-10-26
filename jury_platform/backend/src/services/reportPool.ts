@@ -10,6 +10,10 @@ import { teamsOf } from "./passages";
 // its day's draw is settled. If the pools change afterwards, the reports
 // already handed out are sorted out when the day is validated again
 // (services/reportValidation.ts).
+//
+// Once the list of admissibles is fixed (services/admissibles.ts), only the
+// admissibles' reports are to hand out. The other teams' reports their juror
+// already graded stay listed, marked: they count 0, and can't move.
 
 export interface PoolReport {
   id: string;
@@ -17,12 +21,15 @@ export interface PoolReport {
   problemNumber: number;
   accountId: string | null; // the juror correcting it
   graded: boolean; // that juror has already saved a grade
+  admissible: boolean; // false: a team outside the list of admissibles, graded before it was fixed (counts 0)
 }
 
 export interface ReportPool {
   reports: PoolReport[];
   /** Days with pools whose draw isn't validated: their teams wait */
   pendingDays: { id: string; center: string; date: string }[];
+  /** The list of admissibles, when it is fixed */
+  admissibles: { teams: number; fixedAt: Date; fixedBy: string } | null;
 }
 
 export async function reportPool(): Promise<ReportPool> {
@@ -41,6 +48,8 @@ export async function reportPool(): Promise<ReportPool> {
     }
   }
 
+  const list = await db.admissibleList.findUnique({ where: { id: 1 } });
+  const admissible = list ? new Set(list.teamIds) : null;
   const [reports, evaluations] = await Promise.all([
     db.teamReport.findMany({ where: { teamId: { in: [...placed] } }, include: { assignment: true } }),
     db.reportEvaluation.findMany({
@@ -61,9 +70,12 @@ export async function reportPool(): Promise<ReportPool> {
           problemNumber: r.problemNumber,
           accountId,
           graded: accountId !== null && gradedBy.has(`${accountId}:${r.teamId}:${r.problemNumber}`),
+          admissible: !admissible || admissible.has(r.teamId),
         };
-      }),
+      })
+      .filter((r) => r.admissible || r.graded),
     pendingDays: days.filter((d) => !d.drawValidatedAt).map(({ id, center, date }) => ({ id, center, date })),
+    admissibles: list && { teams: list.teamIds.length, fixedAt: list.fixedAt, fixedBy: list.fixedBy },
   };
 }
 

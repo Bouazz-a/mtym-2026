@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { getAccounts } from "@/lib/repositories/accountRepository";
+import { getAdmissibles } from "@/lib/repositories/admissiblesRepository";
 import { getCriteria } from "@/lib/repositories/criteriaRepository";
 import { getOralEvaluations, getReportEvaluations } from "@/lib/repositories/evaluationRepository";
 import { getFinalWeights } from "@/lib/repositories/finalWeightsRepository";
@@ -8,6 +9,7 @@ import { getTeams } from "@/lib/repositories/teamRepository";
 import type { AuditEntry, Center, CenterDay, Grade, PoolDetails, Team } from "@/types";
 import { centerLabel } from "@/utils/labels";
 import { slotTime } from "@/utils/schedule";
+import { defendedProblems, outsideList } from "./admissibility";
 import { buildPoolSheets } from "./poolsExport";
 import { passageResults, percent, teamResults, writtenReportNotes, type NoteSet } from "./results";
 
@@ -24,8 +26,8 @@ import { passageResults, percent, teamResults, writtenReportNotes, type NoteSet 
 const ROLE_LABEL = { defender: "Défenseur", opponent: "Opposant", reporter: "Rapporteur", extra: "Observateur" } as const;
 
 export async function exportGradesXlsx(): Promise<void> {
-  const [pools, teams, criteria, oral, report, accounts, weights] = await Promise.all([
-    getPools(), getTeams(), getCriteria(), getOralEvaluations(), getReportEvaluations(), getAccounts(), getFinalWeights(),
+  const [pools, teams, criteria, oral, report, accounts, weights, admissibles] = await Promise.all([
+    getPools(), getTeams(), getCriteria(), getOralEvaluations(), getReportEvaluations(), getAccounts(), getFinalWeights(), getAdmissibles(),
   ]);
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const nameById = new Map(accounts.map((a) => [a.id, `${a.firstName} ${a.lastName}`]));
@@ -64,7 +66,10 @@ export async function exportGradesXlsx(): Promise<void> {
     notes_saisies: `${done}/${expected}`,
   })));
 
-  const written = writtenReportNotes(teams, criteria, report, weights.problemWeights);
+  const written = writtenReportNotes(
+    teams, criteria, report, weights.problemWeights, outsideList(admissibles, pools),
+    weights.reportDefendedOnly ? defendedProblems(pools) : undefined,
+  );
   append(wb, "Équipes", teamResults(results, weights, written).map(({ teamId, pool, notes, final }) => {
     const defended = results.find((x) => x.passage.defenderTeamId === teamId);
     const w = written.get(teamId);

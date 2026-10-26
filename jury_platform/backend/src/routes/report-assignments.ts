@@ -99,7 +99,7 @@ router.put("/:reportId", ...adminOnly, asyncRoute(async (req, res) => {
   const { reports } = await reportPool();
   const report = reports.find((r) => r.id === req.params.reportId);
   if (!report) {
-    throw new BadRequestError("Ce rapport n'est pas à attribuer : c'est celui du problème défendu, ou le tirage de son jour n'est pas validé");
+    throw new BadRequestError("Ce rapport n'est pas à attribuer : c'est celui du problème défendu, le tirage de son jour n'est pas validé, ou son équipe n'est pas admissible");
   }
   if (report.accountId === accountId) {
     res.json(report);

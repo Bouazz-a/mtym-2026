@@ -50,7 +50,7 @@ export const NAV: Record<Role, NavEntry[]> = {
           items: [
             { to: "/criteres", label: "Critères de notation", description: "Grilles de notation et coefficients" },
             { to: "/notes", label: "Notes", description: "Notes du jury, passage par passage" },
-            { to: "/resultats", label: "Résultats", description: "Note finale de chaque équipe" },
+            { to: "/resultats", label: "Résultats", description: "Notes finales, classements et admissibles" },
           ],
         },
       ],

@@ -959,3 +959,16 @@ textarea.focus-ring:focus,
     font-size: 0.75rem;
   }
 }
+
+/* Admissibles: the line under the last admissible team of the ranking */
+.brutal-table tbody tr.admissible-cut td {
+  padding: 0.35rem 0.75rem;
+  border-top: 2px solid var(--saffron);
+  background: rgba(246, 168, 6, 0.1);
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--saffron-dark);
+}

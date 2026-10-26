@@ -65,7 +65,8 @@ export function stages(d: DashboardData, centerQuery: string): Stage[] {
   const inPools = teamsInPools(d.pools);
   const withDay = d.teams.filter((t) => t.centerDayId);
   const daysWithTeams = d.days.filter((day) => d.teams.some((t) => t.centerDayId === day.id));
-  const reports = d.board?.reports ?? [];
+  // A report of a team left out of the admissibles, graded before, isn't to correct
+  const reports = (d.board?.reports ?? []).filter((r) => r.admissible !== false);
   const assigned = reports.filter((r) => r.accountId);
   const orals = oralProgress(passages, d.orals ?? []);
   return [
@@ -159,7 +160,7 @@ export function dayChecks(day: CenterDay, d: DashboardData, mailings?: MailingBo
   const inPools = teamsInPools(pools);
   const validated = Boolean(day.drawValidatedAt);
   const teamIds = new Set(teams.map((t) => t.id));
-  const reports = (d.board?.reports ?? []).filter((r) => teamIds.has(r.teamId));
+  const reports = (d.board?.reports ?? []).filter((r) => teamIds.has(r.teamId) && r.admissible !== false);
   const assigned = reports.filter((r) => r.accountId);
   const state = (p: Progress, ready = true): DayCheck["state"] => (!ready ? "later" : p.total > 0 && p.done >= p.total ? "done" : "todo");
 

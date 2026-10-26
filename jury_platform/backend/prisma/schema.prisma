@@ -355,6 +355,23 @@ model FinalWeights {
   // The written-report note is the weighted average of the team's reports
   // (each out of 20): the weight of each problem, in %, adding up to 100
   problemWeights Json @default("{\"1\":25,\"2\":25,\"3\":25,\"4\":25}")
+  // True: the written-report note is the defended report alone, the team's
+  // other reports weighing nothing (their notes stay, they just don't count)
+  reportDefendedOnly Boolean @default(false)
+}
+
+// The admissible teams, fixed by an admin on the Admissibles page: the first
+// λ × n of the ranking by admissibility note (the defended report standing
+// for the written part). While the list exists only their reports are
+// handed out, and the other teams' reports, the defended one aside, count 0.
+// One row, none until an admin fixes the list.
+model AdmissibleList {
+  id      Int      @id @default(1)
+  places  Int // n, the places the selection fills
+  lambda  Float // λ: λ × n teams are admissible
+  teamIds String[]
+  fixedAt DateTime @default(now())
+  fixedBy String // the admin's name at that moment, like AuditLog
 }
 
 // ─── Journal ─────────────────────────────────────────────────────────────────

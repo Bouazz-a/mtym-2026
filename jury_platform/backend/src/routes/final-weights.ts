@@ -9,7 +9,8 @@ import { asyncRoute, BadRequestError } from "../utils/errors";
 // The final grade's weights: a team's final grade is the weighted average of
 // its defence, opposition, reporter and written-report notes. The written
 // report is itself the weighted average of the team's reports (each out of
-// 20), with a weight per problem in %. One row.
+// 20), with a weight per problem in %, or the defended report alone
+// (reportDefendedOnly). One row.
 const router = Router();
 router.use(...adminOnly);
 
@@ -29,6 +30,7 @@ const BodySchema = z.object({
   reporter: z.number().min(0).optional(),
   report: z.number().min(0).optional(),
   problemWeights: ProblemWeightsSchema.optional(),
+  reportDefendedOnly: z.boolean().optional(),
 });
 
 type ProblemWeights = Record<string, number>;
@@ -48,6 +50,7 @@ router.put("/", asyncRoute(async (req, res) => {
   const data = {
     ...Object.fromEntries(PARTS.map((k) => [k, body[k] ?? before[k]])) as Record<(typeof PARTS)[number], number>,
     problemWeights: (body.problemWeights ?? before.problemWeights) as ProblemWeights,
+    reportDefendedOnly: body.reportDefendedOnly ?? before.reportDefendedOnly,
   };
   if (PARTS.every((k) => data[k] === 0)) throw new BadRequestError("Au moins un coefficient doit être positif");
 
@@ -65,6 +68,15 @@ router.put("/", asyncRoute(async (req, res) => {
           before: Object.fromEntries(PARTS.map((k) => [NAMES[k], before[k]])),
           after: Object.fromEntries(PARTS.map((k) => [NAMES[k], data[k]])),
         },
+      });
+    }
+    if (data.reportDefendedOnly !== before.reportDefendedOnly) {
+      await audit(tx, req.user!, {
+        category: "Note finale",
+        action: "weights.reportScope",
+        summary: data.reportDefendedOnly
+          ? "Rapport écrit : le rapport défendu seulement, les autres rapports ne comptent plus (leurs notes sont gardées)"
+          : "Rapport écrit : tous les rapports de l'équipe comptent de nouveau",
       });
     }
     if (changedProblems.length) {

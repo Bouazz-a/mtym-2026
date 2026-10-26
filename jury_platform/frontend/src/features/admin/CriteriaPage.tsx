@@ -167,7 +167,36 @@ function ProblemWeightsSection() {
   const weightsQ = useQuery({ queryKey: ["final-weights"], queryFn: getFinalWeights });
   if (!weightsQ.data) return null; // loading, or failed (FinalWeightsSection says why)
   // Remounted when the saved weights change, so the draft starts from them
-  return <ProblemWeightsEditor key={JSON.stringify(weightsQ.data.problemWeights)} saved={weightsQ.data.problemWeights} />;
+  return (
+    <>
+      <ReportScope defendedOnly={weightsQ.data.reportDefendedOnly} />
+      <ProblemWeightsEditor key={JSON.stringify(weightsQ.data.problemWeights)} saved={weightsQ.data.problemWeights} />
+    </>
+  );
+}
+
+// Which reports make the written note: all of them, or the defended one
+// alone (the others then weigh nothing; their notes are kept)
+function ReportScope({ defendedOnly }: { defendedOnly: boolean }) {
+  const { run, busy, error } = useAction([["final-weights"]]);
+  return (
+    <BrutalCard className="p-5 mb-6">
+      <div className="flex items-center gap-4 flex-wrap">
+        <span className="font-mont text-micro uppercase tracking-widest" style={{ color: "var(--ink-faint)", fontWeight: 800 }}>Rapports comptés</span>
+        <Segmented
+          options={[{ value: "all", label: "Tous les rapports" }, { value: "defended", label: "Rapport défendu seulement" }]}
+          value={defendedOnly ? "defended" : "all"}
+          onChange={(v) => { if (!busy) run(() => updateFinalWeights({ reportDefendedOnly: v === "defended" })); }}
+        />
+      </div>
+      <p className="font-open text-sm mt-4" style={{ color: "var(--ink-soft)" }}>
+        {defendedOnly
+          ? "Le rapport écrit d'une équipe est son seul rapport défendu, noté par le duo de son passage. Ses autres rapports ont un coefficient nul : leurs notes restent enregistrées, elles ne comptent pas. Les poids des problèmes ci-dessous ne servent plus."
+          : "Le rapport écrit d'une équipe est la moyenne de tous ses rapports, pondérés par les poids des problèmes ci-dessous."}
+      </p>
+      {error && <div className="mt-3"><Alert>{error}</Alert></div>}
+    </BrutalCard>
+  );
 }
 
 function ProblemWeightsEditor({ saved }: { saved: Record<string, number> }) {
