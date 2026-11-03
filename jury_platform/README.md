@@ -37,6 +37,32 @@ Pool draws and the automatic assignment of jury duos are computed by the
 backend, in `backend/src/algorithms/` (pure modules, tested next to them);
 the admin UI only asks for them.
 
+## Demo data
+
+To try the platform with data in every page (pools, duos, notes, results,
+the selection for the finale), run it on a demo database: a whole fictional
+qualification phase, with 147 made-up teams in the eight centers and nearly
+every note in.
+
+```bash
+./dev.sh demo           # from the root of the repository: http://localhost:5174
+./dev.sh demo fresh     # the same, on a demo rebuilt from scratch
+```
+
+Sign in as `admin@demo.test`, password `demo-mtym-2026` (an admin who also
+judges; every juror of the Comptes page has the same password).
+
+The demo lives in its own database, named after the local one plus `_demo`:
+the local database is never touched, and `./dev.sh` keeps running on it at
+the same time (the demo uses ports 3002 and 5174). Nothing leaves the
+machine: emails are written to `outbox/` instead of being sent. Reports and
+presentations can't be opened, since their files don't exist.
+
+`scripts/demo-db.sh` builds the database on its own, and
+`DEMO_SEED=<number> scripts/demo-db.sh` makes up another one. The data comes
+from `backend/scripts/seed-demo.ts`, which draws the pools and assigns the
+duos and the reports with the platform's own code.
+
 ## Importing teams from the main site
 
 Teams come from a `pg_dump` of the main site (mtym.mathmaroc.org). Only

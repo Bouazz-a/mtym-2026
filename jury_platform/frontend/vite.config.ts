@@ -8,6 +8,10 @@ const apiTarget = process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:3001'
 
 export default defineConfig({
   plugins: [react()],
+  // A second dev server of this project (./dev.sh demo, next to ./dev.sh)
+  // keeps its own cache of prepared dependencies: sharing one, each could
+  // rebuild it under the other. Unset: Vite's usual node_modules/.vite.
+  cacheDir: process.env.VITE_CACHE_DIR,
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
