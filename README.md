@@ -259,6 +259,7 @@ Project link: [https://github.com/Bouazz-a/mtym-2026](https://github.com/Bouazz-
 * The jurors of the 2026 qualifications
 * [Best-README-Template](https://github.com/othneildrew/Best-README-Template), the template of this README
 * [particles.js](https://vincentgarreau.com/particles.js/), the idea behind the particle background
+* [Gather](https://gather.be-of-dao.com) by DAO, the inspiration for the sand logo of the login page (its sand that blows away past a line and gathers again, the hairlines between trackers, the ruler round the frame); our version is written from scratch
 * [Shields.io](https://shields.io)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

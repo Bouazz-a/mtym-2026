@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Alert, Btn, BrutalCard, FadeIn, Field, Input, PageMotion } from "./primitives";
 import { usePageTitle } from "./usePageTitle";
 import { MtymLogo } from "./widgets";
+import { SandLogo } from "./SandLogo";
 import { useSession } from "./SessionContext";
 import { requestPasswordReset } from "@/lib/repositories/accountRepository";
 import { errorMessage } from "@/lib/services/errors";
@@ -29,9 +30,11 @@ export function LoginPage() {
     if (params.has("oubli")) setParams({}, { replace: true });
   };
 
+  // Beside the card on a wide screen, above it on a narrow one: the logo in sand
   return (
-    <PageMotion className="min-h-[60vh] flex items-center justify-center py-10">
-      <BrutalCard className="w-full max-w-md p-8">
+    <PageMotion className="min-h-[60vh] py-10 grid gap-6 lg:gap-8 items-center lg:grid-cols-[minmax(0,1fr)_28rem]">
+      <SandLogo className="w-full max-w-md mx-auto lg:max-w-none h-[10rem] sm:h-[13rem] lg:h-[32rem]" />
+      <BrutalCard className="w-full max-w-md mx-auto p-8">
         <div className="flex items-center gap-3 mb-6">
           <MtymLogo size="2rem" />
           <span
